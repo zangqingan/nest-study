@@ -3,7 +3,7 @@ nestjs 9.0.0的学习。
 
 # 二、nestjs概述
 Nest (NestJS) 是一个用于构建高效、可扩展的 Node.js 服务器端应用程序的开发框架。它利用JavaScript 的渐进增强的能力，使用并完全支持 TypeScript （仍然允许开发者使用纯 JavaScript 进行开发），并结合了 OOP （面向对象编程）、FP （函数式编程）和 FRP （函数响应式编程）。
-在底层，Nest 构建在强大的 HTTP 服务器框架上，例如 Express （默认），并且还可以通过配置从而使用 Fastify ！它提供了一个体系结构。
+在底层，Nest 构建在强大的 HTTP 服务器框架上，例如 Express （默认），并且还可以通过配置从而使用 Fastify ！它是一个功能比较全面的Nodejs后端框架。
 安装脚手架:
 npm i -g @nestjs/cli  // 全局安装Nest
 脚手架创建项目：
@@ -56,4 +56,70 @@ nest g service posts
 
 注意创建顺序： 先创建Module, 再创建Controller和Service, 这样创建出来的文件在Module中自动注册，反之，后创建Module, Controller和Service,会被注册到外层的app.module.ts
 
-# 三、
+# 三、控制器controller
+从概述里已经知道，控制器就是被 @Controller 装饰的类就是一个 Controller ，在module中把它导入到对应的controllers中就能够使用它,其功能是处理传入的请求和向客户端返回响应。本身只做路由的控制跳转。
+@Controller() 装饰器可以传入一个字符串值，作为路由前缀。
+可以使用 @Get @Put @Post @Delete 装饰器来定义http请求类型。如果你给他传递了参数那么这个参数就是它的路径。
+@Req，@Res装饰器获取请求 request 和 响应 response 对象。
+@Param，@Query装饰器获取get的query参数和parma参数
+@Body装饰器获取POST PUT 等请求的Body参数
+@HttpCode，@Header，@Redirect装饰器自定义状态码，请求头类型，重定向
+
+# 四、提供者provider
+在Nest中随处可见的都是 Providers ，比如接下来的拦截器啊，各种配置模块啊，各种中间间啊全都是统统都是 Providers，即提供各种问题具体解决方法的人。在Nestjs 凡被 @Injectable 装饰的类 都是Providers ，他们都可以通过 constructor 注入依赖关系。 这意味着对象可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给 Nest运行时系统。 Provider 只是一个用 @Injectable() 装饰器注释的类。在nestjs一般作为service服务，所以文件命名一般是 xxx.service.js/ts。
+它是业务实际处理的地方，它的使用也和前面 的controller 类似，你需要在module入口加入到指定的对象providers选项中去。
+
+# 五、模块module
+Module是 Nestjs中 大的一个内容，它是整个module功能模块的收口 ，功能和特性和Angular保持一致。模块是具有 @Module() 装饰器的类。 @Module() 装饰器提供了元数据，Nest 用它来组织应用程序的结构。
+@Module() 装饰器可以接受下面的参数
+如果你需要把这个模块 暴露到全局使用可以加 一个装饰器 @Global
+@Global()
+@Module({ 
+    controllers:[], // 前面说过的控制器
+    imports:[], // 可以注入 其他module 或者provider
+    exports:[], // 如果你这个模块中的provider要在别的模块中使用你必须要在这里声明导出provider ，当然你也可以把这个module导出其他地方import 一下这样其他模块中的provider也是可以使用的。
+    providers:[]  // 由 Nest 注入器实例化的提供者，并且可以至少在整个模块中共享。
+})
+
+# 六、实战
+实现一个简单的博客Blog功能，包括以下功能
+[基础的Article Tag Use 的CRUD ]
+[ 统一config管理]
+[日志搜集 ]
+[ 异常处理]
+[请求参数验证Dto ]
+[JWT ]
+[统一返回体 ]
+[上传文件包括上传到本地和上传的OSS服务商 ]
+[请求转发 ]
+[job]
+[用redis做单点登录 ]
+[微服务]
+[如果部署和运维（优雅重启） ]
+
+路由设计：
+Article相关
+-get /artcels 获取所有文章
+-get /artcels:id 获取指定id的文章
+-post /artcels 创建文章
+-put /artcels:id 修改文章
+-delete /artcels:id 删除文章
+
+
+Tag相关
+-get /tags 获取所有 标签
+-post /tag 创建标签
+-put /tag:id 修改标签
+-delete /tag:id 删除标签
+
+User相关
+-get /users 获取所有用户
+-get /user:id 获取指定id用户的用户信息
+-post /user 创建用户（注册）
+-put /user:id 修改用户 信息
+-delete /user:id 删除用户
+
+
+
+
+
