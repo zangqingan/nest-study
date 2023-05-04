@@ -112,7 +112,13 @@ providers:[] // 由 Nest 注入器实例化的提供者，并且可以至少在�
 
 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上。
 这里选择 typeORM 来操作数据库。
-安装：npm install @nestjs/typeorm typeorm mysql2 -S
+安装：npm install --save @nestjs/typeorm typeorm mysql2
+接下来就可以通过代码来建表，进行数据操作，TypeORM是通过实体映射到数据库表。
+所以我们先创建对应的实体类entity
+## 6.1 实体entity
+实体是一个用@Entity()装饰器装饰过的映射到数据库表（或使用 MongoDB 时的集合）的类。
+可以通过定义一个新类来创建一个实体。
+
 
 # 七、实战
 
