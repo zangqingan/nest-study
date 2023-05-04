@@ -9,7 +9,8 @@ async function bootstrap() {
   // 4. 调用 NestFactory 类的create 方法创建nest应用实例
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // app.setGlobalPrefix('api'); // 设置全局路由前缀
+  // 启动http服务监听3000端口
   await app.listen(3000);
 }
-// 5. 运行函数启动nest应用
+// 5. 运行启动函数开启nest应用
 bootstrap();
