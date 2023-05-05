@@ -119,6 +119,8 @@ ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映�
 实体是一个用@Entity()装饰器装饰过的映射到数据库表（或使用 MongoDB 时的集合）的类。
 可以通过定义一个新类来创建一个实体。
 
+# 七、配置接口文档swagger
+安装：npm install @nestjs/swagger swagger-ui-express -S
 
 # 七、实战
 

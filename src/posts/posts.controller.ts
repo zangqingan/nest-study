@@ -8,7 +8,10 @@ import {
   Put,
   Query,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiProperty } from '@nestjs/swagger';
 import { PostsService, PostsRo } from './posts.service';
+import { CreatePostDto } from './posts.dto';
+@ApiTags('文章')
 @Controller('posts')
 export class PostsController {
   // 初始化服务实例
@@ -44,14 +47,16 @@ export class PostsController {
    * 创建文章
    * @param post
    */
+  @ApiOperation({ summary: '创建文章' })
   @Post()
-  async create(@Body() post) {
+  async create(@Body() post: CreatePostDto) {
     return await this.postsService.create(post);
   }
 
   /**
    * 获取所有文章
    */
+  @ApiOperation({ summary: '获取所有文章' })
   @Get()
   async findAll(@Query() query): Promise<PostsRo> {
     return await this.postsService.findAll(query);
@@ -61,8 +66,10 @@ export class PostsController {
    * 获取指定文章
    * @param id
    */
+  @ApiOperation({ summary: '根据文章id获取指定文章' })
   @Get(':id')
   async findById(@Param('id') id) {
+    console.log('id', id);
     return await this.postsService.findById(id);
   }
 
@@ -71,6 +78,7 @@ export class PostsController {
    * @param id
    * @param post
    */
+  @ApiOperation({ summary: '更新文章' })
   @Put(':id')
   async update(@Param('id') id, @Body() post) {
     return await this.postsService.updateById(id, post);
@@ -80,6 +88,7 @@ export class PostsController {
    * 删除
    * @param id
    */
+  @ApiOperation({ summary: '根据文章id删除指定文章' })
   @Delete('id')
   async remove(@Param('id') id) {
     return await this.postsService.remove(id);

@@ -1,6 +1,8 @@
 import { Controller, Get, Post, Put } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service';
 // @Controller(‘hello’) 当你访问3000/hello的时候你就能 导航 到这个controoler来了
+@ApiTags('公共接口')
 @Controller()
 export class AppController {
   constructor(private readonly appService: AppService) {}
