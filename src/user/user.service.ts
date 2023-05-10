@@ -4,11 +4,14 @@ import { User } from './entities/user.entity';
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    // jwt服务
+    private jwtService: JwtService,
   ) {}
 
   async create(createUserDto: CreateUserDto) {
@@ -40,5 +43,25 @@ export class UserService {
 
   remove(id: number) {
     return `This action removes a #${id} user`;
+  }
+
+  // 生成token
+  createToken(user: Partial<User>) {
+    return this.jwtService.sign(user);
+  }
+  async login(user: Partial<User>) {
+    console.log('user', user);
+    const token = this.createToken({
+      id: user.id,
+      username: user.username,
+      role: user.role,
+    });
+
+    return { token };
+  }
+
+  getUser(user: Partial<User>) {
+    console.log('user', user);
+    return `This action returns all user`;
   }
 }

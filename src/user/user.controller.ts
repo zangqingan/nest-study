@@ -6,11 +6,16 @@ import {
   Patch,
   Param,
   Delete,
+  UseInterceptors,
+  ClassSerializerInterceptor,
+  UseGuards,
 } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { LoginDto } from './dto/login-user.dto';
 
 @ApiTags('用户')
 @Controller('user')
@@ -18,7 +23,8 @@ export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @ApiOperation({ summary: '创建用户' })
-  @Post()
+  @UseInterceptors(ClassSerializerInterceptor)
+  @Post('register')
   create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
   }
@@ -45,5 +51,13 @@ export class UserController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.userService.remove(+id);
+  }
+
+  @ApiOperation({ summary: '用户登陆' })
+  @UseGuards(AuthGuard('local'))
+  @UseInterceptors(ClassSerializerInterceptor)
+  @Post('login')
+  login(@Body() user: LoginDto) {
+    return this.userService.login(user);
   }
 }
