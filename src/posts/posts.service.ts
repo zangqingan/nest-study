@@ -1,7 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { PostsEntity } from './posts.entity';
+import { PostsEntity } from './entities/posts.entity';
 interface QueryItf {
   value: number;
   name: string;
