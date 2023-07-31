@@ -1,4 +1,4 @@
-# 一、概述
+# 一、项目说明
 
 nestjs^9.0.0 的学习，主要包括以下几个部分内容。
 nestjs 概述、
@@ -8,14 +8,14 @@ MySQL 连接和操作、
 resfulapi curd 接口实现、
 接口校验、
 swagger 接口文档编写
-等内容
+等内容。主要是学习后端的思维。
 
-# 二、nestjs 概述及使用
+# 二、nestjs 概述及基本使用
 
 ## 2.1 nestjs 概述
 
 Nest (NestJS) 是一个用于构建高效、可扩展的  Node.js  服务器端应用程序的开发框架。它利用 JavaScript 的渐进增强的能力，使用并完全支持  TypeScript （仍然允许开发者使用纯 JavaScript 进行开发），并结合了 OOP （面向对象编程）、FP （函数式编程）和 FRP （函数响应式编程）。
-在底层，Nest 构建在强大的 HTTP 服务器框架上，例如  Express （默认），并且还可以通过配置从而使用  Fastify ！它是一个功能比较全面的 Nodejs 后端框架。其实和 Express 用法类似，不同在用使用了控制反转依赖注入。
+在底层，Nest 构建在强大的 HTTP 服务器框架上，例如  Express （默认），并且还可以通过配置从而使用  Fastify 。它是一个功能比较全面的 Nodejs 后端框架。其实和 Express 用法类似，不同在用使用了控制反转依赖注入。使用上更加方便。
 
 安装脚手架:
 npm i -g @nestjs/cli // 全局安装 Nest 脚手架
@@ -28,7 +28,7 @@ nest new project-name // 创建项目
 npm run start 其它启动命令查看包管理文件即可。
 此命令将使用 HTTP 服务器启动应用程序，以侦听 src/main.ts 文件中所定义的端口。
 
-nest 项目目录结构如下：
+nest 项目初始目录结构如下：
 项目名(文件名)
 dist 打包的目录
 node_modules 模块依赖安装存放目录
@@ -67,7 +67,13 @@ exports、导出服务的列表，供其他模块导入使用。如果希望当�
 //创建一个 nest 元素语法
 nest generate [文件类型] [文件名] [文件目录]
 nest g [文件类型] [文件名] [文件目录]
-常见的文件类型有：模块 module/mo、控制器 controller/co、服务 service/s、中间件 middleware/mi、接口 interface/itf、工具类 library/lib 等等
+常见的文件类型有：
+模块 module/mo、
+控制器 controller/co、
+服务 service/s、
+中间件 middleware/mi、
+接口 interface/itf、
+工具类 library/lib 等等
 
 1:创建模块
 //创建一个 posts 帖子模块
@@ -97,22 +103,25 @@ nest g resource user
 
 这是一种约定：
 项目名(文件名)
-dist 打包的目录
-node_modules 模块依赖安装存放目录
-test 测试的目录
-src 源码目录
-├── app.controller.spec.ts 针对控制器的单元测试
-├── app.controller.ts 单个路由的基本控制器(Controller)
-├── app.module.ts 应用程序的根模块(Module)
-├── app.service.ts 具有单一方法的基本服务(Service)
-├── main.ts nest 应用程序的入口文件，它使用核心函数 NestFactory 来创建 Nest 应用程序的实例。
+├──dist 打包的目录
+├──node_modules 模块依赖安装存放目录
+├──test 测试的目录
+├──src 源码目录
+├───── app.controller.spec.ts 针对控制器的单元测试
+├───── app.controller.ts 单个路由的基本控制器(Controller)
+├───── app.module.ts 应用程序的根模块(Module)
+├───── app.service.ts 具有单一方法的基本服务(Service)
+├───── main.ts nest 应用程序的入口文件，它使用核心函数 NestFactory 来创建 Nest 应用程序的实例。
 
 # 三、控制器 controller
 
 和 express 里的路由类似，作用一样的就是处理客户端传入的请求和向客户端返回响应。
-而在 nestjs 里，控制器就是被 @Controller 装饰器装饰的类就是一个 Controller 。而控制器总属于某一个模块，所以要在 module 文件中把它导入到@Module() 装饰器对应的 controllers 选项中这样就能够使用它,其本身只做路由的控制跳转这样有利于业务的抽离。
+而在 nestjs 里，控制器就是被 @Controller 装饰器装饰的类就是一个 Controller 。
+而控制器总是属于某一个模块，所以要在 module 文件中把它导入到@Module() 装饰器对应的 controllers 选项中,这样 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装,也就可以直接使用它,其本身只做路由的控制跳转这样有利于业务的抽离。
 
-在这个文件中常用的装饰器如下，它们的作用和 express 里的 req、res 对象类似。就是 nest 帮忙封装成了装饰器，可以直接使用罢了。常见的如下：它们都是'@nestjs/common' 模块导出的。
+在这个文件中常用的装饰器如下，它们的作用和 express 里的 req、res 对象类似。
+就是 nest 帮忙封装成了装饰器，可以直接使用罢了。
+常见的如下：它们都是'@nestjs/common' 模块导出的。
 import { Controller, Get, Post, Put, Patch, Delete, HttpCode, Headers, Redirect, Request, Response, Body, Param, Query,} from '@nestjs/common';
 
 @Controller() 装饰器，是一个类装饰器，用来装饰一个类。
@@ -139,9 +148,9 @@ req.query 和 req.params
 req.body
 
 不过 nest 都提供了对应的装饰器，方便操作。
-req.query === @Query()
-req.params === @Param()
-req.body === @Body()
+req.query === @Query() 直接获取 query 查询对象
+req.params === @Param()直接获取 params 查询对象
+req.body === @Body()直接获取请求体 body 对象
 
 # 四、提供者 provider
 
@@ -186,16 +195,20 @@ ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映�
 # 七、拦截器 interceptor
 
 # 八、过滤器 filter
-Nest中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的JSON信息。
 
+Nest 中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的 JSON 信息。
 
-# 九、中间价 middleware
+# 九、中间件 middleware
+中间件是在路由处理程序 **之前** 调用的函数。 中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。
+## 9.1 日志收集和记录中间件
 
-# 七、配置接口文档 swagger
+使用 Nestjs 中的两个技术点 中间件 +拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
+
+# 十、配置接口文档 swagger
 
 安装：npm install @nestjs/swagger swagger-ui-express -S
 
-# 七、实战
+# 十一、实战
 
 实现一个简单的博客 Blog 功能，包括以下功能
 [基础的 Article Tag Use 的 CRUD ]

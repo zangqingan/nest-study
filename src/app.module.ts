@@ -2,8 +2,8 @@ import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PostsModule } from './posts/posts.module';
-import { ArticlesModule } from './articles/articles.module';
-import { TagsModule } from './tags/tags.module';
+import { ArticlesModule } from './modules/articles/articles.module';
+import { TagsModule } from './modules/tags/tags.module';
 // 连接MySQL数据库
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './user/user.module';
