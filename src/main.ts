@@ -10,8 +10,8 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 // swagger
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-// 拦截器
-// import { TransformInterceptor } from './core/interceptor/transform/transform.interceptor';
+// 全局返回结果拦截器
+import { TransformInterceptor } from './common/interceptors/transform/transform.interceptor';
 // 全局错误过滤器
 import { HttpExceptionFilter } from './common/filter/http-exception/http-exception.filter';
 
@@ -20,10 +20,10 @@ async function bootstrap() {
   // 4. 调用 NestFactory 类的create 方法创建nest应用实例
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // app.setGlobalPrefix('api'); // 设置全局路由前缀
-  // 注册全局注册过滤器
+  // 注册全局错误过滤器
   app.useGlobalFilters(new HttpExceptionFilter());
-  // 全局注册拦截器
-  // app.useGlobalInterceptors(new TransformInterceptor());
+  // 注册全局返回拦截器
+  app.useGlobalInterceptors(new TransformInterceptor());
   // swagger
   const config = new DocumentBuilder()
     .setTitle('nest学习记录')
