@@ -11,19 +11,19 @@ import { ValidationPipe } from '@nestjs/common';
 // swagger
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 // 拦截器
-import { TransformInterceptor } from './core/interceptor/transform/transform.interceptor';
-// 过滤器
-import { HttpExceptionFilter } from './core/filter/http-exception/http-exception.filter';
+// import { TransformInterceptor } from './core/interceptor/transform/transform.interceptor';
+// 全局错误过滤器
+import { HttpExceptionFilter } from './common/filter/http-exception/http-exception.filter';
 
 // 3. 定义一个异步启动函数 bootstrap 专门用来引导项目启动
 async function bootstrap() {
   // 4. 调用 NestFactory 类的create 方法创建nest应用实例
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   // app.setGlobalPrefix('api'); // 设置全局路由前缀
-  // 全局注册过滤器
+  // 注册全局注册过滤器
   app.useGlobalFilters(new HttpExceptionFilter());
   // 全局注册拦截器
-  app.useGlobalInterceptors(new TransformInterceptor());
+  // app.useGlobalInterceptors(new TransformInterceptor());
   // swagger
   const config = new DocumentBuilder()
     .setTitle('nest学习记录')

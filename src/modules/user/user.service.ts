@@ -29,8 +29,10 @@ export class UserService {
     return await this.userRepository.save(newUser);
   }
 
-  findAll() {
-    return `This action returns all user`;
+  async findAll() {
+    throw new HttpException('查找失败', HttpStatus.NOT_FOUND);
+    const result = await this.userRepository.find();
+    return `This action returns all user${result}`;
   }
 
   findOne(id: number) {

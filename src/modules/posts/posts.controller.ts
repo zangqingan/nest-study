@@ -11,7 +11,7 @@ import {
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { PostsService, PostsRo } from './posts.service';
 import { CreatePostDto } from './dto/create-posts.dto';
-@ApiTags('文章')
+@ApiTags('帖子')
 @Controller('posts')
 export class PostsController {
   // 初始化服务实例

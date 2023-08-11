@@ -5,8 +5,8 @@ import { JwtModule } from '@nestjs/jwt';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { User } from './entities/user.entity';
-import { LocalStorage } from '../utils/local.strategy';
-import { JwtStorage } from '../utils/jwt.strategy';
+import { LocalStorage } from '../../common/utils/local.strategy';
+import { JwtStorage } from '../../common/utils/jwt.strategy';
 
 const jwtModuleA = JwtModule.register({
   secret: 'test123456',
