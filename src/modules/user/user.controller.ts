@@ -60,4 +60,11 @@ export class UserController {
   login(@Body() user: LoginDto) {
     return this.userService.login(user);
   }
+
+  @ApiOperation({ summary: '是否已登录测试' })
+  @UseGuards(AuthGuard('local'))
+  @Post('test')
+  test() {
+    return 1;
+  }
 }

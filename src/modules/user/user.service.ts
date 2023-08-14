@@ -16,7 +16,7 @@ export class UserService {
 
   /**
    *
-   * @param createUserDto 用户信息
+   * @param createUserDto 用户信息体
    * @returns 新注册用户信息
    */
   async create(createUserDto: CreateUserDto) {
@@ -25,14 +25,13 @@ export class UserService {
     const isExist = await this.userRepository.findOne({
       where: { username },
     });
-    console.log('isExist', isExist);
     if (isExist) {
       throw new HttpException('用户名已存在', HttpStatus.BAD_REQUEST);
     }
     try {
       // 写入数据库
       const newUser = await this.userRepository.create(createUserDto);
-      // 返回
+      // 返回新增的用户对象
       return await this.userRepository.save(newUser);
     } catch (error) {
       throw new HttpException(error, HttpStatus.INTERNAL_SERVER_ERROR);
@@ -44,8 +43,14 @@ export class UserService {
     return `This action returns all user${result}`;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  async findOne(id: number) {
+    const user = await this.userRepository.findOne({
+      where: { id },
+    });
+    if (!user) {
+      throw new HttpException('用户名不存在', HttpStatus.BAD_REQUEST);
+    }
+    return user;
   }
 
   update(id: number, updateUserDto: UpdateUserDto) {
@@ -60,6 +65,11 @@ export class UserService {
   createToken(user: Partial<User>) {
     return this.jwtService.sign(user);
   }
+  /**
+   *
+   * @param user 登录用户信息
+   * @returns 返回token对象
+   */
   async login(user: Partial<User>) {
     console.log('user', user);
     const token = this.createToken({

@@ -39,6 +39,9 @@ export class User {
   })
   updateTime: Date;
 
+  /**
+   * 数据库插入之前加密密码
+   */
   @BeforeInsert()
   async encryptPwd() {
     this.password = await bcrypt.hashSync(this.password, 10);
