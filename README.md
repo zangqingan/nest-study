@@ -9,23 +9,44 @@ resfulapi curd 接口实现、
 接口校验、
 swagger 接口文档编写
 等内容。主要是学习后端的思维。
+2023.8.23-购买掘金-神说要有光的-Nest 通关秘籍小册，主要学习实战部分知识点。
+Nest 基础：Nest 各种功能的使用，包括 IOC、AOP、全局模块、动态模块、自定义 provider、middleware、pipe、interceptor、guard 等功能，还有 Nest CLI 的使用，Nest 项目的调试。
+扩展高级：mysql、mongodb、redis、rabbitmq、nacos 等后端中间件学一遍，也会学习 pm2、docker、docker compose 等部署方案。
 
 # 二、nestjs 概述及基本使用
 
 ## 2.1 nestjs 概述
 
-Nest (NestJS) 是一个用于构建高效、可扩展的  Node.js  服务器端应用程序的开发框架。它利用 JavaScript 的渐进增强的能力，使用并完全支持  TypeScript （仍然允许开发者使用纯 JavaScript 进行开发），并结合了 OOP （面向对象编程）、FP （函数式编程）和 FRP （函数响应式编程）。
+Nest (NestJS) 是一个用于构建高效、可扩展的 Node.js  服务器端应用程序的开发框架。它利用 JavaScript 的渐进增强的能力，使用并完全支持  TypeScript （仍然允许开发者使用纯 JavaScript 进行开发），并结合了 OOP （面向对象编程）、FP （函数式编程）和 FRP （函数响应式编程）。
 在底层，Nest 构建在强大的 HTTP 服务器框架上，例如  Express （默认），并且还可以通过配置从而使用  Fastify 。它是一个功能比较全面的 Nodejs 后端框架。其实和 Express 用法类似，不同在用使用了控制反转依赖注入。使用上更加方便。
 
 安装脚手架:
-npm i -g @nestjs/cli // 全局安装 Nest 脚手架
+npm install -g @nestjs/cli // 全局安装 Nest 脚手架
+npm update -g @nestjs/cli // 全家升级脚手架版本
 之后跟 vue 脚手架类似就可以使用：nest 命令。
-nest -v 查看安装的版本。
-nest -h 查看帮助信息。
+它可以
+生成项目结构和各种代码
+编译代码
+监听文件变动自动编译
+打印项目依赖信息
+
+```
+    常用命令：
+    nest -v 查看安装的版本。
+    nest -h 查看帮助信息即脚手架提供的命令。
+    nest new 快速创建项目
+    nest generate 快速生成各种代码
+    nest build 使用 tsc 或者 webpack 构建代码
+    nest start 启动开发服务，支持 watch 和调试
+    nest info 打印 node、npm、nest 包的依赖版本
+```
+
+
+
 脚手架创建项目：
 nest new project-name // 创建项目
 项目运行
-npm run start 其它启动命令查看包管理文件即可。
+npm run start / nest start 其它启动命令查看包管理文件即可。
 此命令将使用 HTTP 服务器启动应用程序，以侦听 src/main.ts 文件中所定义的端口。
 
 nest 项目初始目录结构如下：
@@ -62,18 +83,19 @@ exports、导出服务的列表，供其他模块导入使用。如果希望当�
 
 ## 2.2 nestjs 使用
 
-安装 nest-cli，也就是 nestjs 脚手架后，脚手架提供了很多命令。
-其中常用命令如下：
-//创建一个 nest 元素语法
-nest generate [文件类型] [文件名] [文件目录]
-nest g [文件类型] [文件名] [文件目录]
+安装 nest-cli，也就是 nestjs 脚手架后，脚手架提供了很多命令。除了之前用来创建项目的命令还有可以生成一些别的代码的命令，比如 controller、service、module 等。
+声明如下：可以通过 nest generate -h命令查看具体语法。
+//创建一个 nest 元素语法，
+nest generate [文件类型] [文件名] [文件目录] [参数]
+缩写：nest g [文件类型] [文件名] [文件目录] [参数]
 常见的文件类型有：
-模块 module/mo、
+模块 module/mo、生成的模块会自动在 AppModule 里引入。
 控制器 controller/co、
 服务 service/s、
 中间件 middleware/mi、
 接口 interface/itf、
-工具类 library/lib 等等
+工具类 library/lib 、
+网关 gateway/ga、等等。
 
 1:创建模块
 //创建一个 posts 帖子模块
@@ -91,13 +113,19 @@ co-- controller
 3:创建服务类
 nest g service posts
 
-注意创建顺序： 先创建 Module, 再创建 Controller 和 Service, 这样创建出来的文件在 Module 中自动注册。
+注意创建顺序： 先创建 Module, 再创建 Controller 和 Service, 这样创建出来的文件控制器和服务会在 Module 中自动注册。
 反之，后创建 Module, Controller 和 Service,会被注册到最外层的根模块文件 app.module.ts 上。
 
 还有一个快速创建 Contoller、Service、Module 以及 DTO 文件的方式:
 比如创建一个用户 user 模块
-nest g resource user
-这样就快速生成了一个 curd 模块
+nest generate resource user / nest g  res user 这样就快速生成了一个 curd 模块,它同样会自动在 AppModule 引入.
+
+打包命令：nest build 用来构建项目它会在 dist 目录下生成编译后的代码。
+同样的它也有一些选项参数，可以通过 nest build -h 查看。
+
+nest info 命令:这个就是查看项目信息的，包括系统信息、 node、npm 和依赖版本
+
+如上等相关的配置都可以在 nest-cli.json 配置文件中对应的配置选项上配置，就跟vue项目的配置文件一样。
 
 ## 2.3 nestjs 实战目录
 
@@ -113,9 +141,29 @@ nest g resource user
 ├───── app.service.ts 具有单一方法的基本服务(Service)
 ├───── main.ts nest 应用程序的入口文件，它使用核心函数 NestFactory 来创建 Nest 应用程序的实例。
 
+## 2.4 nestjs全局模块
+
+当一个模块被很多地方使用时就可以考虑将其变成全局模块，只需要在模块前添加 @Global()装饰器装饰即可。
+不过全局模块还是尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
+
+## 2.5 nestjs生命周期
+
+Nest 在启动的时候，会递归解析 Module 依赖，扫描其中的 provider、controller，注入它的依赖。
+全部解析完后，会监听网络端口，开始处理请求。
+这个过程中，Nest 暴露了一些生命周期方法：
+首先，递归初始化模块，会依次调用模块内的 controller、provider 的 onModuleInit 方法，然后再调用 module 的 onModuleInit 方法。
+
+全部初始化完之后，再依次调用模块内的 controller、provider 的 onApplicationBootstrap 方法，然后调用 module 的 onApplicationBootstrap 方法。然后监听网络端口。之后 Nest 应用就正常运行了。这个过程中，onModuleInit、onApplicationBootstrap 都是我们可以实现的生命周期方法。
+
+应用销毁的时候也同样有生命周期：先调用每个模块的 controller、provider 的 onModuleDestroy 方法，然后调用 Module 的 onModuleDestroy 方法。之后再调用每个模块的 controller、provider 的 beforeApplicationShutdown 方法，然后调用 Module 的 beforeApplicationShutdown 方法。然后停止监听网络端口。之后调用每个模块的 controller、provider 的 onApplicationShutdown 方法，然后调用 Module 的 onApplicationShutdown 方法。之后停止进程。
+
+provider、controller、module 都支持启动和销毁的生命周期函数，这些生命周期函数都支持 async 的方式。
+
 # 三、控制器 controller
 
-和 express 里的路由类似，作用一样的就是处理客户端传入的请求和向客户端返回响应。
+后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller 控制器，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 视图 View。
+
+和 express 里的路由类似，nest的控制器作用一样的就是处理客户端传入的请求和向客户端返回响应。
 而在 nestjs 里，控制器就是被 @Controller 装饰器装饰的类就是一个 Controller 。
 而控制器总是属于某一个模块，所以要在 module 文件中把它导入到@Module() 装饰器对应的 controllers 选项中,这样 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装,也就可以直接使用它,其本身只做路由的控制跳转这样有利于业务的抽离。
 
