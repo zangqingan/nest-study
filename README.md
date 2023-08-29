@@ -163,7 +163,7 @@ provider、controller、module 都支持启动和销毁的生命周期函数，�
 
 后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller 控制器，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 视图 View。
 
-和 express 里的路由类似，nest的控制器作用一样的就是处理客户端传入的请求和向客户端返回响应。
+和 express 里的路由类似，nest的控制器作用一样的：就是处理客户端传入的请求和向客户端返回响应。
 而在 nestjs 里，控制器就是被 @Controller 装饰器装饰的类就是一个 Controller 。
 而控制器总是属于某一个模块，所以要在 module 文件中把它导入到@Module() 装饰器对应的 controllers 选项中,这样 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装,也就可以直接使用它,其本身只做路由的控制跳转这样有利于业务的抽离。
 
