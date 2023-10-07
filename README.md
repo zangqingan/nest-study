@@ -240,20 +240,7 @@ exports:[], // 如果你这个模块中的 provider 要在别的模块中使用�
 providers:[] // 由 Nest 注入器实例化的提供者，并且可以至少在整个模块中共享。
 })
 
-# 六、nest 连接 MySQL 数据库
-
-ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上。
-这里选择 typeORM 来操作数据库。
-安装：npm install --save @nestjs/typeorm typeorm mysql2
-接下来创建实体类就可以通过代码来建表操作表，进行数据操作，TypeORM 是通过实体映射到数据库表。
-所以我们先创建对应的实体类 entity，nest 中使用 entities 文件夹存放。
-
-## 6.1 实体 entity
-
-实体是一个用@Entity()装饰器装饰过的映射到数据库表（或使用 MongoDB 时的集合）的类。
-可以通过定义一个新类来创建一个实体。
-
-# 七、拦截器 interceptor
+# 六、拦截器 interceptor
 
 拦截器是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。
 在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
@@ -303,11 +290,11 @@ export class CatsController {
 
 ```
 
-# 八、过滤器 filter
+# 七、过滤器 filter
 
 Nest 中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的 JSON 信息。
 
-# 九、中间件 middleware
+# 八、中间件 middleware
 
 中间件是 NestJS 中实现 AOP 编程的五种方式之一与 Express 中的中间件类似,它是用于处理 HTTP 请求和响应的功能模块。也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。
 
@@ -392,7 +379,55 @@ await app.listen(3000);
 
 使用 Nestjs 中的两个技术点 中间件 +拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
 
-# 十、登录状态相关
+# 九、导航守卫 Guard
+
+它也是 NestJS 中实现 AOP 编程的五种方式之一，顾名思义,Guard 可以根据某些自定义的条件在调用某个 Controller 之前返回 true 或 false 决定放不放行。也就是进不进这个路由。本质上守卫也是一个带有@Injectable()装饰器的类。同时守卫应该实现 CanActivate 接口。
+
+导航守卫就一个职责就是决定给定的请求是否由路由处理程序处理，也就是前端请求这个路径时处不处理。
+这取决于运行时存在的某些条件：如权限、角色、acl 等这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。
+
+每个守卫都必须实现一个 canActivate()函数。这个函数应该返回一个布尔值，指示当前请求是否被允许。
+如果返回 true，请求将被处理。如果返回 false, Nest 将拒绝请求。
+和拦截器一样有一个 ExecutionContext 类型的 context 参数,同样的我们可以根据 context.getHandler()拿到某个路由的元数据。
+一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行
+
+```
+使用脚手架命令快速生成一个守卫
+nest g gu test --no-spec --flat
+-- test.guard.ts
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class TestGuard implements CanActivate {
+  canActivate(
+    context: ExecutionContext,
+  ): boolean | Promise<boolean> | Observable<boolean> {
+    return true;
+  }
+}
+
+Guard用法也有三种,分为全局路由守卫、控制器路由守卫、具体方法路由守卫,首先我们来看全局路由守卫的使用方法,用法和上面拦截器差不多,在main.ts中通过app.useGlobalGuards进行注册。
+ // 全局导航守卫
+  app.useGlobalGuards(new TestGuard());
+
+想要控制单个路由或者整个控制器的守卫写法也和拦截器差不多,在app.controller.ts使用UseGuards启用即可
+  @UseGuards(TestGuard)
+  @Get('aa')
+  aa(): string {
+    return 'aa';
+  }
+这样就只在/aa路由中生效了
+
+@UseGuards(RolesGuard)
+export class CatsController {}
+这样就是整个控制器生效
+
+```
+
+# 十、管道 pipe
+
+# 十一、登录状态相关
 
 ## 10.1 概述
 
@@ -544,11 +579,24 @@ ttt(@Res({ passthrough: true}) response: Response) {
 
 ```
 
-# 十一、配置接口文档 swagger
+# 十二、nest 连接 MySQL 数据库
+
+ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上。
+这里选择 typeORM 来操作数据库。
+安装：npm install --save @nestjs/typeorm typeorm mysql2
+接下来创建实体类就可以通过代码来建表操作表，进行数据操作，TypeORM 是通过实体映射到数据库表。
+所以我们先创建对应的实体类 entity，nest 中使用 entities 文件夹存放。
+
+## 6.1 实体 entity
+
+实体是一个用@Entity()装饰器装饰过的映射到数据库表（或使用 MongoDB 时的集合）的类。
+可以通过定义一个新类来创建一个实体。
+
+# 十三、配置接口文档 swagger
 
 安装：npm install @nestjs/swagger swagger-ui-express -S
 
-# 十二、实战
+# 十四、实战
 
 实现一个简单的博客 Blog 功能，包括以下功能
 [基础的 Article Tag Use 的 CRUD ]
