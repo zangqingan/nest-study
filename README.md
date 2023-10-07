@@ -255,13 +255,138 @@ ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映�
 
 # 七、拦截器 interceptor
 
+拦截器是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。
+在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
+它本质也是一个@Injectable()装饰器装饰的类，这个类实现了 NestInterceptor 接口，同时每个拦截器也实现了 intercept 方法，改方法接收两个参数：第一个是 ExecutionContext 实例 context(与警卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。
+在拦截器中 context.getClass()可以获取当前路由的类,
+context.getHandler()可以获取到路由将要执行的方法
+
+第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法
+
+```
+脚手架命令快速生成一个拦截器
+nest g itc test --no-spec --flat
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class TestInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle();
+  }
+}
+
+
+
+```
+
+拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。
+
+```
+1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
+@UseInterceptors(LoggingInterceptor)
+export class CatsController {}
+
+2.方法作用域：就是只针对某个指定的方法进行拦截。
+export class CatsController {
+  @ApiOperation({ summary: '获取所有用户' })
+  @Get()
+  @UseInterceptors(TestInterceptor) // 方法作用域拦截器
+  findAll() {
+    return this.userService.findAll();
+  }
+}
+
+3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册
+
+ app.useGlobalInterceptors(new TransformInterceptor());
+
+```
+
 # 八、过滤器 filter
 
 Nest 中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的 JSON 信息。
 
 # 九、中间件 middleware
 
-中间件是在路由处理程序 **之前** 调用的函数。 中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。
+中间件是 NestJS 中实现 AOP 编程的五种方式之一与 Express 中的中间件类似,它是用于处理 HTTP 请求和响应的功能模块。也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。
+
+```
+在nestjs中使用脚手架命令创建一个中间件
+nest g mi middlewareName --no-spec --flat
+使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。
+同时可以使用express 中的类型指定req、res next钩子的类型。
+
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+
+@Injectable()
+export class TestMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    next();
+  }
+}
+
+```
+
+因为 nest 中间件也是使用 @Injectable() 装饰器装饰的类所以它完全支持依赖注入，所以可可以注册到全局模块使用，也可以在指定模块中注入使用。
+
+使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure()方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口所以会自动执行模块类的 configure 方法。
+
+```
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { PostsModule } from './modules/posts/posts.module';
+import { TagsModule } from './modules/tags/tags.module';
+// 连接MySQL数据库
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserModule } from './modules/user/user.module';
+// 中间件
+import { TestMiddleware } from './common/middlewares/test.middleware';
+
+// 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      password: 'wanggeng123456',
+      database: 'nest-vue-bms',
+      autoLoadEntities: true, //自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
+      synchronize: false, // 是否自动同步实体文件,生产环境建议关闭 - 不同步
+    }),
+    PostsModule,
+    TagsModule,
+    UserModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+// 导出根模块类，它已经经过@Module 装饰器 装饰了。
+export class AppModule implements NestModule {
+  // 实现中间件注册
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(TestMiddleware) // 应用中间件,多个时逗号分隔即可。
+      .forRoutes('*'); // 指定应用的路由或者控制器
+  }
+}
+
+
+```
+
+全局中间件就是使用 nest 使用 app 的 use 方法注册
+
+```
+
+const app = await NestFactory.create(AppModule);
+app.use(logger);
+await app.listen(3000);
+
+```
 
 ## 9.1 日志收集和记录中间件
 
