@@ -10,7 +10,7 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
-    // jwt服务
+    // 注入jwt服务
     private jwtService: JwtService,
   ) {}
 
@@ -29,7 +29,7 @@ export class UserService {
       throw new HttpException('用户名已存在', HttpStatus.BAD_REQUEST);
     }
     try {
-      // 写入数据库
+      // 创建对象
       const newUser = await this.userRepository.create(createUserDto);
       // 返回新增的用户对象
       return await this.userRepository.save(newUser);
@@ -38,11 +38,20 @@ export class UserService {
     }
   }
 
+  /**
+   *
+   * @returns all users
+   */
   async findAll() {
     const result = await this.userRepository.find();
-    return `This action returns all user${result}`;
+    return result;
   }
 
+  /**
+   *
+   * @param id 用户id
+   * @returns 指定id对应用户对象
+   */
   async findOne(id: number) {
     const user = await this.userRepository.findOne({
       where: { id },
@@ -53,18 +62,28 @@ export class UserService {
     return user;
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  /**
+   *
+   * @param id 要更新的用户id
+   * @param updateUserDto dto
+   * @returns
+   */
+  async update(id: number, updateUserDto: UpdateUserDto) {
+    const result = await this.userRepository.update(id, updateUserDto);
+    return result;
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  /**
+   *
+   * @param id 要删除数据id
+   * @returns
+   */
+  async remove(id: number) {
+    console.log('id', id);
+    const result = await this.userRepository.delete(id);
+    return result;
   }
 
-  // 生成token
-  createToken(user: Partial<User>) {
-    return this.jwtService.sign(user);
-  }
   /**
    *
    * @param user 登录用户信息
@@ -72,17 +91,28 @@ export class UserService {
    */
   async login(user: Partial<User>) {
     console.log('user', user);
+    // 根据账号查找数据库看是否存在用户
+    const isExist = await this.userRepository.findOne({
+      where: { username: user.username },
+    });
+    console.log('isExist', isExist);
+    if (!isExist) {
+      throw new HttpException('用户名不存在', HttpStatus.BAD_REQUEST);
+    }
+    if (isExist.password !== user.password) {
+      throw new HttpException('密码错误', HttpStatus.BAD_REQUEST);
+    }
     const token = this.createToken({
       id: user.id,
       username: user.username,
       role: user.role,
     });
 
-    return { token };
+    return token;
   }
 
-  getUser(user: Partial<User>) {
-    console.log('user', user);
-    return `This action returns all user`;
+  // 生成token函数
+  createToken(user: Partial<User>) {
+    return this.jwtService.sign(user);
   }
 }

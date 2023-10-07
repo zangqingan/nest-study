@@ -5,18 +5,17 @@ import { JwtModule } from '@nestjs/jwt';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { User } from './entities/user.entity';
-import { LocalStorage } from '../../common/utils/local.strategy';
-import { JwtStorage } from '../../common/utils/jwt.strategy';
 
+// 定义jwt 模块方便导入
 const jwtModuleA = JwtModule.register({
-  secret: 'test123456',
-  signOptions: { expiresIn: '4h' },
+  secret: 'test123456', // 指定加密 jwt 的密钥
+  signOptions: { expiresIn: '4h' }, // 设置过期时间 expiresIn 设置为4小时
 });
 @Module({
   // 注册实体类
   imports: [TypeOrmModule.forFeature([User]), PassportModule, jwtModuleA],
   controllers: [UserController],
-  providers: [UserService, LocalStorage, JwtStorage],
+  providers: [UserService],
   exports: [jwtModuleA],
 })
 export class UserModule {}

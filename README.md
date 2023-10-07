@@ -41,8 +41,6 @@ npm update -g @nestjs/cli // 全家升级脚手架版本
     nest info 打印 node、npm、nest 包的依赖版本
 ```
 
-
-
 脚手架创建项目：
 nest new project-name // 创建项目
 项目运行
@@ -50,16 +48,31 @@ npm run start / nest start 其它启动命令查看包管理文件即可。
 此命令将使用 HTTP 服务器启动应用程序，以侦听 src/main.ts 文件中所定义的端口。
 
 nest 项目初始目录结构如下：
+
+```
 项目名(文件名)
-dist 打包的目录
-node_modules 模块依赖安装存放目录
-test 测试的目录
-src 源码目录
-├── app.controller.spec.ts 针对控制器的单元测试
-├── app.controller.ts 单个路由的基本控制器(Controller)
-├── app.module.ts 应用程序的根模块(Module)
-├── app.service.ts 具有单一方法的基本服务(Service)
-├── main.ts nest 应用程序的入口文件，它使用核心函数 NestFactory 来创建 Nest 应用程序的实例。
++-- dist[目录]                      // 编译后的目录，用于预览项目
++-- node_modules[目录]              // 项目使用的包目录，开发使用和上线使用的都在里边
++-- src[目录]                       // 源文件/代码，程序员主要编写的目录
+|  +-- app.controller.spec.ts      // 对于基本控制器的单元测试样例
+|  +-- app.controller.ts           // 控制器文件，可以简单理解为路由文件
+|  +-- app.module.ts               // 模块文件，在NestJS世界里主要操作的就是模块
+|  +-- app.service.ts              // 服务文件，提供的服务文件，业务逻辑编写在这里
+|  +-- app.main.ts                 // 项目的入口文件，里边包括项目的主模块和监听端口号
++-- test[目录]                      // 测试文件目录，对项目测试时使用的目录，比如单元测试...
+|  +-- app.e2e-spec.ts             // e2e测试，端对端测试文件，测试流程和功能使用
+|  +-- jest-e2e.json               // jest测试文件，jset是一款简介的JavaScript测试框架
++-- .eslintrc.js                   // ESlint的配置文件
++-- .gitignore                     // git的配置文件，用于控制哪些文件不受Git管理
++-- .prettierrc                    // prettier配置文件，用于美化/格式化代码的
++-- nest-cli.json                  // 整个项目的配置文件，这个需要根据项目进行不同的配置
++-- package-lock.json              // 防止由于包不同，导致项目无法启动的配置文件，固定包版本
++-- package.json                   // 项目依赖包管理文件和Script文件，比如如何启动项目的命令
++-- README.md                      // 对项目的描述文件，markdown语法
++-- tsconfig.build.json            // TypeScript语法构建时的配置文件
++-- tsconfig.json                  // TypeScript的配置文件，控制TypeScript编译器的一些行为
+
+```
 
 main.ts 就是项目的入口文件，一些全局的配置会在这里注入加载。
 
@@ -84,7 +97,7 @@ exports、导出服务的列表，供其他模块导入使用。如果希望当�
 ## 2.2 nestjs 使用
 
 安装 nest-cli，也就是 nestjs 脚手架后，脚手架提供了很多命令。除了之前用来创建项目的命令还有可以生成一些别的代码的命令，比如 controller、service、module 等。
-声明如下：可以通过 nest generate -h命令查看具体语法。
+声明如下：可以通过 nest generate -h 命令查看具体语法。
 //创建一个 nest 元素语法，
 nest generate [文件类型] [文件名] [文件目录] [参数]
 缩写：nest g [文件类型] [文件名] [文件目录] [参数]
@@ -118,14 +131,14 @@ nest g service posts
 
 还有一个快速创建 Contoller、Service、Module 以及 DTO 文件的方式:
 比如创建一个用户 user 模块
-nest generate resource user / nest g  res user 这样就快速生成了一个 curd 模块,它同样会自动在 AppModule 引入.
+nest generate resource user / nest g res user 这样就快速生成了一个 curd 模块,它同样会自动在 AppModule 引入.
 
 打包命令：nest build 用来构建项目它会在 dist 目录下生成编译后的代码。
 同样的它也有一些选项参数，可以通过 nest build -h 查看。
 
 nest info 命令:这个就是查看项目信息的，包括系统信息、 node、npm 和依赖版本
 
-如上等相关的配置都可以在 nest-cli.json 配置文件中对应的配置选项上配置，就跟vue项目的配置文件一样。
+如上等相关的配置都可以在 nest-cli.json 配置文件中对应的配置选项上配置，就跟 vue 项目的配置文件一样。
 
 ## 2.3 nestjs 实战目录
 
@@ -141,12 +154,12 @@ nest info 命令:这个就是查看项目信息的，包括系统信息、 node�
 ├───── app.service.ts 具有单一方法的基本服务(Service)
 ├───── main.ts nest 应用程序的入口文件，它使用核心函数 NestFactory 来创建 Nest 应用程序的实例。
 
-## 2.4 nestjs全局模块
+## 2.4 nestjs 全局模块
 
 当一个模块被很多地方使用时就可以考虑将其变成全局模块，只需要在模块前添加 @Global()装饰器装饰即可。
 不过全局模块还是尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
 
-## 2.5 nestjs生命周期
+## 2.5 nestjs 生命周期
 
 Nest 在启动的时候，会递归解析 Module 依赖，扫描其中的 provider、controller，注入它的依赖。
 全部解析完后，会监听网络端口，开始处理请求。
@@ -163,7 +176,7 @@ provider、controller、module 都支持启动和销毁的生命周期函数，�
 
 后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller 控制器，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 视图 View。
 
-和 express 里的路由类似，nest的控制器作用一样的：就是处理客户端传入的请求和向客户端返回响应。
+和 express 里的路由类似，nest 的控制器作用一样的：就是处理客户端传入的请求和向客户端返回响应。
 而在 nestjs 里，控制器就是被 @Controller 装饰器装饰的类就是一个 Controller 。
 而控制器总是属于某一个模块，所以要在 module 文件中把它导入到@Module() 装饰器对应的 controllers 选项中,这样 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装,也就可以直接使用它,其本身只做路由的控制跳转这样有利于业务的抽离。
 
@@ -247,16 +260,170 @@ ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映�
 Nest 中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的 JSON 信息。
 
 # 九、中间件 middleware
+
 中间件是在路由处理程序 **之前** 调用的函数。 中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。
+
 ## 9.1 日志收集和记录中间件
 
 使用 Nestjs 中的两个技术点 中间件 +拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
 
-# 十、配置接口文档 swagger
+# 十、登录状态相关
+
+## 10.1 概述
+
+http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。
+而基本所有网站都有登录功能，登录之后再次请求依然是登录状态。
+那么如何实现登录状态的保持呢？
+
+```
+有两种解决方案：
+1.服务端保存 session + cookie 的方案。
+第一次登录时后端返回凭证信息，前端存储在cookie中，之后每次http请求都会自动携带上cookie中保存的凭证信息，算是给请求打上了唯一标识。后端根据前端传过来的标识去查找与之对应的数据 session即可。
+缺点：有CSRF(跨站请求伪造)风险，因为 cookie 会在请求时自动带上，那你在一个网站登录了，再访问别的网站，万一里面有个按钮会请求之前那个网站的，那 cookie 依然能带上。而这时候就不用再登录了。
+
+为了解决这个问题，我们一般会验证 referer，就是请求是哪个网站发起的，如果发起请求的网站不对，那就阻止掉。但这样依然不能完全解决问题，万一你用的浏览器也是有问题的，能伪造 referer 呢？
+
+所以一般会用随机值来解决，每次随机生成一个值返回，后面再发起的请求需要包含这个值才行，否则就认为是非法的。
+
+这个随机值叫做 token，可以放在参数中，也可以放在 请求头 header 中，因为钓鱼网站拿不到这个随机值，就算带了 cookie 也没发通过服务端的验证。
+
+还有一个问题当并发量比较高时会使用分布式部署，这时不同服务器之间的 session就会不同。
+这个问题的解决有两种方案：
+
+一种是 session 复制，也就是通过一种机制在各台机器自动复制 session，并且每次修改都同步下。这个有对应的框架来做，比如 java 的 spring-session。
+各台服务器都做了 session 复制了，那你访问任何一台都能找到对应的 session。
+
+还有一种方案是把 session 保存在 redis，这样每台服务器都去那里查，只要一台服务器登录了，其他的服务器也就能查到 session，这样就不需要复制了。
+分布式会话的场景，redis + session 的方案更常用一点。
+还好，session 在分布式时的这个问题也算是有解决方案的。
+
+2.客户端保存 jwt token 的方案。
+session + cookie 的方案是把状态数据保存在服务端，再把 id 保存在 cookie 里来实现的。
+既然这样的方案有那么多的问题，那我反其道而行之，不把状态保存在服务端了，直接全部放在请求里，也不放在 cookie 里了，而是放在 请求头 header 里，这样是不是就能解决那一堆问题了呢？
+token 的方案常用 json 格式来保存，叫做 json web token，简称 JWT。它保存在 request header 里的一段字符串（比如用 header 名可以叫 authorization）。
+它由三部分组成：header、payload、verify signature
+header 部分保存当前的加密算法，
+payload 部分是具体存储的数据，
+verify signature 部分是把 header 和 payload 还有 salt 做一次加密之后生成的。
+然后这三部分会分别做Base 64加密后再返回。
+然后一般放到请求头header 的authorization:Bearer xxx.xxx.xxx 字段上。
+请求的时候把这个 header 带上，服务端就可以解析出对应的 header、payload、verify signature 这三部分，然后根据 header 里的算法也对 header、payload 加上 salt 做一次加密，如果得出的结果和 verify signature 一样，就接受这个 token。
+
+流程是用户登录提交用户名和密码-后端接收并认证-认证通过生成 jwt token并返回给前端-前端本地保存返回的jwt token-之后每次请求都在请求头中携带-后端拦截请求并验证-验证通过执行业务逻辑并返回数据-前端展示数据-如果是验证不通过返回错误信息-前端提示错误信息并返回登录页面。至此整个登录流程结束。
+
+但是这个方案也有安全性问题，因为它是把数据直接 Base64 之后就放在了 header 里，那别人就可以轻易从中拿到状态数据，比如用户名等敏感信息，也能根据这个 JWT 去伪造请求。所以 JWT 要搭配 https 来用，让别人拿不到 header。
+
+
+
+
+```
+
+## 10.2 代码层面解决
+
+在 Nest 里实现 session 还是用的 express 的中间件 express-session。
+安装 express-session 和它的 ts 类型定义
+npm install express-session @types/express-session
+
+然后在入口模块里启用它
+
+```
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import * as session from 'express-session';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  app.use(session({
+    secret: 'guang',// 指定加密的密钥 secret
+    resave: false,// 每次访问时是否都会更新 session
+    saveUninitialized: false // 是否初始化一个空的 session 对象
+  }));
+  await app.listen(3000);
+}
+bootstrap();
+
+```
+
+然后在 controller 里就可以注入 session 对象：
+直接使用@Session 装饰器即可。
+
+```
+@Get('sss')
+sss(@Session() session) {
+    console.log(session)
+    session.count = session.count ? session.count + 1 : 1;
+    return session.count;
+}
+
+
+```
+
+在 Nest 里实现 jwt 需要引入 @nestjs/jwt 这个包
+安装：npm install @nestjs/jwt
+
+然后在 AppModule 里引入 JwtModule,那就是全局注册，也可以在指定 module 文件中注册。
+JwtModule 是一个动态模块，通过 register 传入 option。
+或者是 registerAsync，然后通过 useFactory 异步拿到 option 传入。
+
+```
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
+@Module({
+  imports: [
+    JwtModule.register({
+      secret: 'guang',
+      signOptions: {
+        expiresIn: '7d'
+      }
+    })
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+
+
+```
+
+注册成功后就可以在 controller 里注入 JwtModule 里的 JwtService 了。
+
+```
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class AppService {
+    constructor(
+    // jwt服务
+    private readonly jwtService: JwtService,
+  ) {}
+  <!-- 或者定义私有属性 -->
+  private readonly jwtService: JwtService
+}
+然后添加一个 handler返回即可：使用 jwtService.sign 来生成一个 jwt token，放到 response header 里。
+注意：注入 response 对象之后，默认不会把返回值作为 body 了，需要设置 passthrough 为 true 才可以。
+@Get('ttt')
+ttt(@Res({ passthrough: true}) response: Response) {
+    const newToken = this.jwtService.sign({
+      count: 1
+    });
+
+    response.setHeader('token', newToken);
+    return 'hello';
+}
+
+
+
+```
+
+# 十一、配置接口文档 swagger
 
 安装：npm install @nestjs/swagger swagger-ui-express -S
 
-# 十一、实战
+# 十二、实战
 
 实现一个简单的博客 Blog 功能，包括以下功能
 [基础的 Article Tag Use 的 CRUD ]
