@@ -292,7 +292,95 @@ export class CatsController {
 
 # 七、过滤器 filter
 
-Nest 中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的 JSON 信息。
+## 7.1 过滤器概述
+
+过滤器也是 NestJS 中实现 AOP 编程的五种方式之一，Nest 中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的 JSON 信息。在 NestJS 中有一个内置异常层可以自动处理整个程序中抛出的异常,比如你访问一个不存在的路由它会自动返回 404。
+
+Nest 提供了一个内置的 HttpException 类，从@nestjs/common 包中公开。可以在任意地方使用它抛出一个错误。HttpStatus 也是从@nestjs/common 包中导入的一个 helper 枚举对象。
+HttpException 构造函数接收两个必填参数用来决定返回的信息
+new HttpException('描述信息', http 状态码);
+默认情况下，返回的 JSON 响应体也包含两个属性:
+statusCode:默认为 status 参数中提供的 HTTP 状态码
+message:基于状态的 HTTP 错误的简短描述。
+
+此外：Nest 提供了一组继承自基本 HttpException 的标准异常。这些都是从@nestjs/common 包中暴露出来的，代表了许多最常见的 HTTP 异常:
+
+```
+@Get()
+async findAll() {
+  throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+}
+当客户端访问时就会返回如下内容：
+{
+  "statusCode": 403,
+  "message": "Forbidden"
+}
+
+```
+
+## 7.2 过滤器生成
+
+```
+脚手架命令快速生成一个过滤器
+ nest g f http-exception --no-spec --flat
+
+ /**
+ * 统一的异常处理器-在错误发生时做一个统一的过滤处理后再返回给前台
+ */
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+} from '@nestjs/common';
+
+@Catch(HttpException)
+export class HttpExceptionFilter implements ExceptionFilter {
+  catch(exception: HttpException, host: ArgumentsHost) {
+    const ctx = host.switchToHttp(); // 获取请求上下文
+    const response = ctx.getResponse(); // 获取请求上下文中的 response对象
+    const status = exception.getStatus(); // 获取异常状态码
+    // 设置错误信息,没有时根据状态码值返回
+    const message = exception.message
+      ? exception.message
+      : `${status >= 500 ? 'Service Error' : 'Client Error'}`;
+    const errorResponse = {
+      data: {},
+      timestamp: new Date().toISOString(),
+      message: message,
+      code: status,
+    };
+
+    // 设置返回的状态码， 请求头，发送错误信息
+    response.status(status);
+    response.header('Content-Type', 'application/json; charset=utf-8');
+    response.send(errorResponse);
+  }
+}
+
+
+```
+
+## 7.3 过滤器注册
+
+和中间件、守卫、拦截器类似，也是有全局作用域过滤器、控制器作用域、方法作用域三种。
+
+```
+方法作用域：使用UseFilters装饰器装饰即可
+@Post()
+@UseFilters(new HttpExceptionFilter())
+async create(@Body() createCatDto: CreateCatDto) {
+  throw new ForbiddenException();
+}
+
+控制器作用域：
+@UseFilters(new HttpExceptionFilter())
+export class CatsController {}
+
+全局作用域过滤器：在入口文件中使用useGlobalFilters装饰器设置全局
+app.useGlobalFilters(new HttpExceptionFilter());
+
+```
 
 # 八、中间件 middleware
 
@@ -587,7 +675,7 @@ ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映�
 接下来创建实体类就可以通过代码来建表操作表，进行数据操作，TypeORM 是通过实体映射到数据库表。
 所以我们先创建对应的实体类 entity，nest 中使用 entities 文件夹存放。
 
-## 6.1 实体 entity
+## 12.1 实体 entity
 
 实体是一个用@Entity()装饰器装饰过的映射到数据库表（或使用 MongoDB 时的集合）的类。
 可以通过定义一个新类来创建一个实体。
