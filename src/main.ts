@@ -8,13 +8,13 @@ import { AppModule } from './app.module';
 /** 其它全局相关的东西 */
 // swagger
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-// 管道验证
+// 内置验证管道
 import { ValidationPipe } from '@nestjs/common';
-// 全局返回结果拦截器
+// 返回结果拦截器
 import { TransformInterceptor } from './common/interceptors/transform/transform.interceptor';
-// 全局错误过滤器
+// 错误过滤器
 import { HttpExceptionFilter } from './common/filter/http-exception/http-exception.filter';
-// 全局守卫测试
+// 守卫测试
 import { TestGuard } from './common/guards/test.guard';
 
 // 3. 定义一个异步启动函数 bootstrap 专门用来引导项目启动

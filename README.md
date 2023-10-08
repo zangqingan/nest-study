@@ -515,6 +515,100 @@ export class CatsController {}
 
 # 十、管道 pipe
 
+## 10.1 管道概述
+
+它也是 NestJS 中实现 AOP 编程的五种方式之一，在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类，它应该实现 PipeTransform 接口。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。
+
+管道有两个典型的用例:
+转换:将用户输入数据转换为所需的形式(例如，从字符串到整数)。
+验证:对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
+在这两种情况下，管道都对由控制器路由处理程序处理的参数进行操作。
+
+## 10.2 管道注册
+
+和中间件、过滤器等一样，管道也有全局作用域、方法作用域
+
+```
+方法作用域：
+@Post()
+@UsePipes(new JoiValidationPipe(createCatSchema))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+方法参数：绑定其他转换管道(所有Parse*管道)的工作原理类似。这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。
+@Get(':id')
+async findOne(@Param('id', ParseIntPipe) id: number) {
+  return this.catsService.findOne(id);
+}
+
+@Get()
+async findOne(@Query('id', ParseIntPipe) id: number) {
+  return this.catsService.findOne(id);
+}
+
+全局：依然是在入口文件中使用 useGlobalPipes 装饰器。
+ app.useGlobalPipes(new ValidationPipe());
+
+
+```
+
+## 10.3 内置管道
+
+NestJS 提供了很多内置的 Pipe,其中有六个管道是可以开箱即用的它们都是从 @nestjs/common 包导出。
+
+ValidationPipe: 用于验证请求数据，通常用于验证请求体数据、查询参数、路由参数等。它使用了类似于 class-validator 库的装饰器来进行验证。如果验证失败，它会抛出 ValidationException 异常。
+
+ParseIntPipe: 用于将输入数据解析为整数。它可以将字符串形式的整数转换为 JavaScript 整数。如果无法解析为整数，它会抛出 BadRequestException 异常。
+
+ParseBoolPipe: 用于将输入数据解析为布尔值。它可以将字符串形式的"true"和"false"转换为对应的布尔值。如果无法解析为布尔值，它会抛出 BadRequestException 异常。
+
+ParseArrayPipe: 用于将输入数据解析为数组。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为数组，它会抛出 BadRequestException 异常。
+
+ParseUUIDPipe: 用于将输入数据解析为 UUID（Universally Unique Identifier）。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为 UUID，它会抛出 BadRequestException 异常。
+
+DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。
+
+## 10.4 自定义管道
+
+和其它 AOP 编程实现方式类似的
+
+```
+脚手架命令快速生成一个管道
+nest g pi test --no-spec --flat
+每个管道都必须实现transform()方法来实现PipeTransform接口契约。这个方法有两个参数:
+value参数是当前处理的方法参数(在被路由处理方法接收之前)，
+metadata是当前处理的方法参数的元数据是一个包含被处理数据的元数据对象,它有两个属性分别为
+type: 表示正在处理的数据的类型。可以是 'body'、'query'、'param' 或其他。这可以让我们确定管道是应用于请求体、查询参数、路由参数还是其他类型的数据。
+metatype: 表示正在处理的数据的原始 JavaScript 类型。例如，如果正在处理一个参数，并且该参数是一个字符串，那么 metatype 可能是 String 类型。
+
+
+import { ArgumentMetadata, Injectable, PipeTransform } from '@nestjs/common';
+
+@Injectable()
+export class TestPipe implements PipeTransform {
+  transform(value: any, metadata: ArgumentMetadata) {
+    return value;
+  }
+}
+
+注册使用：第一种是全局使用,可以在main.ts使用app.useGlobalPipes()进行全局注册,还可以在module中通过注入的方式使用。
+import { Module } from '@nestjs/common';
+import { APP_PIPE } from '@nestjs/core';
+import { CustomPipe } from './custom.pipe';
+
+@Module({
+  providers: [
+    {
+      provide: APP_PIPE,
+      useClass: CustomPipe, // 启用自定义管道
+    },
+  ],
+})
+export class AppModule {}
+
+
+```
+
 # 十一、登录状态相关
 
 ## 10.1 概述
