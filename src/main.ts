@@ -1,11 +1,11 @@
 // 1. 引入nest核心类 NestFactory，用来创建nest应用实例
 import { NestFactory } from '@nestjs/core';
-// ts约束
+// 平台ts约束
 import { NestExpressApplication } from '@nestjs/platform-express';
 // 2. 引入应用程序的根模块挂载
 import { AppModule } from './app.module';
 
-/** 其它全局相关的东西 */
+/** 其它全局相关的东西 start */
 // swagger
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 // 内置验证管道
@@ -16,6 +16,8 @@ import { TransformInterceptor } from './common/interceptors/transform/transform.
 import { HttpExceptionFilter } from './common/filter/http-exception/http-exception.filter';
 // 守卫测试
 import { TestGuard } from './common/guards/test.guard';
+
+/** 其它全局相关的东西 end */
 
 // 3. 定义一个异步启动函数 bootstrap 专门用来引导项目启动
 async function bootstrap() {

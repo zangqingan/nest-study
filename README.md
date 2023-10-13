@@ -12,30 +12,29 @@ swagger 接口文档编写
 2023.8.23-购买掘金-神说要有光的-Nest 通关秘籍小册，主要学习实战部分知识点。
 Nest 基础：Nest 各种功能的使用，包括 IOC、AOP、全局模块、动态模块、自定义 provider、middleware、pipe、interceptor、guard 等功能，还有 Nest CLI 的使用，Nest 项目的调试。
 扩展高级：mysql、mongodb、redis、rabbitmq、nacos 等后端中间件学一遍，也会学习 pm2、docker、docker compose 等部署方案。
+目标是学习了这个之后自己能前后端一起做一个 demo 上线即可。
 
-# 二、nestjs 概述及基本使用
+# 二、nestjs 概述
 
-## 2.1 nestjs 概述
+## 2.1 nestjs 介绍及安装
 
 Nest (NestJS) 是一个用于构建高效、可扩展的 Node.js  服务器端应用程序的开发框架。它利用 JavaScript 的渐进增强的能力，使用并完全支持  TypeScript （仍然允许开发者使用纯 JavaScript 进行开发），并结合了 OOP （面向对象编程）、FP （函数式编程）和 FRP （函数响应式编程）。
-在底层，Nest 构建在强大的 HTTP 服务器框架上，例如  Express （默认），并且还可以通过配置从而使用  Fastify 。它是一个功能比较全面的 Nodejs 后端框架。其实和 Express 用法类似，不同在用使用了控制反转依赖注入。使用上更加方便。
+在底层，Nest 构建在强大的 HTTP 服务器框架上，例如  Express （默认），并且还可以通过配置从而使用  Fastify 。它是一个功能比较全面的 Nodejs 后端框架。其实和 Express 用法类似，不同在用使用了控制反转依赖注入使用上更加方便，功能也更加强大因为是框架它拥有一套完整的解决方案。
+本质上还是监听 HTTP 请求，然后处理并返回结果给前端。
 
+学习 nestjs 直接使用官方脚手架 nestcli 即可。
 安装脚手架:
 npm install -g @nestjs/cli // 全局安装 Nest 脚手架
 npm update -g @nestjs/cli // 全家升级脚手架版本
 之后跟 vue 脚手架类似就可以使用：nest 命令。
-它可以
-生成项目结构和各种代码
-编译代码
-监听文件变动自动编译
-打印项目依赖信息
+它可以生成项目结构和各种代码、编译代码、监听文件变动自动编译、打印项目依赖信息等
 
 ```
     常用命令：
-    nest -v 查看安装的版本。
+    nest -v 查看nestjs安装的版本。
     nest -h 查看帮助信息即脚手架提供的命令。
-    nest new 快速创建项目
-    nest generate 快速生成各种代码
+    nest new 项目名，用于快速创建一个nest项目
+    nest generate 快速生成各种模块代码
     nest build 使用 tsc 或者 webpack 构建代码
     nest start 启动开发服务，支持 watch 和调试
     nest info 打印 node、npm、nest 包的依赖版本
@@ -44,10 +43,10 @@ npm update -g @nestjs/cli // 全家升级脚手架版本
 脚手架创建项目：
 nest new project-name // 创建项目
 项目运行
-npm run start / nest start 其它启动命令查看包管理文件即可。
+npm run start:dev 其它启动命令查看包管理文件即可。
 此命令将使用 HTTP 服务器启动应用程序，以侦听 src/main.ts 文件中所定义的端口。
 
-nest 项目初始目录结构如下：
+脚手架生成的 nest 项目初始目录结构如下：
 
 ```
 项目名(文件名)
@@ -72,9 +71,10 @@ nest 项目初始目录结构如下：
 +-- tsconfig.build.json            // TypeScript语法构建时的配置文件
 +-- tsconfig.json                  // TypeScript的配置文件，控制TypeScript编译器的一些行为
 
+使用 Nest CLI 创建的项目会拥有一个初始的项目结构，以鼓励开发人员将每个模块保存在其专用目录中(也就是更加作用自定义模块文件名)。
 ```
 
-main.ts 就是项目的入口文件，一些全局的配置会在这里注入加载。
+main.ts 就是 nest 项目的入口文件，一些全局的配置会在这里注入加载，同时这个文件中包含了一个异步函数，此函数将引导（bootstrap） 应用程序的启动过程。
 
 AppModule 是应用程序的根模块，它提供了用来启动应用的引导机制，可以包含很多功能模块。
 .module 文件需要导出一个使用@Module() 装饰器装饰过的类，
@@ -92,11 +92,11 @@ exports、导出服务的列表，供其他模块导入使用。如果希望当�
 .service() 文件需要导出一个使用@Injectable 装饰器装饰过的类，用来定义服务。也就是路由命中后会执行的操作，数据的处理返回，数据库的查询，写入，更新，删除等操作都是在这个文件中进行。
 使用@Injectable 修饰后的 服务类, 在 模块 中注册之后，就可以直接在控制器中使用，我们就不需要使用 new AppService()去实例化，直接引入过来就可以用。也就是说在@Module 装饰器的 providers 选项中注册了，@Module 装饰器中 controllers 选项中注册的控制器里就可以直接引入使用 service 文件里定义的方法。
 
-所以一个基本的 nest 模块是按照 mvc 模式拆分的分成三个组成：模块 module、控制器 controller、服务 service。
+所以一个基本的 nest 模块是按照 mvc 模式拆分的分成三个组成：模块 module、控制器 controller(NestJS 的路由 由 控制器负责)、服务 service。
 
-## 2.2 nestjs 使用
+## 2.2 nestjs 脚手架常用命令
 
-安装 nest-cli，也就是 nestjs 脚手架后，脚手架提供了很多命令。除了之前用来创建项目的命令还有可以生成一些别的代码的命令，比如 controller、service、module 等。
+安装 nest-cli，也就是 nestjs 脚手架后，脚手架提供了很多命令。除了之前用来创建项目的命令还有可以生成一些别的模块代码的命令，比如 controller、service、module 等。这是非常常用的。记不住也问题不大查就完事儿了。
 声明如下：可以通过 nest generate -h 命令查看具体语法。
 //创建一个 nest 元素语法，
 nest generate [文件类型] [文件名] [文件目录] [参数]
@@ -110,6 +110,8 @@ nest generate [文件类型] [文件名] [文件目录] [参数]
 工具类 library/lib 、
 网关 gateway/ga、等等。
 
+```
+示例：
 1:创建模块
 //创建一个 posts 帖子模块
 nest g mo posts
@@ -140,9 +142,46 @@ nest info 命令:这个就是查看项目信息的，包括系统信息、 node�
 
 如上等相关的配置都可以在 nest-cli.json 配置文件中对应的配置选项上配置，就跟 vue 项目的配置文件一样。
 
-## 2.3 nestjs 实战目录
+```
 
-这是一种约定：
+## 2.3 nestjs 请求生命周期
+
+Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到响应的流程就如下：
+除了异常过滤器和拦截器（请求后）是由 路由->控制器->全局 之外，中间件、守卫、拦截器（请求前）、管道都是从 全局->控制器->路由 的顺序执行。
+1. 收到请求
+
+2. 全局绑定的中间件
+3. 模块绑定的中间件
+
+4. 全局守卫
+5. 控制层守卫
+6. 路由守卫
+
+7. 全局拦截器（控制器之前）
+8. 控制器层拦截器 （控制器之前）
+9. 路由拦截器 （控制器之前）
+
+10. 全局管道
+11. 控制器管道
+12. 路由管道
+13. 路由参数管道
+
+14. 控制器（方法处理器）
+
+15. 服务（如果有）
+
+16. 路由拦截器（请求之后）
+17. 控制器拦截器 （请求之后）
+18. 全局拦截器 （请求之后）
+
+19. 异常过滤器 （路由，之后是控制器，之后是全局）
+
+20. 服务器响应
+
+## 2.4 nestjs 实战目录
+
+使用 Nest CLI 创建的项目会拥有一个初始的项目结构，以鼓励开发人员将每个模块保存在其专用目录中(也就是更加作用自定义模块文件名)。所以根据个人喜好来就行，这只是一种约定：
+
 项目名(文件名)
 ├──dist 打包的目录
 ├──node_modules 模块依赖安装存放目录
@@ -152,25 +191,7 @@ nest info 命令:这个就是查看项目信息的，包括系统信息、 node�
 ├───── app.controller.ts 单个路由的基本控制器(Controller)
 ├───── app.module.ts 应用程序的根模块(Module)
 ├───── app.service.ts 具有单一方法的基本服务(Service)
-├───── main.ts nest 应用程序的入口文件，它使用核心函数 NestFactory 来创建 Nest 应用程序的实例。
-
-## 2.4 nestjs 全局模块
-
-当一个模块被很多地方使用时就可以考虑将其变成全局模块，只需要在模块前添加 @Global()装饰器装饰即可。
-不过全局模块还是尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
-
-## 2.5 nestjs 生命周期
-
-Nest 在启动的时候，会递归解析 Module 依赖，扫描其中的 provider、controller，注入它的依赖。
-全部解析完后，会监听网络端口，开始处理请求。
-这个过程中，Nest 暴露了一些生命周期方法：
-首先，递归初始化模块，会依次调用模块内的 controller、provider 的 onModuleInit 方法，然后再调用 module 的 onModuleInit 方法。
-
-全部初始化完之后，再依次调用模块内的 controller、provider 的 onApplicationBootstrap 方法，然后调用 module 的 onApplicationBootstrap 方法。然后监听网络端口。之后 Nest 应用就正常运行了。这个过程中，onModuleInit、onApplicationBootstrap 都是我们可以实现的生命周期方法。
-
-应用销毁的时候也同样有生命周期：先调用每个模块的 controller、provider 的 onModuleDestroy 方法，然后调用 Module 的 onModuleDestroy 方法。之后再调用每个模块的 controller、provider 的 beforeApplicationShutdown 方法，然后调用 Module 的 beforeApplicationShutdown 方法。然后停止监听网络端口。之后调用每个模块的 controller、provider 的 onApplicationShutdown 方法，然后调用 Module 的 onApplicationShutdown 方法。之后停止进程。
-
-provider、controller、module 都支持启动和销毁的生命周期函数，这些生命周期函数都支持 async 的方式。
+├───── main.ts nest 应用程序的入口文件，
 
 # 三、控制器 controller
 
@@ -761,9 +782,7 @@ ttt(@Res({ passthrough: true}) response: Response) {
 
 ```
 
-## 10.3 
-
-
+## 10.3
 
 # 十二、nest 连接 MySQL 数据库
 
@@ -819,3 +838,5 @@ User 相关
 -post /user 创建用户（注册）
 -put /user:id 修改用户 信息
 -delete /user:id 删除用户
+
+# 十五、总结
