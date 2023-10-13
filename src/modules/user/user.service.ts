@@ -63,6 +63,15 @@ export class UserService {
   }
 
   /**
+   * 
+   */
+  async findOneByName(username) {
+    return this.userRepository.findOne({
+      where: { username },
+    });
+  }
+
+  /**
    *
    * @param id 要更新的用户id
    * @param updateUserDto dto
@@ -107,7 +116,7 @@ export class UserService {
       username: user.username,
       role: user.role,
     });
-
+    // 登录成功返回token
     return token;
   }
 

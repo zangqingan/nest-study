@@ -18,6 +18,8 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { LoginDto } from './dto/login-user.dto';
 //  测试拦截器
 import { TestInterceptor } from 'src/common/interceptors/test/test.interceptor';
+// 是否登录
+import { LoginAuthGuard } from '../../common/guards/loginAuth.guard';
 
 @ApiTags('用户') // swagger文档标题
 @Controller('user') // 路由前缀
@@ -34,6 +36,7 @@ export class UserController {
 
   @ApiOperation({ summary: '获取所有用户' })
   @Get()
+  @UseGuards(LoginAuthGuard)
   @UseInterceptors(TestInterceptor) // 方法作用域拦截器
   findAll() {
     return this.userService.findAll();
