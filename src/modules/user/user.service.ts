@@ -63,7 +63,7 @@ export class UserService {
   }
 
   /**
-   * 
+   *
    */
   async findOneByName(username) {
     return this.userRepository.findOne({

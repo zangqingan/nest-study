@@ -48,8 +48,10 @@ export class PostsController {
    * @param post
    */
   @ApiOperation({ summary: '创建文章' })
-  @Post()
+  @Put('/create')
   async create(@Body() post: CreatePostDto) {
+    console.log('post');
+    console.log(post);
     return await this.postsService.create(post);
   }
 
@@ -59,6 +61,7 @@ export class PostsController {
   @ApiOperation({ summary: '获取所有文章' })
   @Get()
   async findAll(@Query() query): Promise<PostsRo> {
+    console.log('post');
     return await this.postsService.findAll(query);
   }
 

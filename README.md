@@ -187,6 +187,7 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 ├──node_modules 模块依赖安装存放目录
 ├──test 测试的目录
 ├──src 源码目录
+├───── 自定义目录
 ├───── app.controller.spec.ts 针对控制器的单元测试
 ├───── app.controller.ts 单个路由的基本控制器(Controller)
 ├───── app.module.ts 应用程序的根模块(Module)
@@ -195,7 +196,7 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 
 # 三、控制器 controller
 
-后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller 控制器，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 视图 View。
+nest控制器其实就是路由。后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller 控制器，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 视图 View。
 
 和 express 里的路由类似，nest 的控制器作用一样的：就是处理客户端传入的请求和向客户端返回响应。
 而在 nestjs 里，控制器就是被 @Controller 装饰器装饰的类就是一个 Controller 。
@@ -238,10 +239,10 @@ req.body === @Body()直接获取请求体 body 对象
 
 各种功能和业务代码具体实现的地方就是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间间等全都是 Providers，即提供各种问题具体解决方法的人。
 
-在 Nestjs 凡被 @Injectable 装饰器装饰的类就是 Providers ，提供者的主要思想是它可以注入依赖。他们都可以通过  constructor()方法注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。
+在 Nestjs 凡被 @Injectable 装饰器装饰的类就是 Providers ，提供者的主要思想是它可以通过 constructor 方法注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。
 本质上就是使用了 @Injectable() 装饰器声明的类就可以被 Nest IoC 容器管理。
 
-在 nestjs 一般作为 service 服务，所以文件命名一般是 xxx.service.js/ts。
+在 nestjs 中最常见是作为 service 服务，所以文件命名一般是 xxx.service.js/ts。
 也可以是过滤器， xxx.filter.js/ts。
 也可以是拦截器， xxx.interceptor.js/ts。
 等等反正就是一个用  @Injectable()  装饰器装饰的类。
@@ -250,6 +251,7 @@ req.body === @Body()直接获取请求体 body 对象
 
 # 五、模块 module
 
+它是nest的精髓所在，是控制反转IoC容器实现所在。
 Module 是 Nestjs 中 大的一个内容，它是整个 module 功能模块的收口 ，功能和特性和 Angular 保持一致。模块是具有 @Module() 装饰器的类。 @Module() 装饰器提供了元数据，Nest 用它来组织应用程序的结构。
 @Module() 装饰器可以接受下面的参数
 如果你需要把这个模块 暴露到全局使用可以加 一个装饰器 @Global
@@ -261,55 +263,97 @@ exports:[], // 如果你这个模块中的 provider 要在别的模块中使用�
 providers:[] // 由 Nest 注入器实例化的提供者，并且可以至少在整个模块中共享。
 })
 
-# 六、拦截器 interceptor
+# 六、中间件 middleware
 
-拦截器是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。
-在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
-它本质也是一个@Injectable()装饰器装饰的类，这个类实现了 NestInterceptor 接口，同时每个拦截器也实现了 intercept 方法，改方法接收两个参数：第一个是 ExecutionContext 实例 context(与警卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。
-在拦截器中 context.getClass()可以获取当前路由的类,
-context.getHandler()可以获取到路由将要执行的方法
-
-第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法
+## 6.1 中间件概述
+中间件是 NestJS 中实现 AOP 编程的五种方式之一与 Express 中的中间件类似,它是用于处理 HTTP 请求和响应的功能模块。它是路由处理程序之前调用的函数，也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。next() 中间件函数通常由名为 next 的变量表示。
+中间件函数可以执行以下任务：
+    执行任何代码。
+    对请求和响应对象进行更改。
+    结束请求-响应周期。
+    调用堆栈中的下一个中间件函数。
+    如果当前的中间件函数没有结束请求-响应周期, 它必须调用 next() 将控制传递给下一个中间件函数。否则, 请求将被挂起。
 
 ```
-脚手架命令快速生成一个拦截器
-nest g itc test --no-spec --flat
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { Observable } from 'rxjs';
+在nestjs中使用脚手架命令创建一个中间件
+nest g mi middlewareName --no-spec --flat
+使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。
+同时可以使用 express 中的类型指定req、res next钩子的类型。
+
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
 
 @Injectable()
-export class TestInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    return next.handle();
+export class TestMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    next();
+  }
+}
+
+```
+
+因为 nest 中间件也是使用 @Injectable() 装饰器装饰的类所以它完全支持依赖注入，所以可可以注册到全局模块使用，也可以在指定模块中注入使用。
+
+使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure()方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口所以会自动执行模块类的 configure 方法。
+
+```
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { PostsModule } from './modules/posts/posts.module';
+import { TagsModule } from './modules/tags/tags.module';
+// 连接MySQL数据库
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserModule } from './modules/user/user.module';
+// 中间件
+import { TestMiddleware } from './common/middlewares/test.middleware';
+
+// 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
+@Module({
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      password: 'wanggeng123456',
+      database: 'nest-vue-bms',
+      autoLoadEntities: true, //自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
+      synchronize: false, // 是否自动同步实体文件,生产环境建议关闭 - 不同步
+    }),
+    PostsModule,
+    TagsModule,
+    UserModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+// 导出根模块类，它已经经过 @Module 装饰器 装饰了。
+export class AppModule implements NestModule {
+  // 实现中间件注册
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(TestMiddleware) // 应用中间件,多个时逗号分隔即可。
+      .forRoutes('*'); // 指定应用的路由或者控制器
   }
 }
 
 
+```
+
+全局中间件就是使用 nest 使用 app 的 use 方法注册
 
 ```
 
-拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。
+const app = await NestFactory.create(AppModule);
+app.use(logger);
+await app.listen(3000);
 
 ```
-1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
-@UseInterceptors(LoggingInterceptor)
-export class CatsController {}
 
-2.方法作用域：就是只针对某个指定的方法进行拦截。
-export class CatsController {
-  @ApiOperation({ summary: '获取所有用户' })
-  @Get()
-  @UseInterceptors(TestInterceptor) // 方法作用域拦截器
-  findAll() {
-    return this.userService.findAll();
-  }
-}
+## 6.2 日志收集和记录中间件
 
-3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册
-
- app.useGlobalInterceptors(new TransformInterceptor());
-
-```
+使用 Nestjs 中的两个技术点 中间件 +拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
 
 # 七、过滤器 filter
 
@@ -403,102 +447,74 @@ app.useGlobalFilters(new HttpExceptionFilter());
 
 ```
 
-# 八、中间件 middleware
+# 八、拦截器 interceptor
 
-中间件是 NestJS 中实现 AOP 编程的五种方式之一与 Express 中的中间件类似,它是用于处理 HTTP 请求和响应的功能模块。也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。
+## 8.1 概述
+拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。
+在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
+它本质也是一个@Injectable()装饰器装饰的类，这个类实现了 NestInterceptor 接口，同时每个拦截器也实现了 intercept 方法。
+该方法接收两个参数：
+第一个是 ExecutionContext 实例 context(与警卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。
+在拦截器中 context.getClass()可以获取当前路由的类,
+context.getHandler()可以获取到路由将要执行的方法
+
+第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法
 
 ```
-在nestjs中使用脚手架命令创建一个中间件
-nest g mi middlewareName --no-spec --flat
-使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。
-同时可以使用express 中的类型指定req、res next钩子的类型。
-
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
+脚手架命令快速生成一个拦截器
+nest g itc test --no-spec --flat
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { Observable } from 'rxjs';
 
 @Injectable()
-export class TestMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
-    next();
+export class TestInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle();
   }
 }
 
 ```
 
-因为 nest 中间件也是使用 @Injectable() 装饰器装饰的类所以它完全支持依赖注入，所以可可以注册到全局模块使用，也可以在指定模块中注入使用。
+## 8.2 拦截器分类
 
-使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure()方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口所以会自动执行模块类的 configure 方法。
+拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。
 
 ```
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { PostsModule } from './modules/posts/posts.module';
-import { TagsModule } from './modules/tags/tags.module';
-// 连接MySQL数据库
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserModule } from './modules/user/user.module';
-// 中间件
-import { TestMiddleware } from './common/middlewares/test.middleware';
+1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
+@UseInterceptors(LoggingInterceptor)
+export class CatsController {}
 
-// 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
-@Module({
-  imports: [
-    TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: 'wanggeng123456',
-      database: 'nest-vue-bms',
-      autoLoadEntities: true, //自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
-      synchronize: false, // 是否自动同步实体文件,生产环境建议关闭 - 不同步
-    }),
-    PostsModule,
-    TagsModule,
-    UserModule,
-  ],
-  controllers: [AppController],
-  providers: [AppService],
-})
-// 导出根模块类，它已经经过@Module 装饰器 装饰了。
-export class AppModule implements NestModule {
-  // 实现中间件注册
-  configure(consumer: MiddlewareConsumer) {
-    consumer
-      .apply(TestMiddleware) // 应用中间件,多个时逗号分隔即可。
-      .forRoutes('*'); // 指定应用的路由或者控制器
+2.方法作用域：就是只针对某个指定的方法进行拦截。
+export class CatsController {
+  @ApiOperation({ summary: '获取所有用户' })
+  @Get()
+  @UseInterceptors(TestInterceptor) // 方法作用域拦截器
+  findAll() {
+    return this.userService.findAll();
   }
 }
 
+3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册
+
+ app.useGlobalInterceptors(new TransformInterceptor());
 
 ```
 
-全局中间件就是使用 nest 使用 app 的 use 方法注册
 
-```
 
-const app = await NestFactory.create(AppModule);
-app.use(logger);
-await app.listen(3000);
 
-```
-
-## 9.1 日志收集和记录中间件
-
-使用 Nestjs 中的两个技术点 中间件 +拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
 
 # 九、导航守卫 Guard
 
-它也是 NestJS 中实现 AOP 编程的五种方式之一，顾名思义,Guard 可以根据某些自定义的条件在调用某个 Controller 之前返回 true 或 false 决定放不放行。也就是进不进这个路由。本质上守卫也是一个带有@Injectable()装饰器的类。同时守卫应该实现 CanActivate 接口。
+## 9.1 概述
+导航它也是 NestJS 中实现 AOP 编程的五种方式之一，顾名思义,Guard 可以根据某些自定义的条件在调用某个 Controller 之前返回 true 或 false 决定放不放行也就是进不进这个路由。本质上守卫也是一个带有@Injectable()装饰器的类，同时守卫应该实现 CanActivate 接口。
 
-导航守卫就一个职责就是决定给定的请求是否由路由处理程序处理，也就是前端请求这个路径时处不处理。
-这取决于运行时存在的某些条件：如权限、角色、acl 等这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。
+导航守卫就一个职责：它们根据运行时出现的某些条件（例如权限，角色，访问控制列表等）来确定给定的请求是否由路由处理程序处理。 也就是决定给定的请求是否进入路由进而由路由处理程序处理，也就是前端请求这个路径时处不处理。
+这取决于运行时存在的某些条件：如权限、角色、acl 等，而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。
 
-每个守卫都必须实现一个 canActivate()函数。这个函数应该返回一个布尔值，指示当前请求是否被允许。
-如果返回 true，请求将被处理。如果返回 false, Nest 将拒绝请求。
-和拦截器一样有一个 ExecutionContext 类型的 context 参数,同样的我们可以根据 context.getHandler()拿到某个路由的元数据。
-一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行
+每个守卫类都必须实现一个 canActivate()方法。这个方法函数应该返回一个布尔值，指示当前请求是否被允许。
+如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。
+和拦截器一样有一个 ExecutionContext 类型的 context 参数,同样的我们可以根据 context.getHandler()拿到某个路由的元数据。一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。
 
 ```
 使用脚手架命令快速生成一个守卫
@@ -516,7 +532,11 @@ export class TestGuard implements CanActivate {
   }
 }
 
+```
+## 9.2 守卫分类
 Guard用法也有三种,分为全局路由守卫、控制器路由守卫、具体方法路由守卫,首先我们来看全局路由守卫的使用方法,用法和上面拦截器差不多,在main.ts中通过app.useGlobalGuards进行注册。
+
+```
  // 全局导航守卫
   app.useGlobalGuards(new TestGuard());
 
@@ -534,6 +554,7 @@ export class CatsController {}
 
 ```
 
+
 # 十、管道 pipe
 
 ## 10.1 管道概述
@@ -541,7 +562,7 @@ export class CatsController {}
 它也是 NestJS 中实现 AOP 编程的五种方式之一，在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类，它应该实现 PipeTransform 接口。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。
 
 管道有两个典型的用例:
-转换:将用户输入数据转换为所需的形式(例如，从字符串到整数)。
+转换:将用户输入数据转换为所需的形式后再输出(例如，从字符串到整数)。
 验证:对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
 在这两种情况下，管道都对由控制器路由处理程序处理的参数进行操作。
 
@@ -632,7 +653,7 @@ export class AppModule {}
 
 # 十一、安全相关
 
-## 10.1 概述
+## 11.1 概述
 
 http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。
 而基本所有网站都有登录功能，登录之后再次请求依然是登录状态。
@@ -681,7 +702,7 @@ verify signature 部分是把 header 和 payload 还有 salt 做一次加密之�
 
 ```
 
-## 10.2 代码层面解决
+## 11.2 代码层面解决
 
 在 Nest 里实现 session 还是用的 express 的中间件 express-session。
 安装 express-session 和它的 ts 类型定义
@@ -782,7 +803,6 @@ ttt(@Res({ passthrough: true}) response: Response) {
 
 ```
 
-## 10.3
 
 # 十二、nest 连接 MySQL 数据库
 
