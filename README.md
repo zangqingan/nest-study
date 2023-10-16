@@ -503,6 +503,29 @@ export class CatsController {
 
 ```
 
+## 8.3 nest 内置异常类
+
+throw new HttpException('缺少文章标题', 401);
+
+| 异常类名                      | 含义                                                                                    | 状态码 |
+| ----------------------------- | --------------------------------------------------------------------------------------- | ------ |
+| BadRequestException           | 服务器不理解客户端的请求，未做任何处理                                                  | 400    |
+| UnauthorizedException         | 用户未提供身份验证凭据，或者没有通过身份验证                                            | 401    |
+| NotFoundException             | 所请求的资源不存在，或不可用                                                            | 404    |
+| ForbiddenException            | 用户通过了身份验证，但是不具有访问资源所需的权限                                        | 403    |
+| NotAcceptableException        | 不可接受                                                                                | 406    |
+| RequestTimeoutException       | 请求超时                                                                                | 408    |
+| ConflictException             | 冲突                                                                                    | 409    |
+| GoneException                 | 所请求的资源已从这个地址转移，不再可用                                                  | 410    |
+| PayloadTooLargeException      | 负载过大                                                                                | 413    |
+| UnsupportedMediaTypeException | 客户端要求的返回格式不支持。比如，API 只能返回 JSON 格式，但是客户端要求返回 XML 格式。 | 415    |
+| UnprocessableException        | 客户端上传的附件无法处理，导致请求失败                                                  | 422    |
+| InternalServerErrorException  | 客户端请求有效，服务器处理时发生了意外                                                  | 500    |
+| NotImplementedException       | 未实现                                                                                  | 501    |
+| BadGatewayException           | 坏网关                                                                                  | 502    |
+| ServiceUnavailableException   | 服务器无法处理请求，一般用于网站维护状态                                                | 503    |
+| GatewayTimeoutException       | 网关超时                                                                                | 504    |
+
 # 九、导航守卫 Guard
 
 ## 9.1 概述
@@ -1046,9 +1069,178 @@ export class PostsService {
 
 ```
 
+## 12.2 字段校验
+
+不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。在 nest 中常使用 class-validator+类验证器来实现。
+安装：npm install --save class-validator class-transformer
+
 # 十三、配置接口文档 swagger
 
-安装：npm install @nestjs/swagger swagger-ui-express -S
+swagger 需要根据 nest 的底层库来选择，这里我们使用 express。
+安装：npm install --save @nestjs/swagger swagger-ui-express
+
+1. 配置 swagger
+
+在入口文件配置初始化
+
+```
+// 1. 引入nest核心类 NestFactory，用来创建nest应用实例
+import { NestFactory } from '@nestjs/core';
+// 平台ts约束
+import { NestExpressApplication } from '@nestjs/platform-express';
+// 2. 引入应用程序的根模块挂载
+import { AppModule } from './app.module';
+
+/** 其它全局相关的东西 start */
+// swagger
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+// 内置验证管道
+import { ValidationPipe } from '@nestjs/common';
+// 请求成功返回结果拦截器
+import { TransformInterceptor } from './common/interceptors/transform/transform.interceptor';
+// 请求错误过滤器
+import { HttpExceptionFilter } from './common/filter/http-exception/http-exception.filter';
+// 守卫测试
+import { TestGuard } from './common/guards/test.guard';
+
+/** 其它全局相关的东西 end */
+
+// 3. 定义一个异步启动函数 bootstrap 专门用来引导项目启动
+async function bootstrap() {
+  // 4. 调用 NestFactory 类的create 方法创建nest应用实例
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // app.setGlobalPrefix('api'); // 设置全局路由前缀
+  // 注册全局错误过滤器
+  app.useGlobalFilters(new HttpExceptionFilter());
+  // 注册全局返回拦截器
+  app.useGlobalInterceptors(new TransformInterceptor());
+  // 全局导航守卫
+  app.useGlobalGuards(new TestGuard());
+  // 全局注册管道
+  app.useGlobalPipes(new ValidationPipe());
+  // swagger
+  const config = new DocumentBuilder()
+    .setTitle('nest学习记录')
+    .setDescription('nest学习记录接口文档汇总')
+    .setVersion('1.0')
+    .addBearerAuth()
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api-docs', app, document);
+
+  // 启动http服务监听3000端口
+  await app.listen(3000);
+}
+
+// 5. 运行启动函数开启nest应用
+bootstrap();
+
+```
+
+2. 声明接口描述
+
+配置好之后就可以使用 swagger 提供的装饰器装饰需要描述接口、dto 等。
+
+```
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { PostsService, PostsRo } from './posts.service';
+import { CreatePostDto } from './dto/create-posts.dto';
+@ApiTags('帖子')
+@Controller('posts')
+export class PostsController {
+  // 初始化服务实例
+  constructor(private readonly postsService: PostsService) {}
+
+  // http://localhost:3000/posts/nihao 即可命中路由
+  @Get('/nihao')
+  getHello(): string {
+    return this.postsService.getHello();
+  }
+  // 2. 如何获取get的query参数和parma参数
+  // http://localhost:3000/posts/getQueryAndParam/id 即可命中路由
+  @Get('getQueryAndParam/:id?')
+  getQuery(
+    @Param('id') params: number,
+    @Query() query: { value: number; name: string },
+  ): object {
+    // 实际上你可以直接通过req去拿，当然通过注入也是可以的
+    return this.postsService.getQuery(params, query);
+  }
+  // 3. 如何获取POST PUT 等请求的Body参数
+  // http://localhost:3000/posts/postQuery/id 即可命中路由
+  @Post('postQuery/:id?')
+  postQuery(
+    @Param('id') params: number,
+    @Body() body: { value: number; name: string },
+  ): object {
+    // 实际上你可以直接通过req去拿，当然通过注入也是可以的
+    return this.postsService.postQuery(params, body);
+  }
+
+  /**
+   * 创建文章
+   * @param post
+   */
+  @ApiOperation({ summary: '创建文章' })
+  @Post('/create')
+  async create(@Body() post: CreatePostDto) {
+    return await this.postsService.create(post);
+  }
+
+  /**
+   * 获取所有文章
+   */
+  @ApiOperation({ summary: '获取所有文章' })
+  @Get()
+  async findAll(@Query() query): Promise<PostsRo> {
+    console.log('post');
+    return await this.postsService.findAll(query);
+  }
+
+  /**
+   * 获取指定文章
+   * @param id
+   */
+  @ApiOperation({ summary: '根据文章id获取指定文章' })
+  @Get(':id')
+  async findById(@Param('id') id) {
+    console.log('id', id);
+    return await this.postsService.findById(id);
+  }
+
+  /**
+   * 更新文章
+   * @param id
+   * @param post
+   */
+  @ApiOperation({ summary: '更新文章' })
+  @Put(':id')
+  async update(@Param('id') id, @Body() post) {
+    return await this.postsService.updateById(id, post);
+  }
+
+  /**
+   * 删除
+   * @param id
+   */
+  @ApiOperation({ summary: '根据文章id删除指定文章' })
+  @Delete(':id')
+  async remove(@Param('id') id) {
+    return await this.postsService.remove(id);
+  }
+}
+
+```
 
 # 十四、实战
 

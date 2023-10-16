@@ -1,5 +1,6 @@
 /**
- * 统一的异常处理器-在错误发生时做一个统一的过滤处理后再返回给前台
+ * 数据返回拦截器-统一的异常处理器-在错误发生时做一个统一的过滤处理后再返回给前端。
+ * 使用nest异常类是就会进入这里。
  */
 import {
   ArgumentsHost,
@@ -19,16 +20,18 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const message = exception.message
       ? exception.message
       : `${status >= 500 ? 'Service Error' : 'Client Error'}`;
+    // 定义返回数据对象
     const errorResponse = {
       data: {},
-      timestamp: new Date().toISOString(),
       message: message,
       code: status,
+      timestamp: new Date().toISOString(),
     };
 
-    // 设置返回的状态码， 请求头，发送错误信息
-    response.status(status);
-    response.header('Content-Type', 'application/json; charset=utf-8');
-    response.send(errorResponse);
+    // 设置返回的状态码， 请求头，错误信息
+    response
+      .status(status)
+      .header('Content-Type', 'application/json; charset=utf-8')
+      .send(errorResponse);
   }
 }

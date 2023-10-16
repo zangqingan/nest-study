@@ -12,7 +12,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { ValidationPipe } from '@nestjs/common';
 // 请求成功返回结果拦截器
 import { TransformInterceptor } from './common/interceptors/transform/transform.interceptor';
-// 错误过滤器
+// 请求错误过滤器
 import { HttpExceptionFilter } from './common/filter/http-exception/http-exception.filter';
 // 守卫测试
 import { TestGuard } from './common/guards/test.guard';
@@ -32,7 +32,7 @@ async function bootstrap() {
   app.useGlobalGuards(new TestGuard());
   // 全局注册管道
   app.useGlobalPipes(new ValidationPipe());
-  // swagger
+  // 配置swagger
   const config = new DocumentBuilder()
     .setTitle('nest学习记录')
     .setDescription('nest学习记录接口文档汇总')
@@ -40,6 +40,7 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
+  // 访问 http://localhost:3000/api-docs#/ 接口查看swagger文档
   SwaggerModule.setup('api-docs', app, document);
 
   // 启动http服务监听3000端口
