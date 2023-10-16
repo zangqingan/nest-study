@@ -10,7 +10,7 @@ import { AppModule } from './app.module';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 // 内置验证管道
 import { ValidationPipe } from '@nestjs/common';
-// 返回结果拦截器
+// 请求成功返回结果拦截器
 import { TransformInterceptor } from './common/interceptors/transform/transform.interceptor';
 // 错误过滤器
 import { HttpExceptionFilter } from './common/filter/http-exception/http-exception.filter';

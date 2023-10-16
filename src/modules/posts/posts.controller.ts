@@ -48,10 +48,8 @@ export class PostsController {
    * @param post
    */
   @ApiOperation({ summary: '创建文章' })
-  @Put('/create')
+  @Post('/create')
   async create(@Body() post: CreatePostDto) {
-    console.log('post');
-    console.log(post);
     return await this.postsService.create(post);
   }
 
@@ -92,7 +90,7 @@ export class PostsController {
    * @param id
    */
   @ApiOperation({ summary: '根据文章id删除指定文章' })
-  @Delete('id')
+  @Delete(':id')
   async remove(@Param('id') id) {
     return await this.postsService.remove(id);
   }

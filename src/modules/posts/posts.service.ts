@@ -40,7 +40,6 @@ export class PostsService {
    * @returns
    */
   async create(post: Partial<PostsEntity>): Promise<PostsEntity> {
-    console.log('post', post);
     const { title } = post;
     if (!title) {
       throw new HttpException('缺少文章标题', 401);
@@ -49,7 +48,7 @@ export class PostsService {
     if (doc) {
       throw new HttpException('文章已存在', 401);
     }
-    return await this.postsRepository.create(post);
+    return await this.postsRepository.save(post);
   }
 
   /**
@@ -89,7 +88,9 @@ export class PostsService {
    * @returns
    */
   async updateById(id, post): Promise<PostsEntity> {
-    const existPost = await this.postsRepository.findOne(id);
+    const existPost = await this.postsRepository.findOne({
+      where: { id },
+    });
     if (!existPost) {
       throw new HttpException(`id为${id}的文章不存在`, 401);
     }
@@ -103,7 +104,9 @@ export class PostsService {
    * @returns
    */
   async remove(id) {
-    const existPost = await this.postsRepository.findOne(id);
+    const existPost = await this.postsRepository.findOne({
+      where: { id },
+    });
     if (!existPost) {
       throw new HttpException(`id为${id}的文章不存在`, 401);
     }
