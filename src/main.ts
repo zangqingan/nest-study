@@ -37,7 +37,7 @@ async function bootstrap() {
     .setTitle('nest学习记录')
     .setDescription('nest学习记录接口文档汇总')
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth() // 接口增加token认证
     .build();
   const document = SwaggerModule.createDocument(app, config);
   // 访问 http://localhost:3000/api-docs#/ 接口查看swagger文档

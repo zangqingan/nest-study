@@ -5,6 +5,9 @@ import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+// 解密
+import * as bcrypt from 'bcryptjs';
+
 @Injectable()
 export class UserService {
   constructor(
@@ -29,7 +32,7 @@ export class UserService {
       throw new HttpException('用户名已存在', HttpStatus.BAD_REQUEST);
     }
     try {
-      // 创建对象
+      // 创建实体插入对象
       const newUser = await this.userRepository.create(createUserDto);
       // 返回新增的用户对象
       return await this.userRepository.save(newUser);
@@ -57,18 +60,9 @@ export class UserService {
       where: { id },
     });
     if (!user) {
-      throw new HttpException('用户名不存在', HttpStatus.BAD_REQUEST);
+      throw new HttpException('用户不存在', HttpStatus.BAD_REQUEST);
     }
     return user;
-  }
-
-  /**
-   *
-   */
-  async findOneByName(username) {
-    return this.userRepository.findOne({
-      where: { username },
-    });
   }
 
   /**
@@ -88,7 +82,6 @@ export class UserService {
    * @returns
    */
   async remove(id: number) {
-    console.log('id', id);
     const result = await this.userRepository.delete(id);
     return result;
   }
@@ -98,23 +91,11 @@ export class UserService {
    * @param user 登录用户信息
    * @returns 返回token对象
    */
-  async login(user: Partial<User>) {
-    console.log('user', user);
-    // 根据账号查找数据库看是否存在用户
-    const isExist = await this.userRepository.findOne({
-      where: { username: user.username },
-    });
-    console.log('isExist', isExist);
-    if (!isExist) {
-      throw new HttpException('用户名不存在', HttpStatus.BAD_REQUEST);
-    }
-    if (isExist.password !== user.password) {
-      throw new HttpException('密码错误', HttpStatus.BAD_REQUEST);
-    }
+  async login(req) {
     const token = this.createToken({
-      id: user.id,
-      username: user.username,
-      role: user.role,
+      id: req.user.id,
+      username: req.user.username,
+      role: req.user.role,
     });
     // 登录成功返回token
     return token;
