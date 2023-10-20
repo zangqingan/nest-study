@@ -827,6 +827,9 @@ ttt(@Res({ passthrough: true}) response: Response) {
 
 ```
 
+## 11.3 常量的管理 Configuration
+应用程序通常在不同的环境中运行。根据环境的不同，应该使用不同的配置设置。
+如果直接把相关的配置文件直接写死在代码里既是不安全的
 # 十二、nest 连接 MySQL 数据库
 
 nest 中使用 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上。
