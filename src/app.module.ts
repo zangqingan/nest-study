@@ -20,6 +20,7 @@ import { TestMiddleware } from './common/middlewares/test.middleware';
       username: 'root',
       password: 'wanggeng123456',
       database: 'nest-vue-bms',
+      logging: false, // 是否打印对应的sql语句
       autoLoadEntities: true, //自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
       synchronize: false, // 是否自动同步实体文件,生产环境建议关闭 - 不同步
     }),

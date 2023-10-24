@@ -57,9 +57,10 @@ export class PostsService {
    * @returns 所有博客列表
    */
   async findAll(query): Promise<PostsRo> {
-    const qb = await this.postsRepository.createQueryBuilder('post');
-    qb.where('1 = 1');
-    qb.orderBy('post.create_time', 'DESC');
+    const qb = await this.postsRepository
+      .createQueryBuilder('post')
+      .where('1 = 1')
+      .orderBy('post.create_time', 'DESC');
 
     const count = await qb.getCount();
     const { pageNum = 1, pageSize = 10, ...params } = query;

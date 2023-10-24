@@ -30,7 +30,7 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
   // 全局导航守卫
   app.useGlobalGuards(new TestGuard());
-  // 全局注册管道
+  // 全局注册参数验证管道
   app.useGlobalPipes(new ValidationPipe());
   // 配置swagger
   const config = new DocumentBuilder()

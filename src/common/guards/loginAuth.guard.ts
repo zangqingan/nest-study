@@ -1,3 +1,6 @@
+/**
+ * 登录验证守卫，只用来判断是否携带token即是否是登录状态。
+ */
 import {
   CanActivate,
   ExecutionContext,
@@ -29,6 +32,7 @@ export class LoginAuthGuard implements CanActivate {
     const token = bearer[1];
     try {
       const info = this.jwtService.verify(token);
+      // 这个user也会被挂载到请求对象req的user对象上。
       (request as any).user = info.user;
       return true;
     } catch (e) {
