@@ -828,8 +828,40 @@ ttt(@Res({ passthrough: true}) response: Response) {
 ```
 
 ## 11.3 常量的管理 Configuration
+
 应用程序通常在不同的环境中运行。根据环境的不同，应该使用不同的配置设置。
-如果直接把相关的配置文件直接写死在代码里既是不安全的
+如果直接把相关的配置文件直接写死在代码里既是不安全的，也不好统一管理。
+在 node 里最常用的是 .env 格式的配置文件，它有一个专门的 npm 包 dotenv 用来管理。
+npm install dotenv
+yaml 格式的配置文件也可以，安装 js-yaml 包。
+npm install js-yaml
+yaml 的格式更适合有层次关系的配置( 对象套对象、数组等复杂的)，而 .env 更适合简单的配置(就是简单的键值对)。
+然后都是通过 process 模块的 env 全局变量切换环境变量来切换生产、开发的配置文件。
+
+在 Nest 中提供了现成的封装：@nestjs/config 包(这个包内部也是使用的 dotenv。)。它会是创建一个 ConfigModule 并公开了一个 ConfigService，该服务加载适当的 .env 文件。
+安装：npm install --save @nestjs/config
+
+在根目录创建一个 .env 文件,在这个文件中定义键值对，其中每个键代表特定的值。
+
+然后在 AppModule 里面引入 ConfigModule 这样就可以使用 forRoot()方法注册 ConfigService 提供者，默认是读取项目根目录下的 .env 文件，可以传入一个对象指定配置文件。
+
+```
+{
+  envFilePath: '.development.env',
+}
+
+app.module.ts
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+
+@Module({
+  imports: [ConfigModule.forRoot()],
+  //方法会注册 ConfigService 提供者，该提供者提供了一个 get() 方法，用于读取这些已解析/合并的配置变量。
+})
+export class AppModule {}
+
+```
+
 # 十二、nest 连接 MySQL 数据库
 
 nest 中使用 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上。

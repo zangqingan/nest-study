@@ -3,6 +3,8 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PostsModule } from './modules/posts/posts.module';
 import { TagsModule } from './modules/tags/tags.module';
+// 引入配置管理模块
+// import { ConfigModule } from '@nestjs/config';
 // 连接MySQL数据库
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './modules/user/user.module';
@@ -12,6 +14,8 @@ import { TestMiddleware } from './common/middlewares/test.middleware';
 // 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
 @Module({
   imports: [
+    // 注册全局配置模块实现环境配置文件的读取
+    // ConfigModule.forRoot(),
     // 使用 TypeORM 配置数据库
     TypeOrmModule.forRoot({
       type: 'mysql',
