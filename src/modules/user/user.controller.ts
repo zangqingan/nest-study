@@ -9,9 +9,10 @@ import {
   UseInterceptors,
   ClassSerializerInterceptor,
   UseGuards,
+  Req,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
@@ -20,15 +21,16 @@ import { LoginDto } from './dto/login-user.dto';
 import { TestInterceptor } from 'src/common/interceptors/test/test.interceptor';
 // 是否登录
 import { LoginAuthGuard } from '../../common/guards/loginAuth.guard';
+import { User } from './entities/user.entity';
 
 @ApiTags('用户') // swagger文档标题
 @Controller('user') // 路由前缀
 // @UseInterceptors(TestInterceptor) // 控制器作用域拦截器
+@UseInterceptors(ClassSerializerInterceptor) //过滤掉如 @Exclude()装饰器装饰的属性
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @ApiOperation({ summary: '创建用户' })
-  @UseInterceptors(ClassSerializerInterceptor)
   @Post('register')
   create(@Body() createUserDto: CreateUserDto) {
     return this.userService.create(createUserDto);
@@ -36,9 +38,11 @@ export class UserController {
 
   @ApiOperation({ summary: '获取所有用户' })
   @Get()
-  @UseGuards(LoginAuthGuard)
+  // @UseGuards(LoginAuthGuard)// 自定义token验证守卫
+  @UseGuards(AuthGuard('jwt')) // passport-jwt策略token验证
   @UseInterceptors(TestInterceptor) // 方法作用域拦截器
-  findAll() {
+  findAll(@Req() req) {
+    console.log('req', req.user);
     return this.userService.findAll();
   }
 
@@ -61,11 +65,10 @@ export class UserController {
   }
 
   @ApiOperation({ summary: '用户登陆' })
-  @UseGuards(AuthGuard('local'))
-  @UseInterceptors(ClassSerializerInterceptor)
+  @UseGuards(AuthGuard('local')) // 增加登录导航校验
   @Post('login')
-  login(@Body() user: LoginDto) {
-    return this.userService.login(user);
+  login(@Body() user: LoginDto, @Req() req) {
+    return this.userService.login(req);
   }
 
   @ApiOperation({ summary: '是否已登录测试' })
