@@ -218,36 +218,85 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 
 # 三、NestJS 核心基础知识
 
-## 三、控制器 controller
+## 3.1 控制器 controller
 
-nest控制器其实就是路由。后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller 控制器，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 视图 View。
+### 1. 概述
+和原生node、express、koa 里我们抽离的路由类似，nest 的控制器作用一样的: 就是处理客户端传入的请求和向客户端返回响应、nest控制器其实也是路由。
 
-和 express 里的路由类似，nest 的控制器作用一样的：就是处理客户端传入的请求和向客户端返回响应。
-而在 nestjs 里，控制器就是被 @Controller 装饰器装饰的类就是一个 Controller 。
-而控制器总是属于某一个模块，所以要在 module 文件中把它导入到@Module() 装饰器对应的 controllers 选项中,这样 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装,也就可以直接使用它,其本身只做路由的控制跳转这样有利于业务的抽离。
+只不过在 NestJS 里是使用类和装饰器，而控制器就是使用 @Controller 装饰器装饰的一个类。装饰器的作用是将类与所需的元数据关联起来，并使Nest能够创建路由映射(将请求与相应的控制器关联起来)。
 
-在这个文件中常用的装饰器如下，它们的作用和 express 里的 req、res 对象类似。
-就是 nest 帮忙封装成了装饰器，可以直接使用罢了。
-常见的如下：它们都是'@nestjs/common' 模块导出的。
-import { Controller, Get, Post, Put, Patch, Delete, HttpCode, Headers, Redirect, Request, Response, Body, Param, Query,} from '@nestjs/common';
+在脚手架一节我们知道要使用CLI创建控制器，只需执行`$ nest g controller [name] `命令即可。
 
-@Controller() 装饰器，是一个类装饰器，用来装饰一个类。
-可以传入一个字符串值，作为路由前缀。
+和express里定义了路由要在入口文件引入才能起作用一样，在定义了控制器之后Nest仍然是不知道控制器存在的，因此不会创建此类的实例。在Nest里控制器总是属于某一个模块类，所以要把它导入到 @Module() 装饰器对应的 controllers 选项中,这样 Nest 就可以轻松反射（reflect）出哪些控制器（controller）必须被安装挂载,也就可以直接使用它,控制器本身只做路由的控制跳转这样有利于业务的抽离。
+
+### 2. 使用
+简单理解就是之前在express、koa里的路由相关的东西都使用了装饰器代替。
+这些装饰器它们的作用和 express 里的 req、res 对象类似、不过是 nest 帮忙封装成了装饰器，可以直接使用罢了。
+常见的如下：它们都是从'@nestjs/common' 模块导出的。
+`import { Controller, Get, Post, Put, Patch, Delete, HttpCode, Headers, Redirect, Request, Response, Body, Param, Query,} from '@nestjs/common';`
+
+1. @Controller() 装饰器，是一个类装饰器，用来装饰一个控制器类。
+可以传入一个字符串值，作为路由路径前缀。
 也可以传入一个对象，常用有三个配置属性
-{
-path:'路径',
-host:'路径',
-version:'接口版本'
+```
+@Controller('路由前缀')
+@Controller({
+   path:'路径',
+   host:'HTTP主机域名',
+   version:'接口版本'
+})
+export class CatsController {}
+
+```
+
+2. 方法装饰器，nest 提供了所有标准 HTTP 方法对应的请求方法装饰器，用来装饰具体的请求方法(类里定义的方法)。同样的这些装饰器也可以传入一个路径参数，它会拼接在 @Controller() 装饰器参数后面。而express、koa里直接使用路由方法。
+注意: 这个路径参数可以是字符串、或者模式匹配的路由。
+
+```
+// express、koa
+app.get('/cat',callback)
+router.post('/cat',callback)
+//nestjs
+@Get()
+@Post()
+@Put()
+@Patch()
+@Delete()
+@All()
+callback(){
+  //.....
 }
 
-方法装饰器，nest 提供了所有标准 HTTP 方法对应的请求方法装饰器，用来装饰具体的请求方法。
-@Get(), @Post(), @Put(), @Patch(), @Delete(), @All()。也可以给这些装饰器传入一个路径参数，它会拼接在@Controller() 装饰器参数后面。
-其它的方法装饰器还有如：@HttpCode() 用来指定返回的 http 状态码、@Headers 装饰器获取请求头信息、@Redirect 装饰器重定向。
+@HttpCode() 用来指定返回的 http 状态码
+@Header() 指定自定义的响应头
+@Headers() 装饰器获取请求头信息
+@Redirect(url,statusCode) 将响应重定向到特定的URL、接受两个参数url和statusCode，两者都是可选的。如果省略statusCode，其默认值为302（Found）。
 
-属性装饰器，用来装饰方法里的参数。
+@Post()
+@HttpCode(204)
+@Header('Cache-Control', 'none')
+create() {
+  return 'This action adds a new cat';
+}
+
+@Get('docs')
+@Redirect('http://nestjs.inode.club', 302)
+getDocs(@Query('version') version) {
+  if (version && version === '5') {
+    // 返回这个结构的对象会覆盖 @Redirect() 装饰器
+    return { url: 'http://nestjs.inode.club/v5/' };
+  }
+}
+
+路由参数
+
+```
+
+3. 属性装饰器，用来装饰方法里的形式参数。
 其中@Request(), @Req() 装饰器都会获取到请求 request 对象，跟 express 里的 req 对象一样
 其中@Response(), @Res() 装饰器都会获取到请求 response 对象，跟 express 里的 req 对象一样
 
+```
 获取 get 请求参数和动态路由参数和 express 里一样都是在请求对象里。
 req.query 和 req.params
 
@@ -256,72 +305,199 @@ req.body
 
 不过 nest 都提供了对应的装饰器，方便操作。
 req.query === @Query() 直接获取 query 查询对象
-req.params === @Param()直接获取 params 查询对象
+req.params === @Param()直接获取 params 查询对象、将特定的参数标记传递给装饰器，然后在方法体中直接按名称引用路由参数。
 req.body === @Body()直接获取请求体 body 对象
 
-## 四、提供者 provider
+@Get('getQueryAndParam/:id?')
+getQuery(
+ @Param('id') id: number,
+ @Query() query: { value: number; name: string },
+) {
 
-各种功能和业务代码具体实现的地方就是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间间等全都是 Providers，即提供各种问题具体解决方法的人。
+}
 
-在 Nestjs 凡被 @Injectable 装饰器装饰的类就是 Providers ，提供者的主要思想是它可以通过 constructor 方法注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。
-本质上就是使用了 @Injectable() 装饰器声明的类就可以被 Nest IoC 容器管理。
+@Post('postQuery/:id?')
+postQuery(
+ @Param('id') id: number,
+ @Body() body: { value: number; name: string },
+){
 
-在 nestjs 中最常见是作为 service 服务，所以文件命名一般是 xxx.service.js/ts。
-也可以是过滤器， xxx.filter.js/ts。
-也可以是拦截器， xxx.interceptor.js/ts。
-等等反正就是一个用  @Injectable()  装饰器装饰的类。
+}
+```
 
-它是业务实际处理的地方，它的使用也和前面 的 controller 类似，也需要在 module 文件通过@Module() 装饰器导入到对应的对象 providers 选项中去，这样就相当于在模块文件中注册。然后当控制器文件中使用 constructor 构造函数声明依赖时 constructor(private readonly catsService: CatsService),nest 的 IOC 容器就会查找之前注册的提供者实例化，将其缓存并返回。如果已经缓存，则直接返回现有实例。这样就可以直接使用了。
+使用脚手架创建一个 cats 控制器
+```javaScript
+// cats.controller.ts 
+// 定义一个控制器、必须使用@Controller()装饰器装饰。
+import { Controller, Get } from '@nestjs/common';
+// 使用 @Controller 装饰器装饰的类就是一个控制器、它可以接收一个可选的字符串参数作为路由路径前缀。
+// 方便地将一组相关的路由分组，并减少重复的代码。
+@Controller('cats')
+export class CatsController {
+  @Get()
+  findAll(): string {
+    return 'This action returns all cats';
+  }
+}
+// 必须在某个模块类的 @Module() 装饰器中的controllers 数组里注册，没有其它模块则注册到根 AppModule 模块类中。
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { CatsController } from './cats/cats.controller';
 
-## 五、模块 module
-
-它是 nest 的精髓所在，是控制反转 IoC 容器实现所在。
-Module 是 Nestjs 中 大的一个内容，它是整个 module 功能模块的收口 ，功能和特性和 Angular 保持一致。模块是具有 @Module() 装饰器的类。 @Module() 装饰器提供了元数据，Nest 用它来组织应用程序的结构。
-@Module() 装饰器可以接受下面的参数
-如果你需要把这个模块 暴露到全局使用可以加 一个装饰器 @Global
-@Global()
 @Module({
-controllers:[], // 前面说过的控制器
-imports:[], // 可以注入 其他 module 或者 provider
-exports:[], // 如果你这个模块中的 provider 要在别的模块中使用你必须要在这里声明导出 provider ，当然你也可以把这个 module 导出其他地方 import 一下这样其他模块中的 provider 也是可以使用的。
-providers:[] // 由 Nest 注入器实例化的提供者，并且可以至少在整个模块中共享。
+  // 注册
+  controllers: [CatsController],
 })
-
-## 六、中间件 middleware
-
-## 6.1 中间件概述
-
-中间件是 NestJS 中实现 AOP 编程的五种方式之一与 Express 中的中间件类似,它是用于处理 HTTP 请求和响应的功能模块。它是路由处理程序之前调用的函数，也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序请求响应周期中的 `next()` 中间件函数。next() 中间件函数通常由名为 next 的变量表示。
-中间件函数可以执行以下任务：
-执行任何代码。
-对请求和响应对象进行更改。
-结束请求-响应周期。
-调用堆栈中的下一个中间件函数。
-如果当前的中间件函数没有结束请求-响应周期, 它必须调用 next() 将控制传递给下一个中间件函数。否则, 请求将被挂起。
+export class AppModule {}
 
 ```
-在nestjs中使用脚手架命令创建一个中间件
-nest g mi middlewareName --no-spec --flat
+
+
+
+## 3.2 提供者 provider
+
+### 1. 概述
+提供者是Nest中的一个基本概念。各种功能和业务代码具体实现的地方都可以看作是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间件等全都是 Providers，即提供各种问题具体解决方法的人。比如控制器应该只处理HTTP请求、而将更复杂的任务(如: 数据库的查询、数据的处理等)委托给提供者。
+
+在 NestJS 里就是被 @Injectable 装饰器装饰的JavaScript类就是 Providers ，提供者的主要思想是它可以通过类的构造器方法即 constructor 方法注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。本质上就是使用了 @Injectable 装饰器装饰的类就可以被 Nest IoC 容器(反转控制容器)管理。
+
+在 NestJS 中提供者最常见是作为 service 服务，所以文件命名一般是 xxx.service.js/ts、也可以是过滤器 xxx.filter.js/ts、也可以是拦截器 xxx.interceptor.js/ts。
+等等反正就是一个用  @Injectable  装饰器装饰的类。
+
+### 2. 使用
+使用 CLI 创建一个服务提供者是很简单的、只需执行`$ nest g s [name] --no-spec`命令即可。跟之前express、koa里抽离的服务一样、要使用就必须引入。
+在定义了一个服务之后就可以通过**依赖注入**的方法在一个控制器类的内部使用它了、具体实现方法是通过类构造函数 constructor 注入依赖项的。然后还要将服务添加某个模块类的   @Module() 装饰器的 providers 数组里进行注册(没有就是根模块)、注册后Nest就能够解析 CatsController 类的依赖关系进而实例化需要的服务类。
+```javaScript
+import { Injectable } from '@nestjs/common';
+// 必须使用 @Injectable 装饰器装饰。
+@Injectable()
+export class CatsService {}
+
+import { CatsService } from './cats.service';
+@Controller('cats')
+export class CatsController {
+  // 通过类构造函数注入服务提供者、之后就可以在方法里使用了。
+  // 之后 Nest 的 IoC 容器就会查找之前注册的提供者实例化，将其缓存并返回。如果已经缓存，则直接返回现有实例。这样就可以直接使用了。
+  constructor(private readonly catsService: CatsService) {}
+
+  @Post()
+  async create(@Body() createCatDto: CreateCatDto) {
+    this.catsService.create(createCatDto);
+  }
+
+  @Get()
+  async findAll(): Promise<Cat[]> {
+    return this.catsService.findAll();
+  }
+}
+```
+
+### 3. 自定义提供者
+
+## 3.3 模块 module
+
+### 1. 概述
+模块是 nest 的精髓所在，是控制反转 IoC 容器实现所在。Module 是 NestJS 中一个大的一个内容，它是整个 module 功能模块的收口，功能和特性和 Angular 保持一致。
+
+在 Nest 中模块就是一个 @Module 装饰器装饰的类。 @Module 装饰器提供了元数据，Nest 用它来组织应用程序的结构。一般来说各个模块最终会在根模块 AppModule汇总、然后在入口文件main.ts里引入执行。
+
+根模块: 每个应用程序至少有一个模块、是Nest用于构建应用程序图的起点、是Nest用于解析模块和提供者之间关系和依赖关系的内部数据结构。
+
+```
+@Module() 装饰器接受一个单一的对象作为参数，其属性描述了模块。
+如果你需要把这个模块暴露到全局使用可以加 一个装饰器 @Global、全局模块应该仅注册一次，通常由根模块或核心模块完成。
+@Global()
+@Module({
+  controllers:[], // 这里注册了的控制器也会被自动实例化
+  imports:[], // 可以导入 其他 module 或者 provider
+  exports:[], // 如果你这个模块中的 provider 要在别的模块中使用你必须要在这里声明导出 provider ，当然你也可以把这个 module 导出其他地方 import 一下这样其他模块中的 provider 也是可以使用的。
+  providers:[] // 在这里注册了的提供者会被 Nest 注入器自动实例化，并且可以至少在整个模块中共享。
+})
+```
+
+### 2. 使用
+使用 CLI 创建一个模块也是很简单的、只需执行`$ nest g mo [name] --no-spec`命令即可。然后把该模块相关的所有内容都移动到了cats 目录中成一个特性模块。这样只需要在根模块里 imports 数组里注册这个特性模块即可。
+
+```javaScript
+import { Module } from '@nestjs/common';
+import { CatsController } from './cats.controller';
+import { CatsService } from './cats.service';
+
+@Module({
+  controllers: [CatsController],
+  providers: [CatsService],
+})
+export class CatsModule {}
+
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { CatsModule } from './modules/cats/cats.module';
+
+@Module({
+  imports: [CatsModule],// 引入注册
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+
+```
+
+### 3. 动态模块
+
+## 3.4 中间件 Middleware
+
+### 1. 概述
+中间件是 NestJS 中实现 AOP 编程的五种方式之一。和express和koa一样、Nest中也有中间件功能类似，Nest中间件默认情况下与express中间件等效。它是一个在路由处理程序之前调用的函数、也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序的请求-响应周期中的 next() 中间件函数。通常，next中间件函数由一个名为next的变量表示。
+
+中间件函数可以执行以下任务：
+1. 执行任何在中间件函数里定义的代码。
+2. 对请求和响应对象进行更改。
+3. 结束请求-响应周期。
+4. 调用堆栈中的下一个中间件函数。如果当前的中间件函数没有结束请求-响应周期, 它必须调用 next() 将控制传递给下一个中间件函数。否则, 请求将被挂起。
+
+
+### 2. 使用
+在Nest中中间件有两种定义方法:
+1. 一种是和express中间件一样就是一个函数没有任何特殊要求-函数式中间件。当中间件不需要任何依赖时使用。
+2. 另一种是带有 @Injectable()装饰器的类中实现自定义的Nest中间件。这个类应该实现NestMiddleware 接口-类中间件。
+
+在 Nest 中使用脚手架命令创建一个中间件使用命令 `$ nest g mi middlewareName --no-spec `、如创建一个 logger 中间件 `$ nest g mi common/logger --no-spec`
 使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。
 同时可以使用 express 中的类型指定req、res next钩子的类型。
 
+```javaScript
+// 类中间件-logger 中间件
 import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response, NextFunction } from 'express';
 
 @Injectable()
-export class TestMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: NextFunction) {
-    next();
+export class LoggerMiddleware implements NestMiddleware {
+  use(req: any, res: any, next: () => void) {
+    // 这里就可以范围到请求和响应对象
+    next();// 释放句柄
   }
 }
 
+// 函数式中间件
+import { Request, Response, NextFunction } from 'express';
+export function logger(req: Request, res: Response, next: NextFunction) {
+  console.log(`Request...`);
+  next();
+};
+
 ```
 
-因为 nest 中间件也是使用 @Injectable() 装饰器装饰的类所以它完全支持依赖注入，所以可可以注册到全局模块使用，也可以在指定模块中注入使用。
+因为在 Nest 中使用类方法实现的中间件也是使用 @Injectable() 装饰器装饰的类(提供者)所以它完全支持依赖注入，所以可以注册到全局模块使用，也可以在指定模块中注入使用，都是通过类构造方法 constructor 实现注入依赖项。
 
-使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure()方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口所以会自动执行模块类的 configure 方法。
+使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure() 方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口实现了这个接口会自动执行模块类的 configure 方法。
 
-```
+MiddlewareConsumer 是一个辅助类，它提供了几种内置方法来管理中间件。
+1. apply() 方法用来应用中间件,多个时逗号分隔即可。
+2. forRoutes() 方法可以接受一个字符串、多个字符串、一个 RouteInfo 对象、一个控制器类，甚至是多个控制器类。
+3. .exclude 方法用来排除、接受单个字符串、多个字符串或 RouteInfo 对象，用于标识要排除的路由
+
+
+```javaScript
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -360,47 +536,53 @@ export class AppModule implements NestModule {
     consumer
       .apply(TestMiddleware) // 应用中间件,多个时逗号分隔即可。
       .forRoutes('*'); // 指定应用的路由或者控制器
+      .forRoutes(CatsController); // 指定控制器
+      .exclude(
+        { path: 'cats', method: RequestMethod.GET },// RouteInfo 对象
+        { path: 'cats', method: RequestMethod.POST },
+        'cats/(.*)',
+      )
   }
 }
 
-
-```
-
-全局中间件就是使用 nest 使用 app 的 use 方法注册
-
-```
-
+// 全局注册中间件就是使用 app 的 use 方法注册、对每个已注册的路由生效。
 const app = await NestFactory.create(AppModule);
 app.use(logger);
 await app.listen(3000);
 
 ```
 
-## 6.2 日志收集和记录中间件
+### 3. 日志收集和记录中间件
 
 使用 Nestjs 中的两个技术点 中间件 +拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
 
-## 七、过滤器 filter
+## 3.5 过滤器 ExceptionFilter
 
-## 7.1 过滤器概述
+### 1. 概述
 
-过滤器也是 NestJS 中实现 AOP 编程的五种方式之一，Nest 中过滤器一般是指 异常处理 过滤器,他们开箱即用，返回一些指定的 JSON 信息。在 NestJS 中有一个内置异常层可以自动处理整个程序中抛出的异常,比如你访问一个不存在的路由它会自动返回 404。
+过滤器也是 NestJS 中实现 AOP 编程的五种方式之一，Nest 中过滤器一般是指: 异常处理过滤器,他们开箱即用返回一些指定的 JSON 信息。在 NestJS 中有一个内置异常处理层、当一个异常没有被应用程序代码处理时(显性声明处理)，它就会被这个异常处理层捕获，然后自动发送一个适当的用户友好响应。
 
-Nest 提供了一个内置的 HttpException 类，从@nestjs/common 包中公开。可以在任意地方使用它抛出一个错误。HttpStatus 也是从@nestjs/common 包中导入的一个 helper 枚举对象。
-HttpException 构造函数接收两个必填参数用来决定返回的信息
-new HttpException('描述信息', http 状态码);
-默认情况下，返回的 JSON 响应体也包含两个属性:
-statusCode:默认为 status 参数中提供的 HTTP 状态码
-message:基于状态的 HTTP 错误的简短描述。
-
-此外：Nest 提供了一组继承自基本 HttpException 的标准异常。这些都是从@nestjs/common 包中暴露出来的，代表了许多最常见的 HTTP 异常:
-
+默认情况下，这个操作是由内置的全局异常过滤器执行的，它处理类型为HttpException（以及其子类）的异常。当一个异常是未识别的（既不是HttpException，也不是继承自HttpException的类），内置的异常过滤器会生成以下默认的JSON响应:
 ```
+{
+  "statusCode": 500,
+  "message": "Internal server error"
+}
+```
+
+Nest 提供了一个内置的 HttpException 类，可以从@nestjs/common包中引入。可以在任意地方使用它手动抛出一个标准异常。
+
+HttpException 类接收两个必填参数用来决定返回的信息、默认情况下，返回的 JSON 响应体也包含两个属性。
+new HttpException('message描述信息', http状态码statusCode);
+1. message:基于状态的 HTTP 错误的简短描述。
+2. statusCode:默认为 status 参数中提供的 HTTP 状态码
+
+```JavaScript
 @Get()
 async findAll() {
   throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
 }
-当客户端访问时就会返回如下内容：
+// 当客户端访问时就会返回如下内容：
 {
   "statusCode": 403,
   "message": "Forbidden"
@@ -408,14 +590,26 @@ async findAll() {
 
 ```
 
-## 7.2 过滤器生成
+内置HTTP异常: Nest提供了一组标准异常，这些异常都是从基本的HttpException继承而来的。它们在@nestjs/common包中公开，代表了许多常见的HTTP异常。使用也是一样的手动抛出即可
 
-```
-脚手架命令快速生成一个过滤器
- nest g f http-exception --no-spec --flat
 
+
+### 2 使用
+尽管基础（内置）异常过滤器可以自动处理许多情况，但您可能希望对异常层具有完全控制。
+这时就创建一个异常过滤器，负责捕获 HttpException 类的实例，并为其实现自定义响应逻辑。使用 CLI 脚手架命令快速生成一个过滤器 `$ nest g f http-exception --no-spec`、 `$ nest g f common/http-exception --no-spec`。
+
+每一个过滤器都应该实现 ExceptionFilter 接口、实现接口要求提供具有指定签名的 catch(exception: T, host: ArgumentsHost) 方法。其中，T 表示异常的类型。
+
+@Catch(HttpException) 装饰器会将必要的元数据绑定到异常过滤器上，告诉 Nest，这个特定的过滤器正在寻找类型为 HttpException 的异常，而不是其他类型的异常。如果要捕获每个未处理的异常（无论异常类型如何）参数列表留空。
+
+定义了异常过滤器之后、就是使用。在 Nest 里过滤器和中间件、守卫、拦截器类似，也是有全局作用域过滤器、控制器作用域、方法作用域三种。有两种方法注册绑定过滤器、
+1. 使用 @UseFilters 装饰器注册方法作用域这样只应用于单个路由处理程序、也可以应用于控制器级别。与 @Catch() 装饰器类似，它可以接受一个过滤器实例，或者一个逗号分隔的过滤器实例列表。也可以传递类（而不是实例），将实例化的责任交给框架，并启用依赖注入。尽可能使用类来应用过滤器，而不是实例。这样做可以减少内存使用，因为 Nest 可以在整个模块中轻松重用相同类的实例。 
+2. 使用 app 实例的 useGlobalFilters 方法注册绑定的就是全局级别。
+
+
+```javaScript
  /**
- * 统一的异常处理器-在错误发生时做一个统一的过滤处理后再返回给前台
+ * 创建一个统一的异常处理器-在错误发生时做一个统一的过滤处理后再返回给前端
  */
 import {
   ArgumentsHost,
@@ -423,12 +617,15 @@ import {
   ExceptionFilter,
   HttpException,
 } from '@nestjs/common';
+import { Request, Response } from 'express';
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: HttpException, host: ArgumentsHost) {
+    // exception 当前正在处理的异常对象
+    // host 一个 ArgumentsHost 对象、它是一个强大的实用工具对象
     const ctx = host.switchToHttp(); // 获取请求上下文
-    const response = ctx.getResponse(); // 获取请求上下文中的 response对象
+    const response = ctx.getResponse<Response>(); // 获取请求上下文中的 response对象
     const status = exception.getStatus(); // 获取异常状态码
     // 设置错误信息,没有时根据状态码值返回
     const message = exception.message
@@ -448,33 +645,216 @@ export class HttpExceptionFilter implements ExceptionFilter {
   }
 }
 
-
-```
-
-## 7.3 过滤器注册
-
-和中间件、守卫、拦截器类似，也是有全局作用域过滤器、控制器作用域、方法作用域三种。
-
-```
-方法作用域：使用UseFilters装饰器装饰即可
+// 绑定过滤器
+// 方法作用域：使用UseFilters装饰器装饰即可
 @Post()
 @UseFilters(new HttpExceptionFilter())
 async create(@Body() createCatDto: CreateCatDto) {
   throw new ForbiddenException();
 }
 
-控制器作用域：
+// 控制器作用域：
 @UseFilters(new HttpExceptionFilter())
 export class CatsController {}
 
-全局作用域过滤器：在入口文件中使用useGlobalFilters装饰器设置全局
+// 全局作用域过滤器：在入口文件中使用useGlobalFilters装饰器设置全局
 app.useGlobalFilters(new HttpExceptionFilter());
 
 ```
 
-## 八、拦截器 interceptor
+## 3.6 管道 Pipe
 
-## 8.1 概述
+### 1. 概述
+
+它也是 NestJS 中实现 AOP 编程的五种方式之一，在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类(提供者)，PipeTransform<T, R> 是每个管道必须要实现的泛型接口。泛型 T 表明输入的 value 的类型，R 表明 transfrom() 方法的返回类型。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。管道有两个典型的用例:
+1. 转换: 将用户输入数据转换为所需的形式后再输出(例如，从字符串到整数)。
+2. 验证: 对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
+  
+在这两种情况下，管道参数(arguments) 会由控制器的路由处理程序进行操作。
+
+### 2. 内置管道
+Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包导出。
+
+1. ValidationPipe: 用于验证请求数据，通常用于验证请求体数据、查询参数、路由参数等。它使用了类似于 class-validator 库的装饰器来进行验证。如果验证失败，它会抛出 ValidationException 异常。
+
+2. ParseIntPipe: 用于将输入数据解析为整数。它可以将字符串形式的整数转换为 JavaScript 整数。如果无法解析为整数，它会抛出 BadRequestException 异常。
+
+3. ParseFloatPipe: 用于将输入数据解析为浮点数。
+
+4. ParseBoolPipe: 用于将输入数据解析为布尔值。它可以将字符串形式的"true"和"false"转换为对应的布尔值。如果无法解析为布尔值，它会抛出 BadRequestException 异常。
+
+5. ParseArrayPipe: 用于将输入数据解析为数组。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为数组，它会抛出 BadRequestException 异常。
+
+6. ParseUUIDPipe: 用于将输入数据解析为 UUID（Universally Unique Identifier）。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为 UUID，它会抛出 BadRequestException 异常。
+
+7. ParseEnumPipe: 枚举类型
+
+8. ParseFilePipe: 文件类型
+
+9. DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。
+
+### 3. 使用
+
+和中间件、过滤器等一样，管道可以是
+1. 参数范围(parameter-scoped)的、直接使用。
+2. 方法范围(method-scoped)的、使用@UsePipes 装饰器装饰
+3. 控制器范围的(controller-scoped)、使用@UsePipes 装饰器装饰
+4. 全局范围(global-scoped)的、app 实例的 useGlobalPipes 方法注册全局
+
+```JavaScript
+// 方法作用域：
+@Post()
+@UsePipes(new JoiValidationPipe(createCatSchema))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+// 所有转换管道即Parse*管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。
+@Get(':id')
+async findOne(@Param('id', ParseIntPipe) id: number) {
+  return this.catsService.findOne(id);
+}
+// 全局：依然是在入口文件中使用 useGlobalPipes 装饰器。
+app.useGlobalPipes(new ValidationPipe());
+
+```
+
+### 4. 自定义管道
+使用 CLI 脚手架创建一个管道使用命令即可 `$ nest g pi <name>`、`$ nest g pi common/validation-pipe`。
+
+为实现 PipeTransfrom接口，每个管道必须声明 transfrom() 方法。该方法有两个参数：
+1. value 当前处理的方法参数(在被路由处理程序方法接收之前)
+2. metadata 当前处理的方法参数的元数据。
+元数据对象具有以下属性:
+```javaScript
+
+export interface ArgumentMetadata {
+  type: 'body' | 'query' | 'param' | 'custom';
+  // 参数是一个 body @Body(), query @Query(), param @Param(), 还是自定义参数
+  metatype?: Type<unknown>;
+  // 参数的元类型
+  data?: string;
+  // 传递给装饰器的字符串
+}
+
+```   
+一般会使用基于对象结构的验证来对数据进行校验、这里常使用 Joi 库、它允许使用可读的 API 以直接的方式创建 schema，让我们构建一个基于 Joi schema 的验证管道。
+
+安装依赖: `$ npm install --save joi`
+
+```JavaScript
+import {
+  ArgumentMetadata,
+  Injectable,
+  BadRequestException,
+  PipeTransform,
+} from '@nestjs/common';
+import { ObjectSchema } from 'joi';
+
+@Injectable()
+export class ValidationPipePipe implements PipeTransform {
+  // 注入 Joi 的对象结构验证
+  constructor(private schema: ObjectSchema) {}
+  // 验证管道要么返回该值，要么抛出一个错误。
+  transform(value: any, metadata: ArgumentMetadata) {
+    // 如果字段名不一致抛出一个错误
+    const { error } = this.schema.validate(value);
+    if (error) {
+      throw new BadRequestException('Validation failed');
+    }
+    return value;
+  }
+}
+
+// 在控制器里注册管道
+import * as Joi from 'joi';
+const createCatSchema = Joi.object({
+  name: Joi.string().required(),
+  age: Joi.number().required(),
+  breed: Joi.string().required(),
+})
+
+export interface CreateCatDto {
+  name: string;
+  age: number;
+  breed: string;
+}
+
+
+@Post()
+@UsePipes(new ValidationPipePipe(createCatSchema))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+// 结构不一致时报错
+{
+    "message": "Validation failed",
+    "error": "Bad Request",
+    "statusCode": 400
+}
+
+
+```
+
+还有一种比较常用的验证管道类型是:**类验证器**、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类添加一些装饰器来校验。
+
+安装依赖: `$ npm i --save class-validator class-transformer`
+
+```JavaScript
+import {
+  ArgumentMetadata,
+  Injectable,
+  BadRequestException,
+  PipeTransform,
+} from '@nestjs/common';
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+
+@Injectable()
+export class ValidationPipePipe implements PipeTransform {
+  // 验证管道要么返回该值，要么抛出一个错误。
+  transform(value: any, metadata: ArgumentMetadata) {
+    // 如果字段名不一致抛出一个错误
+    const { error } = this.schema.validate(value);
+    if (error) {
+      throw new BadRequestException('Validation failed');
+    }
+    return value;
+  }
+}
+
+// 在控制器里注册管道
+import { IsString, IsInt } from 'class-validator';
+export interface CreateCatDto {
+  @IsString()
+  name: string;
+
+  @IsInt()
+  age: number;
+
+  @IsString()
+  breed: string;
+}
+
+
+@Post()
+@UsePipes(new ValidationPipePipe(createCatSchema))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+// 结构不一致时报错
+{
+    "message": "Validation failed",
+    "error": "Bad Request",
+    "statusCode": 400
+}
+
+
+```
+
+
+## 3.6 拦截器 interceptor
+
+### 8.1 概述
 
 拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。
 在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
@@ -501,7 +881,7 @@ export class TestInterceptor implements NestInterceptor {
 
 ```
 
-## 8.2 拦截器分类
+### 8.2 拦截器分类
 
 拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。
 
@@ -532,7 +912,7 @@ export class CatsController {
 
 ## 九、导航守卫 Guard
 
-## 9.1 概述
+### 9.1 概述
 
 导航它也是 NestJS 中实现 AOP 编程的五种方式之一，顾名思义,Guard 可以根据某些自定义的条件在调用某个 Controller 之前返回 true 或 false 决定放不放行也就是进不进这个路由。本质上守卫也是一个带有@Injectable()装饰器的类，同时守卫应该实现 CanActivate 接口。
 
@@ -561,7 +941,7 @@ export class TestGuard implements CanActivate {
 
 ```
 
-## 9.2 守卫分类
+### 9.2 守卫分类
 
 Guard 用法也有三种,分为全局路由守卫、控制器路由守卫、具体方法路由守卫,首先我们来看全局路由守卫的使用方法,用法和上面拦截器差不多,在 main.ts 中通过 app.useGlobalGuards 进行注册。
 
@@ -584,62 +964,7 @@ export class CatsController {}
 ```
 
 
-## 十、管道 pipe
 
-## 10.1 管道概述
-
-它也是 NestJS 中实现 AOP 编程的五种方式之一，在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类，它应该实现 PipeTransform 接口。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。
-
-管道有两个典型的用例:
-转换:将用户输入数据转换为所需的形式后再输出(例如，从字符串到整数)。
-验证:对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
-在这两种情况下，管道都对由控制器路由处理程序处理的参数进行操作。
-
-## 10.2 管道注册
-
-和中间件、过滤器等一样，管道也有全局作用域、方法作用域
-
-```
-方法作用域：
-@Post()
-@UsePipes(new JoiValidationPipe(createCatSchema))
-async create(@Body() createCatDto: CreateCatDto) {
-  this.catsService.create(createCatDto);
-}
-方法参数：绑定其他转换管道(所有Parse*管道)的工作原理类似。这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。
-@Get(':id')
-async findOne(@Param('id', ParseIntPipe) id: number) {
-  return this.catsService.findOne(id);
-}
-
-@Get()
-async findOne(@Query('id', ParseIntPipe) id: number) {
-  return this.catsService.findOne(id);
-}
-
-全局：依然是在入口文件中使用 useGlobalPipes 装饰器。
- app.useGlobalPipes(new ValidationPipe());
-
-
-```
-
-## 10.3 内置管道
-
-NestJS 提供了很多内置的 Pipe,其中有六个管道是可以开箱即用的它们都是从 @nestjs/common 包导出。
-
-ValidationPipe: 用于验证请求数据，通常用于验证请求体数据、查询参数、路由参数等。它使用了类似于 class-validator 库的装饰器来进行验证。如果验证失败，它会抛出 ValidationException 异常。
-
-ParseIntPipe: 用于将输入数据解析为整数。它可以将字符串形式的整数转换为 JavaScript 整数。如果无法解析为整数，它会抛出 BadRequestException 异常。
-
-ParseBoolPipe: 用于将输入数据解析为布尔值。它可以将字符串形式的"true"和"false"转换为对应的布尔值。如果无法解析为布尔值，它会抛出 BadRequestException 异常。
-
-ParseArrayPipe: 用于将输入数据解析为数组。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为数组，它会抛出 BadRequestException 异常。
-
-ParseUUIDPipe: 用于将输入数据解析为 UUID（Universally Unique Identifier）。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为 UUID，它会抛出 BadRequestException 异常。
-
-DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。
-
-## 10.4 自定义管道
 
 和其它 AOP 编程实现方式类似的
 
