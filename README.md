@@ -942,7 +942,7 @@ export class CatsController {}
 
 ### 1. 概述
 
-拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
+拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，功能上它和中间件是很类似的。在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
 
 **作用**
 1. 在函数执行之前/之后绑定额外的逻辑
@@ -1006,7 +1006,38 @@ app.useGlobalInterceptors(new TransformInterceptor());
 
 ```
 
-## 
+## 3.9 自定义装饰器
+
+### 1. 概述
+Nest是基于一种称为装饰器的语言特性构建的。一个ES2016装饰器是一个返回函数的表达式，它可以接受目标、名称和属性描述符作为参数。您可以通过在要装饰的内容的顶部加上@字符来应用它。装饰器可以定义(装饰)在类、方法或属性上。 
+
+### 2. 使用
+除了 Nest 提供的装饰器之外、用户还可以根据需要自定义装饰器。
+
+```JavaScript
+// 在Node.js世界中，通常的做法是将属性附加到request对象上。然后，在每个路由处理程序中手动提取它们
+// 例如 const user = req.user;
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+// 定义
+export const User = createParamDecorator(
+  // 这个 data 就是传入装饰器的参数，@User(data)
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user;
+  },
+);
+// 使用、定义一个装饰器直接取出
+@Get()
+async findOne(@User() user: UserEntity) {
+  console.log(user);
+}
+
+```
+
+# 四、NestJS 进阶知识
+
+## 4.
+
 ## 十一、安全相关
 
 ### 11.1 概述
@@ -1418,7 +1449,7 @@ export class PostsService {
 
 安装：npm install @nestjs/swagger swagger-ui-express -S
 
-# 四、
+
 
 # 五、
 
