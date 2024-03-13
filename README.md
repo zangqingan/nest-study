@@ -357,7 +357,7 @@ export class AppModule {}
 ## 3.2 提供者 provider
 
 ### 1. 概述
-提供者是Nest中的一个基本概念。各种功能和业务代码具体实现的地方都可以看作是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间件等全都是 Providers，即提供各种问题具体解决方法的人。比如控制器应该只处理HTTP请求、而将更复杂的任务(如: 数据库的查询、数据的处理等)委托给提供者。
+提供者是Nest中的一个基本概念。各种功能和业务代码具体实现的地方都可以看作是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间件、管道等全都是 Providers，即提供各种问题具体解决方法的人。比如控制器应该只处理HTTP请求、而将更复杂的任务(如: 数据库的查询、数据的处理等)委托给提供者。
 
 在 NestJS 里就是被 @Injectable 装饰器装饰的JavaScript类就是 Providers ，提供者的主要思想是它可以通过类的构造器方法即 constructor 方法注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。本质上就是使用了 @Injectable 装饰器装饰的类就可以被 Nest IoC 容器(反转控制容器)管理。
 
@@ -691,14 +691,13 @@ Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包�
 
 8. ParseFilePipe: 文件类型
 
-9. DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。
+9. DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。new DefaultValuePipe(false/1)、常和转换类管道一起使用提供默认值。
 
 ### 3. 使用
-
 和中间件、过滤器等一样，管道可以是
 1. 参数范围(parameter-scoped)的、直接使用。
-2. 方法范围(method-scoped)的、使用@UsePipes 装饰器装饰
-3. 控制器范围的(controller-scoped)、使用@UsePipes 装饰器装饰
+2. 方法范围(method-scoped)的、使用 @UsePipes 装饰器装饰
+3. 控制器范围的(controller-scoped)、使用 @UsePipes 装饰器装饰
 4. 全局范围(global-scoped)的、app 实例的 useGlobalPipes 方法注册全局
 
 ```JavaScript
@@ -710,12 +709,11 @@ async create(@Body() createCatDto: CreateCatDto) {
 }
 // 所有转换管道即Parse*管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。
 @Get(':id')
-async findOne(@Param('id', ParseIntPipe) id: number) {
+async findOne(@Param('id',new DefaultValuePipe(0) ParseIntPipe) id: number) {
   return this.catsService.findOne(id);
 }
 // 全局：依然是在入口文件中使用 useGlobalPipes 装饰器。
 app.useGlobalPipes(new ValidationPipe());
-
 ```
 
 ### 4. 自定义管道
@@ -801,30 +799,38 @@ async create(@Body() createCatDto: CreateCatDto) {
 
 ```JavaScript
 import {
-  ArgumentMetadata,
-  Injectable,
-  BadRequestException,
   PipeTransform,
+  Injectable,
+  ArgumentMetadata,
+  BadRequestException,
 } from '@nestjs/common';
 import { validate } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
 
 @Injectable()
-export class ValidationPipePipe implements PipeTransform {
-  // 验证管道要么返回该值，要么抛出一个错误。
-  transform(value: any, metadata: ArgumentMetadata) {
-    // 如果字段名不一致抛出一个错误
-    const { error } = this.schema.validate(value);
-    if (error) {
+export class ValidationPipePipe implements PipeTransform<any> {
+  async transform(value: any, { metatype }: ArgumentMetadata) {
+    if (!metatype || !this.toValidate(metatype)) {
+      return value;
+    }
+    // plainToInstance 方法将普通的 JavaScript 参数对象转换为可验证的类型对象
+    const object = plainToInstance(metatype, value);
+    const errors = await validate(object);
+    if (errors.length > 0) {
       throw new BadRequestException('Validation failed');
     }
     return value;
+  }
+
+  private toValidate(metatype: Function): boolean {
+    const types: Function[] = [String, Boolean, Number, Array, Object];
+    return !types.includes(metatype);
   }
 }
 
 // 在控制器里注册管道
 import { IsString, IsInt } from 'class-validator';
-export interface CreateCatDto {
+export class CreateCatDto {
   @IsString()
   name: string;
 
@@ -835,9 +841,8 @@ export interface CreateCatDto {
   breed: string;
 }
 
-
 @Post()
-@UsePipes(new ValidationPipePipe(createCatSchema))
+@UsePipes(new ValidationPipePipe())
 async create(@Body() createCatDto: CreateCatDto) {
   this.catsService.create(createCatDto);
 }
@@ -847,14 +852,95 @@ async create(@Body() createCatDto: CreateCatDto) {
     "error": "Bad Request",
     "statusCode": 400
 }
+```
+
+## 3.7 导航守卫 Guard
+
+### 1. 概述
+导航也是 NestJS 中实现 AOP 编程的五种方式之一，顾名思义 Guard 可以根据某些自定义的条件在调用某个 Controller 之前返回 true 或 false 决定放不放行、也就是进不进入这个路由。本质上 Nest 守卫也是一个带有 @Injectable()装饰器装饰的类，同时守卫要实现CanActivate 接口。
+
+导航守卫就一个职责：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。也就是决定给定的请求是否进入路由进而由路由处理程序处理，也就是前端请求这个接口路径时处不处理。而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。
+
+每个守卫类都必须实现一个 canActivate()方法。这个方法函数应该返回一个布尔值，指示当前请求是否被允许。如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。守卫会在所有中间件之后执行，但在拦截器或管道之前执行、由守卫引发的任何异常都将由异常层(全局异常过滤器和应用于当前上下文的任何异常过滤器)处理。作用类似express、koa里的鉴权中间件。
+
+canActivate() 函数接受一个参数，即 ExecutionContext 实例。ExecutionContext 继承自 ArgumentsHost。通过它我们可以获取对 Request 对象的引用、一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。
+
+### 2. 使用
+使用 CLI 脚手架创建一个守卫使用命令如下命令即可 `nest g gu AuthGuard --no-spec --flat`、这里我们创建一个验证守卫。
+
+这里我们可以通过 @SetMetadata 装饰器自定义元数据来向路由处理程序附加自定义元数据的能力。但直接在路由中使用@SetMetadata()不是一个良好的实践。相反，创建您自己的装饰器。为了访问路由的角色（自定义元数据），我们将使用Reflector辅助类，它由框架提供并从@nestjs/core包中公开。
+
+```javaScript
+// roles.decorator.ts
+import { SetMetadata } from '@nestjs/common';
+export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+// 这样就有了自定义的 @Roles() 装饰器
+
+@Post()
+@Roles('admin')
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+
+// auth.guard.ts
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { Reflector } from '@nestjs/core';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  // 注入依赖
+  constructor(private reflector: Reflector) {}
+
+  canActivate(
+    context: ExecutionContext,
+  ): boolean | Promise<boolean> | Observable<boolean> {
+    // 结果类似 [ 'user' ]
+    const roles = this.reflector.get<string[]>('roles', context.getHandler());
+    if (!roles) {
+      return true;
+    }
+    const request = context.switchToHttp().getRequest();
+    console.log('body', request.body);
+    const user = request.body.roles;
+    return roles.some((item) => item === user);
+  }
+}
+
+// 权限不足，也就是不通过时报错-自动返回以下响应。其背后的原理是，当守卫返回false时，框架会引发ForbiddenException。如果您希望返回不同的错误响应，您应该抛出自己特定的异常
+{
+    "message": "Forbidden resource",
+    "error": "Forbidden",
+    "statusCode": 403
+}
 
 
 ```
 
+和管道、过滤器使用方法类似，Guard 用法也有三种,分为全局路由守卫、控制器路由守卫、具体方法路由守卫
+1. @UseGuards注册应用到方法路由守卫、控制器守卫。
+2. app 对象的 useGlobalGuards 方法注册全局守卫
 
-## 3.6 拦截器 interceptor
+```JavaScript
+// 全局导航守卫
+app.useGlobalGuards(new TestGuard());
 
-### 8.1 概述
+// 这样就只在/aa路由中生效了
+@UseGuards(TestGuard)
+@Get('aa')
+aa(): string {
+ return 'aa';
+}
+
+// 这样就是整个控制器生效
+@UseGuards(RolesGuard)
+export class CatsController {}
+
+```
+
+## 3.8 拦截器 interceptor
+
+### 1. 概述
 
 拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。
 在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
@@ -881,7 +967,7 @@ export class TestInterceptor implements NestInterceptor {
 
 ```
 
-### 8.2 拦截器分类
+### 2. 使用
 
 拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。
 
@@ -910,104 +996,13 @@ export class CatsController {
 
 
 
-## 九、导航守卫 Guard
-
-### 9.1 概述
-
-导航它也是 NestJS 中实现 AOP 编程的五种方式之一，顾名思义,Guard 可以根据某些自定义的条件在调用某个 Controller 之前返回 true 或 false 决定放不放行也就是进不进这个路由。本质上守卫也是一个带有@Injectable()装饰器的类，同时守卫应该实现 CanActivate 接口。
-
-导航守卫就一个职责：它们根据运行时出现的某些条件（例如权限，角色，访问控制列表等）来确定给定的请求是否由路由处理程序处理。 也就是决定给定的请求是否进入路由进而由路由处理程序处理，也就是前端请求这个路径时处不处理。
-这取决于运行时存在的某些条件：如权限、角色、acl 等，而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。
-
-每个守卫类都必须实现一个 canActivate()方法。这个方法函数应该返回一个布尔值，指示当前请求是否被允许。
-如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。
-和拦截器一样有一个 ExecutionContext 类型的 context 参数,同样的我们可以根据 context.getHandler()拿到某个路由的元数据。一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。
-
-```
-使用脚手架命令快速生成一个守卫
-nest g gu test --no-spec --flat
--- test.guard.ts
-import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
-import { Observable } from 'rxjs';
-
-@Injectable()
-export class TestGuard implements CanActivate {
-  canActivate(
-    context: ExecutionContext,
-  ): boolean | Promise<boolean> | Observable<boolean> {
-    return true;
-  }
-}
-
-```
-
-### 9.2 守卫分类
-
-Guard 用法也有三种,分为全局路由守卫、控制器路由守卫、具体方法路由守卫,首先我们来看全局路由守卫的使用方法,用法和上面拦截器差不多,在 main.ts 中通过 app.useGlobalGuards 进行注册。
-
-```
- // 全局导航守卫
-  app.useGlobalGuards(new TestGuard());
-
-想要控制单个路由或者整个控制器的守卫写法也和拦截器差不多,在app.controller.ts使用UseGuards启用即可
-  @UseGuards(TestGuard)
-  @Get('aa')
-  aa(): string {
-    return 'aa';
-  }
-这样就只在/aa路由中生效了
-
-@UseGuards(RolesGuard)
-export class CatsController {}
-这样就是整个控制器生效
-
-```
 
 
 
-
-和其它 AOP 编程实现方式类似的
-
-```
-脚手架命令快速生成一个管道
-nest g pi test --no-spec --flat
-每个管道都必须实现transform()方法来实现PipeTransform接口契约。这个方法有两个参数:
-value参数是当前处理的方法参数(在被路由处理方法接收之前)，
-metadata是当前处理的方法参数的元数据是一个包含被处理数据的元数据对象,它有两个属性分别为
-type: 表示正在处理的数据的类型。可以是 'body'、'query'、'param' 或其他。这可以让我们确定管道是应用于请求体、查询参数、路由参数还是其他类型的数据。
-metatype: 表示正在处理的数据的原始 JavaScript 类型。例如，如果正在处理一个参数，并且该参数是一个字符串，那么 metatype 可能是 String 类型。
-
-
-import { ArgumentMetadata, Injectable, PipeTransform } from '@nestjs/common';
-
-@Injectable()
-export class TestPipe implements PipeTransform {
-  transform(value: any, metadata: ArgumentMetadata) {
-    return value;
-  }
-}
-
-注册使用：第一种是全局使用,可以在main.ts使用app.useGlobalPipes()进行全局注册,还可以在module中通过注入的方式使用。
-import { Module } from '@nestjs/common';
-import { APP_PIPE } from '@nestjs/core';
-import { CustomPipe } from './custom.pipe';
-
-@Module({
-  providers: [
-    {
-      provide: APP_PIPE,
-      useClass: CustomPipe, // 启用自定义管道
-    },
-  ],
-})
-export class AppModule {}
-
-
-```
 
 ## 十一、安全相关
 
-## 11.1 概述
+### 11.1 概述
 
 http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。
 而基本所有网站都有登录功能，登录之后再次请求依然是登录状态。
@@ -1056,7 +1051,7 @@ verify signature 部分是把 header 和 payload 还有 salt 做一次加密之�
 
 ```
 
-## 11.2 代码层面解决
+### 11.2 代码层面解决
 
 在 Nest 里实现 session 还是用的 express 的中间件 express-session。
 安装 express-session 和它的 ts 类型定义
@@ -1171,7 +1166,7 @@ nest 中使用 ORM 技术（Object-Relational Mapping）,即把关系数据库�
 实体是一个用@Entity()装饰器装饰过的映射到数据库表（或使用 MongoDB 时的集合）的类。
 可以通过定义一个新类来创建一个实体。
 
-## 12.1 nest 操作数据库步骤
+### 12.1 nest 操作数据库步骤
 
 安装必须的包之后就可以在 nest 中进行配置进而通过代码实现对数据库的增删改查了。
 
@@ -1407,7 +1402,7 @@ export class PostsService {
 
 ```
 
-## 12.2 字段校验
+### 12.2 字段校验
 
 不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。在 nest 中常使用 class-validator+类验证器来实现。
 安装：npm install --save class-validator class-transformer
