@@ -1036,7 +1036,202 @@ async findOne(@User() user: UserEntity) {
 
 # 四、NestJS 进阶知识
 
-## 4.
+## 4.1 提供者相关
+
+### 1. 依赖注入原理
+通过对提供者的学习、我们知道在Nest中构造函数基础的依赖注入(DI)作用是将提供者实例（通常是服务提供者）注入到需要使用的类中。
+
+而提供者是怎么实例化的、这个是通过控制反转(IOC)技术实现的。原理是将依赖项的实例化委托给IoC容器(在 Nest 里就是NestJS运行时系统)、而不是手动 new 实例化。
+
+在 Nest 中将提供者注入到我们的控制器类中是通过类的构造函数实现的、然后将提供者注册到Nest的IoC容器中(也就是模块中)。这个过程有三个关键步骤
+1. 使用 @Injectable() 装饰器声明的类可以由Nest IoC容器管理。
+2. 使用构造函数注入声明对提供者令牌的依赖、constructor(private catsService: CatsService)相当于声明了一个  CatsService 令牌标识,键值对同名。
+3. 在模块类中将 CatsService 令牌与真正的 CatsService 类关联起来(即注册)、类似于es对象的键值对名一致所以缩写了。
+   
+如此、当Nest IoC容器实例化 CatsController 时，它首先会查找任何依赖项。当它找到CatsService依赖项时，它会在CatsService令牌上进行查找，该令牌会根据上面的注册步骤返回CatsService类。然后Nest将创建一个CatsService的实例，将其缓存并返回，或者如果已经缓存了一个实例，则返回现有的实例。
+
+通过注册的完整写法、我们就可以理解注册过程。在这里，我们明确地将CatsService令牌与CatsService类关联起来。
+
+```JavaScript
+
+import { Controller, Get } from '@nestjs/common';
+import { CatsService } from './cats.service';
+import { Cat } from './interfaces/cat.interface';
+
+@Controller('cats')
+export class CatsController {
+  // 注入依赖项
+  constructor(private catsService: CatsService) {}
+
+  @Get()
+  async findAll(): Promise<Cat[]> {
+    return this.catsService.findAll();
+  }
+}
+
+// 将提供者注册到Nest的IoC容器中
+
+import { Module } from '@nestjs/common';
+import { CatsController } from './cats/cats.controller';
+import { CatsService } from './cats/cats.service';
+
+@Module({
+  controllers: [CatsController],
+  // 注册，这种写法实际是下面的缩写、令牌被用来请求同名类的实例
+  // 这种也叫标准提供者
+  providers: [CatsService],
+
+  // 完整写法
+  providers: [
+   {
+      // 令牌名
+      provide: CatsService,
+      // 实际的类名
+      useClass: CatsService,
+   }
+  ]; 
+})
+export class AppModule {}
+
+```
+
+### 2. 自定义提供者
+当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象
+
+```JavaScript
+{
+  provide: '令牌名', //除了是类名、还可以使用字符串、JavaScript的symbols或TypeScript的枚举作为标识符值。 
+  // 提供者的类型
+  useClass: '类提供者'
+  useValue: '值提供者'
+  useFactory: '工厂提供者'
+  useExisting: '别名提供者'
+
+}
+```
+
+1. 类提供者: useClass 也就是我们默认使用的标准形式、它可以动态确定一个令牌应该解析到哪个类。
+```JavaScript
+// 根据当前环境，我们希望Nest提供不同的配置服务实现。
+const configServiceProvider = {
+  provide: ConfigService,
+  useClass:
+    process.env.NODE_ENV === 'development'
+      ? DevelopmentConfigService
+      : ProductionConfigService,
+};
+
+@Module({
+  providers: [configServiceProvider],
+})
+export class AppModule {}
+
+```
+
+2. 值提供者: useValue 对于注入常量值、将外部库放入Nest容器中或用模拟对象替换真实实现非常有用。此时不同于基于构造函数的依赖注入、需要使用@Inject()装饰器注入自定义的提供者、这个装饰器接受一个参数 - 标识符。
+```JavaScript
+// 自定义提供者：同时使用字符串类型的标识符
+import { connection } from './connection';
+@Module({
+  providers: [
+    {
+      provide: 'CONNECTION',
+      useValue: connection,
+    },
+  ],
+})
+export class AppModule {}
+@Injectable()
+export class CatsRepository {
+  constructor(
+    // 基于类构造函数的依赖注入
+    private readonly catsService: CatsService,
+    // 自定义提供者使用 @Inject装饰器注入
+    @Inject('CONNECTION') private readonly conMsg,
+  ) {}
+  // 也可以当作属性注入
+  @Inject('CONNECTION')
+  private readonly conMsg;
+}
+```
+
+3. 工厂提供者: useFactory 、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。
+
+在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。
+这种叫异步提供者。
+```JavaScript
+// 提供者通常提供服务，但它们不仅限于此用途。提供者可以提供任何值。
+const configFactory = {
+  provide: 'CONFIG',
+  useFactory(){
+    // 根据当前环境提供配置对象的数组
+    return process.env.NODE_ENV === 'development' ? devConfig : prodConfig;
+  },
+};
+
+@Module({
+  providers: [configFactory],
+})
+export class AppModule {}
+
+```
+
+4. 别名提供者: useExisting、允许为现有的提供者创建别名、这样可以创建两种访问同一提供者的方式。
+```JavaScript
+
+@Injectable()
+class LoggerService {
+  /* implementation details */
+}
+
+const loggerAliasProvider = {
+  // 重命名
+  provide: 'AliasedLoggerService',
+  useExisting: LoggerService,
+};
+
+@Module({
+  providers: [LoggerService, loggerAliasProvider],
+})
+export class AppModule {}
+
+```
+
+**导出** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。
+
+```JavaScript
+// 只在当前模块作用域
+const connectionFactory = {
+  provide: 'CONNECTION',
+  useFactory: (optionsProvider: OptionsProvider) => {
+    const options = optionsProvider.get();
+    return new DatabaseConnection(options);
+  },
+  inject: [OptionsProvider],
+};
+
+@Module({
+  providers: [connectionFactory],
+  // 导出其它模块可以引入
+  exports: ['CONNECTION'],
+  exports: [connectionFactory],
+})
+export class AppModule {}
+
+
+```
+
+
+## 4.2 模块相关
+
+
+## 4.3 作用域
+
+## 4.4 执行上下文
+
+## 4.5 生命周期
+
+# 五、其它后端技术知识
 
 ## 十一、安全相关
 
@@ -1448,10 +1643,6 @@ export class PostsService {
 ## 十三、配置接口文档 swagger
 
 安装：npm install @nestjs/swagger swagger-ui-express -S
-
-
-
-# 五、
 
 # 六、实战
 
