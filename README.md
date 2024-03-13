@@ -1096,7 +1096,7 @@ export class AppModule {}
 ```
 
 ### 2. 自定义提供者
-当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象
+当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类令牌定义提供者时需要使用 @Inject() 装饰器引入。
 
 ```JavaScript
 {
@@ -1224,6 +1224,146 @@ export class AppModule {}
 
 ## 4.2 模块相关
 
+### 1. 静态模块
+模块是 Nest 实现依赖注入的关键所在、它定义了一组组件，如提供者和控制器，它们作为整个应用程序的模块部分相互配合。它们为这些组件提供了执行上下文或范围。例如，在模块中定义的提供者可以在不导出它们的情况下对模块的其他成员可见。当提供者需要在模块外部可见时，首先从其宿主模块导出，然后导入到其消费模块中。但是我们使用的基本是常规或静态模块绑定。看如下例子
+```JavaScript
+// UsersModule提供和导出一个 UsersService 。UsersModule是UsersService的宿主模块。
+import { Module } from '@nestjs/common';
+import { UsersService } from './users.service';
+@Module({
+  providers: [UsersService],
+  exports: [UsersService],
+})
+export class UsersModule {}
+
+// AuthModule 它导入了 UsersModule，从而使 UsersModule 导出的提供者UsersService 在 AuthModule 内部可用
+import { Module } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { UsersModule } from '../users/users.module';
+
+@Module({
+  imports: [UsersModule],// 导入UsersModule、不导入直接使用UsersService是不行的。
+  providers: [AuthService],
+  exports: [AuthService],
+})
+export class AuthModule {}
+
+// 在 AuthModule 中的 AuthService 中注入 UsersService以便使用它
+import { Injectable } from '@nestjs/common';
+import { UsersService } from '../users/users.service';
+
+@Injectable()
+export class AuthService {
+  constructor(private usersService: UsersService) {}
+  /*
+    Implementation that makes use of this.usersService
+  */
+}
+
+```
+
+### 2. 动态模块
+通过静态模块绑定，消费模块没有机会影响宿主模块的提供者配置。只能用不能修改。
+而如果有一个通用的模块，需要在不同的用例中以不同的方式运行(类似于“插件”)、其中一个通用工具需要在被消费者使用之前进行一些配置。这时就使用动态模块功能、动态模块会提供一个API方法以便消费模块在导入时自定义该模块的属性和行为，而不是使用我们到目前为止所见到的静态绑定。示例
+
+```JavaScript
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { ConfigModule } from './config/config.module';
+
+@Module({
+  // 动态模块导入
+  imports: [ConfigModule.register({ folder: './config' })],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+
+```
+
+从这个例子可以看出
+1. register() 是一个静态方法、因为是在 ConfigModule 类上调用它，而不是在类的实例上调用。实际上这个方法可以有任意的名称，但按照惯例，我们应该将它称为 forRoot()、forFeature()  或 register()。
+   - register() 创建模块时，您希望为调用模块配置特定的动态模块，仅供调用模块使用。例如，对于 Nest 的 @nestjs/axios 模块：HttpModule.register({ baseUrl: 'someUrl' } )。如果在另一个模块中使用 HttpModule.register({ baseUrl: 'somewhere else' })，它将具有不同的配置。您可以为尽可能多的模块执行此操作。
+   - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。
+   - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。
+2. register() 方法由自己定义，因此我们可以接受任何我们喜欢的输入参数。
+3. register() 方法必须返回类似于模块的东西，因为其返回值出现在熟悉的 imports 列表中。
+
+实际上，register() 方法返回的就是一个 DynamicModule。动态模块只是在运行时创建的模块，具有与静态模块完全相同的属性，以及一个额外的名为 module 的属性。对于动态模块，模块选项对象的所有属性都是可选的，除了 module。所以 ConfigModule 声明必须是如下结构。可以看出调用 ConfigModule.register(...) 返回一个具有属性的 DynamicModule 对象，这些属性本质上与我们迄今为止通过 @Module() 装饰器提供的元数据相同。
+
+```JavaScript
+
+import { DynamicModule, Module } from '@nestjs/common';
+import { ConfigService } from './config.service';
+
+@Module({})
+export class ConfigModule {
+  static register(): DynamicModule {
+    return {
+      module: ConfigModule,
+      providers: [ConfigService],
+      exports: [ConfigService],
+    };
+  }
+}
+
+```
+
+### 3. 模块配置
+显而易见的解决方案是在静态的 register() 方法中向 ConfigModule 传递一个选项对象
+本质上这个配置对象是给 模块 里的服务用的、所以关键是在运行时，我们首先需要将options对象绑定到 Nest IoC 容器，然后让 Nest 将其注入到我们的 ConfigService 中。提供者不仅可以是服务，还可以是任何值，因此我们完全可以使用依赖注入来处理一个简单的options对象。
+
+而动态模块返回的本质上与我们迄今为止通过 @Module() 装饰器提供的元数据相同。
+
+```JavaScript
+
+import { DynamicModule, Module } from '@nestjs/common';
+import { ConfigService } from './config.service';
+
+@Module({})
+export class ConfigModule {
+  static register(options: Record<string, any>): DynamicModule {
+    return {
+      module: ConfigModule,
+      providers: [
+        // 声明为提供者注入到 服务里。
+        {
+          provide: 'CONFIG_OPTIONS',
+          useValue: options,
+        },
+        ConfigService,
+      ],
+      exports: [ConfigService],
+    };
+  }
+}
+// 使用
+
+import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
+import { Injectable, Inject } from '@nestjs/common';
+import { EnvConfig } from './interfaces';
+
+@Injectable()
+export class ConfigService {
+  private readonly envConfig: EnvConfig;
+
+   // 使用非类令牌定义提供者时，需要使用 @Inject() 装饰器
+  constructor(@Inject('CONFIG_OPTIONS') private options: Record<string, any>) {
+    const filePath = `${process.env.NODE_ENV || 'development'}.env`;
+    const envFile = path.resolve(__dirname, '../../', options.folder, filePath);
+    this.envConfig = dotenv.parse(fs.readFileSync(envFile));
+  }
+
+  get(key: string): string {
+    return this.envConfig[key];
+  }
+}
+
+
+```
 
 ## 4.3 作用域
 
