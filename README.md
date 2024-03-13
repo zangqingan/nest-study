@@ -938,28 +938,43 @@ export class CatsController {}
 
 ```
 
-## 3.8 拦截器 interceptor
+## 3.8 拦截器 Interceptor
 
 ### 1. 概述
 
-拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。
-在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
-它本质也是一个@Injectable()装饰器装饰的类，这个类实现了 NestInterceptor 接口，同时每个拦截器也实现了 intercept 方法。
+拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，它和中间件是很类似的。在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
+
+**作用**
+1. 在函数执行之前/之后绑定额外的逻辑
+2. 转换从函数返回的结果
+3. 转换从函数抛出的异常
+4. 扩展基本函数行为
+5. 根据所选条件完全重写函数 (例如, 缓存目的)
+
+它本质也是一个使用 @Injectable 装饰器装饰的类，这个类实现了 NestInterceptor 接口。每个拦截器也实现了 intercept 方法。
 该方法接收两个参数：
-第一个是 ExecutionContext 实例 context(与警卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。
-在拦截器中 context.getClass()可以获取当前路由的类,
+1. 第一个是 ExecutionContext 实例 context(与守卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。在拦截器中 context.getClass()可以获取当前路由的类,
 context.getHandler()可以获取到路由将要执行的方法
+2. 第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法。在intercept()方法的实现中没有调用handle()方法，路由处理程序方法将根本不会被执行。
 
-第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法
+也就是说在最终路由处理程序执行之前和之后都可以实现自定义逻辑。
+1. 在intercept()方法中编写在调用handle()之前执行的代码
+2. handle()方法返回一个Observable，我们可以使用强大的RxJS操作符进一步操控响应、并将最终结果返回给调用方
 
-```
-脚手架命令快速生成一个拦截器
-nest g itc test --no-spec --flat
+**响应映射**
+
+我们已经知道handle()返回一个Observable。这个流包含来自路由处理程序返回的值，因此我们可以使用RxJS的map()操作符轻松地对其进行变换。
+
+### 2. 使用
+使用 CLI 脚手架命令可以快速生成一个拦截器: `nest g itc test --no-spec --flat`
+、如创建一个记录用户交互的拦截器 `$ nest g gu common/auth --no-spec`
+```javaScript
+
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
 
 @Injectable()
-export class TestInterceptor implements NestInterceptor {
+export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     return next.handle();
   }
@@ -967,16 +982,16 @@ export class TestInterceptor implements NestInterceptor {
 
 ```
 
-### 2. 使用
+与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。
+1. @UseInterceptors 装饰器绑定控制器作用域、方法作用域
+2. app 对象的 useGlobalInterceptors 方法全局绑定。
 
-拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。
-
-```
-1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
+```javaScript
+// 1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
 @UseInterceptors(LoggingInterceptor)
 export class CatsController {}
 
-2.方法作用域：就是只针对某个指定的方法进行拦截。
+// 2.方法作用域：就是只针对某个指定的方法进行拦截。
 export class CatsController {
   @ApiOperation({ summary: '获取所有用户' })
   @Get()
@@ -986,20 +1001,12 @@ export class CatsController {
   }
 }
 
-3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册
-
- app.useGlobalInterceptors(new TransformInterceptor());
+// 3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册
+app.useGlobalInterceptors(new TransformInterceptor());
 
 ```
 
-
-
-
-
-
-
-
-
+## 
 ## 十一、安全相关
 
 ### 11.1 概述
