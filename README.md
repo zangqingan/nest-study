@@ -1365,13 +1365,68 @@ export class ConfigService {
 
 ```
 
-## 4.3 作用域
+## 4.3 执行上下文(Execution Context)
+Nest提供了几个实用的类，帮助您轻松编写跨多个应用程序上下文（例如基于Nest HTTP服务器的、微服务和WebSockets应用程序上下文）运行的应用程序。
 
-## 4.4 执行上下文
+这些实用工具提供有关当前执行上下文的信息，可用于构建通用的守卫、过滤器和拦截器，可以适用于广泛的控制器、方法和执行上下文。
 
-## 4.5 生命周期
+### 1. ArgumentsHost 类
+ArgumentsHost类提供了一些方法，用于检索传递给处理程序的参数。它允许选择适当的上下文（例如HTTP、RPC（微服务）或WebSockets）来从中检索参数、可以使用ArgumentsHost的 getType()方法来实现。(这个类可以叫当前应用上下文)
+```JavaScript
+if (host.getType() === 'http') {
+  // do something that is only important in the context of regular HTTP requests (REST)
+} else if (host.getType() === 'rpc') {
+  // do something that is only important in the context of Microservice requests
+} else if (host.getType() === 'graphql') {
+  // do something that is only important in the context of GraphQL requests
+}
+// 应用的应用上下文是可以切换的
 
-# 五、其它后端技术知识
+/**
+ * Switch context to RPC.
+ */
+host.switchToRpc(): RpcArgumentsHost;
+/**
+ * Switch context to HTTP.
+ */
+host.switchToHttp(): HttpArgumentsHost;
+/**
+ * Switch context to WebSockets.
+ */
+host.switchToWs(): WsArgumentsHost;
+
+```
+
+在希望访问它的地方，Nest框架会提供ArgumentsHost的实例，通常作为一个 host 参数进行引用。我们现阶段主要是对于HTTP服务器应用程序、此时host对象封装了Express的[request，response，next]数组，其中request是请求对象，response是响应对象，next是控制应用程序的请求-响应周期的函数。可以通过以下方法获取
+```JavaScript
+const ctx = host.switchToHttp();// 切换到HTTP请求上下文
+const request = ctx.getRequest<Request>();//获取请求上下文中的 request 对象
+const response = ctx.getResponse<Response>();//获取请求上下文中的 response 对象
+
+```
+
+### 2. ExecutionContext 类
+ExecutionContext 扩展了 ArgumentsHost(也就死继承自ArgumentsHost)，提供有关当前执行过程的更多详细信息。
+与 ArgumentsHost 一样，Nest 在你可能需要的地方提供了 ExecutionContext 的实例，通常作为一个 context 参数进行引用。例如 guard 的 canActivate() 方法和 interceptor 的 intercept() 方法。(也可以叫执行上下文)。
+
+能够访问当前类和处理程序方法的引用提供了很大的灵活性。最重要的是，它使我们有机会从守卫或拦截器内部访问通过 @SetMetadata() 装饰器设置的元数据。
+
+```JavaScript
+// 方法返回即将被调用的处理程序的引用。
+context.getHandler() 
+// 方法返回此特定处理程序所属的 Controller 类型。
+context.getClass() 
+
+// 例如，在 HTTP 上下文中，如果当前处理的请求是绑定到 CatsController 上的 create() 方法的 POST 请求，getHandler() 将返回对 create() 方法的引用，而 getClass() 将返回 CatsController 类型（而不是实例）。
+
+
+const methodKey = context.getHandler().name; // "create"
+const className = context.getClass().name; // "CatsController"
+
+```
+
+
+# 五、其它技术知识
 
 ## 十一、安全相关
 
