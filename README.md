@@ -2106,8 +2106,74 @@ export class AppModule {}
 
 ```
 
+## 5.6 日志
+之前我们是自己收集信息然后写入本地文件中。
+Nest内置了一个基于文本的日志记录器，在应用程序引导和其他情况下（例如显示捕获的异常，即系统日志）中使用。此功能通过@nestjs/common包中的Logger类提供。对于更高级的日志功能，您可以使用任何Node.js日志包（如Winston）来实现完全自定义的生产级日志记录系统。
+
+
+## 5.7 事件
+Event Emitter包（@nestjs/event-emitter）提供了一个简单的观察者实现，允许您订阅和监听应用程序中发生的各种事件。事件作为应用程序各个方面解耦的很好方式，因为单个事件可以有多个不相互依赖的监听器。
+
+### 1. 使用
+
+安装所需的包: `$ npm i --save @nestjs/event-emitter`
+
+安装完成后，将EventEmitterModule导入到根AppModule中，并像下面显示的那样运行forRoot()静态方法：forRoot()调用会初始化事件发射器并注册应用程序中存在的任何声明性事件监听器。注册发生在onApplicationBootstrap生命周期钩子发生时，确保所有模块都已加载并声明了任何预定的作业。
+```JavaScript
+
+import { Module } from '@nestjs/common';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+
+@Module({
+  imports: [
+    EventEmitterModule.forRoot()
+  ],
+})
+export class AppModule {}
+
+```
+
+**emit触发事件:**要调度（即触发）一个事件，首先使用标准构造函数注入来注入EventEmitter2,然后在一个类中使用它即可。
+```JavaScript
+import {EventEmitter2} from '@nestjs/event-emitter'
+constructor(private eventEmitter: EventEmitter2) {}
+
+this.eventEmitter.emit(
+  'order.created',
+  new OrderCreatedEvent({
+    orderId: 1,
+    payload: {},
+  }),
+);
+
+```
+
+**监听事件:**要声明一个事件监听器，使用@OnEvent()装饰器在包含要执行的代码的方法定义之前进行修饰即可。作为一个提供者传入模块即可。
+```JavaScript
+import { Injectable } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
+
+@Injectable()
+export class FindCatsAllListener {
+  @OnEvent('find-mongo')
+  handleOrderCreatedEvent(payload: any) {
+    // emit 抛出的载荷
+    console.log('payload', payload);
+  }
+
+  @OnEvent('order.created')
+  handleOrderCreatedEvent(payload: OrderCreatedEvent) {
+     // handle and process "OrderCreatedEvent" event
+  }
+}
+
+// 模块类中依赖注入
+ providers: [CatsService, valueProvider, factoryProvider, FindCatsAllListener],
+```
+
+
 ## 5. 文件上传
-## 5. 日志
+
 ## 5. 压缩
 
 
