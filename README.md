@@ -1006,6 +1006,44 @@ app.useGlobalInterceptors(new TransformInterceptor());
 
 ```
 
+### 3. 序列化
+序列化是在对象在网络响应中返回之前发生的过程。在这个阶段，我们可以定义规则来转换和清理要返回给客户端的数据。例如，敏感数据如密码应始终从响应中排除。或者，某些属性可能需要进行额外的转换，比如只发送实体的部分属性。
+
+比如：定义一个数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理。
+
+```JavaScript
+/**
+ * 数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理
+ */
+import {
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
+import { map, Observable } from 'rxjs';
+
+
+@Injectable()
+export class TransformInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(
+      map((data) => {
+        return {
+          data,
+          code: 200,
+          msg: '请求成功',
+        };
+      }),
+    );
+  }
+}
+
+
+
+```
+
+
 ## 3.9 自定义装饰器
 
 ### 1. 概述
