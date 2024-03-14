@@ -2172,9 +2172,20 @@ export class FindCatsAllListener {
 ```
 
 
-## 5. 文件上传
+## 5.8 压缩
+压缩可以大大减小响应体的大小，从而提高Web应用的速度。这个主要说的是打包构建时。和在express中一样使用 compression 中间件包来启用 Gzip 压缩、安装完成后，将压缩中间件应用为全局中间件。
 
-## 5. 压缩
+安装:`$ npm i --save compression`
+```JavaScript
+// 根模块
+import * as compression from 'compression';
+// somewhere in your initialization file
+app.use(compression());
+
+```
+
+
+## 5. 文件上传
 
 
 ## 5. 安全相关
