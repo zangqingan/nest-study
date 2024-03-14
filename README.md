@@ -1500,6 +1500,262 @@ const title = this.configService.get('APP_TITE');
 
 ```
 
+## 5.2 数据库相关
+Nest 是数据库无关的，允许您轻松集成任何 SQL 或 NoSQL 数据库。依然是MySQL、mongodb、redis三个数据库为主。不同在于为了与 SQL 和 NoSQL 数据库集成，Nest 提供了 @nestjs/typeorm 包。它使用的是 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上来操作数据库、它和我们使用的 mongoose 包类似的。
+
+### 1. MySQL
+
+这里我们选择 typeORM 这个库来操作关系型数据库mysql。
+
+安装：`$ npm install --save @nestjs/typeorm typeorm mysql2`
+
+安装必须的包之后就可以在 Nest 中进行配置进而通过代码实现对数据库的增删改查了。
+
+#### 使用步骤
+
+1. 完成安装后将 TypeOrmModule 导入到根 AppModule 中、在 nest 项目中注册 typeORM。注册完成后，TypeORM 的 DataSource 和 EntityManager 对象将可在整个项目中进行注入（无需导入任何模块）。
+
+```JavaScript
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { PostsModule } from './modules/posts/posts.module';
+import { TagsModule } from './modules/tags/tags.module';
+// 连接MySQL数据库
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { UserModule } from './modules/user/user.module';
+// 全局中间件
+import { TestMiddleware } from './common/middlewares/test.middleware';
+
+// 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
+@Module({
+  imports: [
+    // 使用 TypeORM 配置数据库
+    TypeOrmModule.forRoot({
+      type: 'mysql',
+      host: 'localhost',
+      port: 3306,
+      username: 'root',
+      password: 'wanggeng123456',
+      database: 'nest-vue-bms',
+      retryDelay: 4000,// 连接重试之间的延迟（毫秒） (默认值: 3000)
+      // entities: [User], // 一个一个手动将实体添加到数据源选项的 entities 数组注册
+      autoLoadEntities: true, // 自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
+      synchronize: false, // 是否自动同步实体文件(即是否建表),生产环境建议关闭否则可能会丢失生产数据 - 不同步
+    }),
+    PostsModule,
+    TagsModule,
+    UserModule,
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+// 导出根模块类，它已经经过@Module 装饰器 装饰了。
+export class AppModule implements NestModule {
+  // 实现中间件注册
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TestMiddleware).forRoutes('*');
+  }
+}
+
+```
+
+orm 有两种方式实现对具体的数据库表的操作:
+ - 一种是使用 EntityManager 实体管理器
+ - 另一种是使用 Repository 存储库模式
+
+两者都可以实现对数据库表的 curd 操作，但是 Repository 操作仅限于具体实体也就是指定的单个表名。所以一般我们使用后者。
+
+2. 创建实体 Entity
+
+Entity 就是由 @Entity 装饰器装饰的一个类，TypeORM 会为此类模型创建数据库表。
+其中 @Entity 装饰器 传入的参数就是实际创建的数据库表名。还有字段名的定义、约束、校验等都是在这里定义的。一般都是单独放在 entities 目录下。
+
+```JavaScript
+import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+@Entity('posts')
+export class PostsEntity {
+  @PrimaryGeneratedColumn()
+  id: number; // 标记为主列，值自动生成
+
+  @Column({ length: 50 })
+  title: string;
+
+  @Column({ length: 20 })
+  author: string;
+
+  @Column('text')
+  content: string;
+
+  @Column({ default: '' })
+  thumb_url: string;
+
+  @Column('tinyint')
+  type: number;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  create_time: Date;
+
+  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
+  update_time: Date;
+}
+
+```
+
+3. 在 module 中注入要使用那些存储库
+
+使用 TypeOrmModule.forFeature() 方法来定义在当前范围内注册哪些仓库。有了这个设置，我们可以使用 @InjectRepository() 装饰器将 UsersRepository 注入到 UsersService 中
+
+```JavaScript
+// posts.module.ts
+import { Module } from '@nestjs/common';
+import { PostsController } from './posts.controller';
+import { PostsService } from './posts.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { PostsEntity } from './entities/posts.entity';
+@Module({
+  // 注册实体类
+  imports: [TypeOrmModule.forFeature([PostsEntity])],
+  controllers: [PostsController],
+  providers: [PostsService],
+})
+export class PostsModule {}
+
+```
+
+4. 在 service 文件中使用仓库
+
+模块文件中注入之后就可以在服务类中注册使用了,使用 @InjectRepository(实体类名)的形式注册。之后通过这个变量就可以实现对对应数据库表的 curd。
+
+```JavaScript
+import { HttpException, Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { PostsEntity } from './entities/posts.entity';
+
+// 查询参数接口
+interface QueryItf {
+  value: number;
+  name: string;
+}
+// 帖子信息接口
+export interface PostsRo {
+  list: PostsEntity[];
+  count: number;
+}
+
+@Injectable()
+export class PostsService {
+  constructor(
+    @InjectRepository(PostsEntity) // 注入实体类仓库操作数据库
+    private readonly postsRepository: Repository<PostsEntity>,
+  ) {}
+
+  /**
+   * 测试路由
+   * @returns string
+   */
+  getHello(): string {
+    return 'Hello World! test router';
+  }
+  getQuery(params: number, query: QueryItf): object {
+    return { id: params, value: query.value, name: query.name };
+  }
+  postQuery(params: number, body: QueryItf): object {
+    return { id: params, value: body.value, name: body.name };
+  }
+  /**
+   * 创建文章
+   * @param post
+   * @returns
+   */
+  async create(post: Partial<PostsEntity>): Promise<PostsEntity> {
+    const { title } = post;
+    if (!title) {
+      throw new HttpException('缺少文章标题', 401);
+    }
+    const doc = await this.postsRepository.findOne({ where: { title } });
+    if (doc) {
+      throw new HttpException('文章已存在', 401);
+    }
+    return await this.postsRepository.save(post);
+  }
+
+  /**
+   * 查询所有博客
+   * @param query
+   * @returns 所有博客列表
+   */
+  async findAll(query): Promise<PostsRo> {
+    const qb = await this.postsRepository.createQueryBuilder('post');
+    qb.where('1 = 1');
+    qb.orderBy('post.create_time', 'DESC');
+
+    const count = await qb.getCount();
+    const { pageNum = 1, pageSize = 10, ...params } = query;
+    qb.limit(pageSize);
+    qb.offset(pageSize * (pageNum - 1));
+
+    const posts = await qb.getMany();
+    return { list: posts, count: count };
+  }
+
+  /**
+   * 更加id查找指定博客
+   * @param id
+   * @returns {指定博客对象}
+   */
+  async findById(id: number): Promise<PostsEntity> {
+    return await this.postsRepository.findOne({
+      where: { id },
+    });
+  }
+
+  /**
+   * 更新指定博客
+   * @param id
+   * @param post
+   * @returns
+   */
+  async updateById(id, post): Promise<PostsEntity> {
+    const existPost = await this.postsRepository.findOne({
+      where: { id },
+    });
+    if (!existPost) {
+      throw new HttpException(`id为${id}的文章不存在`, 401);
+    }
+    const updatePost = this.postsRepository.merge(existPost, post);
+    return this.postsRepository.save(updatePost);
+  }
+
+  /**
+   * 刪除指定博客
+   * @param id
+   * @returns
+   */
+  async remove(id) {
+    const existPost = await this.postsRepository.findOne({
+      where: { id },
+    });
+    if (!existPost) {
+      throw new HttpException(`id为${id}的文章不存在`, 401);
+    }
+    return await this.postsRepository.remove(existPost);
+  }
+}
+
+```
+
+#### 字段校验
+不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。而实体是类形式的、那么在 nest 中也使用之前学习过的 class-validator class-transformer 两个包来实现。
+
+#### CRUD操作
+对应 typeorm 的更多操作在单独的一个仓库里学习。
+
+
+### 2.
+### 3.
+
 
 ## 十一、安全相关
 
@@ -1654,259 +1910,7 @@ ttt(@Res({ passthrough: true}) response: Response) {
 ```
 
 
-## 十二、nest 连接 MySQL 数据库
 
-nest 中使用 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上。
-来操作数据库，这里我们选择 typeORM 这个库来操作数据库。
-安装：npm install --save @nestjs/typeorm typeorm mysql2
-接下来创建实体类就可以通过代码来建表操作表，进行数据操作，TypeORM 是通过实体映射到数据库表。
-所以我们先创建对应的实体类 entity，nest 中使用 entities 文件夹存放。
-
-### 12.1 实体 entity
-
-实体是一个用@Entity()装饰器装饰过的映射到数据库表（或使用 MongoDB 时的集合）的类。
-可以通过定义一个新类来创建一个实体。
-
-### 12.1 nest 操作数据库步骤
-
-安装必须的包之后就可以在 nest 中进行配置进而通过代码实现对数据库的增删改查了。
-
-1. 在 nest 项目中注册 typeORM
-
-首先我们在 app.module 中引用 TypeOrmModule，TypeOrmModule 由 @nestjs/typeorm 提供
-
-```
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { PostsModule } from './modules/posts/posts.module';
-import { TagsModule } from './modules/tags/tags.module';
-// 连接MySQL数据库
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserModule } from './modules/user/user.module';
-// 全局中间件
-import { TestMiddleware } from './common/middlewares/test.middleware';
-
-// 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
-@Module({
-  imports: [
-    // 使用 TypeORM 配置数据库
-    TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: 'wanggeng123456',
-      database: 'nest-vue-bms',
-      autoLoadEntities: true, //自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
-      synchronize: false, // 是否自动同步实体文件,生产环境建议关闭 - 不同步
-    }),
-    PostsModule,
-    TagsModule,
-    UserModule,
-  ],
-  controllers: [AppController],
-  providers: [AppService],
-})
-// 导出根模块类，它已经经过@Module 装饰器 装饰了。
-export class AppModule implements NestModule {
-  // 实现中间件注册
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TestMiddleware).forRoutes('*');
-  }
-}
-
-
-
-
-```
-
-2. 创建实体 Entity
-
-Entity 就是由 @Entity 装饰器装饰的一个类，TypeORM 会为此类模型创建数据库表。
-其中 @Entity 装饰器 传入的参数就是实际创建的数据库表名。还有字段名的定义、约束、校验等都是在这里定义的。
-
-```
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
-@Entity('posts')
-export class PostsEntity {
-  @PrimaryGeneratedColumn()
-  id: number; // 标记为主列，值自动生成
-
-  @Column({ length: 50 })
-  title: string;
-
-  @Column({ length: 20 })
-  author: string;
-
-  @Column('text')
-  content: string;
-
-  @Column({ default: '' })
-  thumb_url: string;
-
-  @Column('tinyint')
-  type: number;
-
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  create_time: Date;
-
-  @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
-  update_time: Date;
-}
-
-```
-
-3. 在 module 中注入要使用那些存储库
-
-orm 有两种方式使用具体的数据库表、一种是使用 EntityManager 实体管理器、另一种是使用 Repository
-它就像 EntityManager 一样都能实现对数据库表的 curd 操作，但是 Repository 操作仅限于具体实体也就是指定的单个表。所以一般我们使用后者。
-
-```
--- posts.module.ts --
-import { Module } from '@nestjs/common';
-import { PostsController } from './posts.controller';
-import { PostsService } from './posts.service';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { PostsEntity } from './entities/posts.entity';
-@Module({
-  // 注册实体类
-  imports: [TypeOrmModule.forFeature([PostsEntity])],
-  controllers: [PostsController],
-  providers: [PostsService],
-})
-export class PostsModule {}
-
-```
-
-4. 在 serveice 文件中使用仓库
-
-模块文件中注入之后就可以在服务类中注册使用了,使用 @InjectRepository(实体类名)的形式注册。
-之后通过这个变量就可以实现对对应数据库表的 curd。
-
-```
-import { HttpException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { PostsEntity } from './entities/posts.entity';
-
-// 查询参数接口
-interface QueryItf {
-  value: number;
-  name: string;
-}
-// 帖子信息接口
-export interface PostsRo {
-  list: PostsEntity[];
-  count: number;
-}
-
-@Injectable()
-export class PostsService {
-  constructor(
-    @InjectRepository(PostsEntity) // 注入实体类仓库操作数据库
-    private readonly postsRepository: Repository<PostsEntity>,
-  ) {}
-
-  /**
-   * 测试路由
-   * @returns string
-   */
-  getHello(): string {
-    return 'Hello World! test router';
-  }
-  getQuery(params: number, query: QueryItf): object {
-    return { id: params, value: query.value, name: query.name };
-  }
-  postQuery(params: number, body: QueryItf): object {
-    return { id: params, value: body.value, name: body.name };
-  }
-  /**
-   * 创建文章
-   * @param post
-   * @returns
-   */
-  async create(post: Partial<PostsEntity>): Promise<PostsEntity> {
-    const { title } = post;
-    if (!title) {
-      throw new HttpException('缺少文章标题', 401);
-    }
-    const doc = await this.postsRepository.findOne({ where: { title } });
-    if (doc) {
-      throw new HttpException('文章已存在', 401);
-    }
-    return await this.postsRepository.save(post);
-  }
-
-  /**
-   * 查询所有博客
-   * @param query
-   * @returns 所有博客列表
-   */
-  async findAll(query): Promise<PostsRo> {
-    const qb = await this.postsRepository.createQueryBuilder('post');
-    qb.where('1 = 1');
-    qb.orderBy('post.create_time', 'DESC');
-
-    const count = await qb.getCount();
-    const { pageNum = 1, pageSize = 10, ...params } = query;
-    qb.limit(pageSize);
-    qb.offset(pageSize * (pageNum - 1));
-
-    const posts = await qb.getMany();
-    return { list: posts, count: count };
-  }
-
-  /**
-   * 更加id查找指定博客
-   * @param id
-   * @returns {指定博客对象}
-   */
-  async findById(id: number): Promise<PostsEntity> {
-    return await this.postsRepository.findOne({
-      where: { id },
-    });
-  }
-
-  /**
-   * 更新指定博客
-   * @param id
-   * @param post
-   * @returns
-   */
-  async updateById(id, post): Promise<PostsEntity> {
-    const existPost = await this.postsRepository.findOne({
-      where: { id },
-    });
-    if (!existPost) {
-      throw new HttpException(`id为${id}的文章不存在`, 401);
-    }
-    const updatePost = this.postsRepository.merge(existPost, post);
-    return this.postsRepository.save(updatePost);
-  }
-
-  /**
-   * 刪除指定博客
-   * @param id
-   * @returns
-   */
-  async remove(id) {
-    const existPost = await this.postsRepository.findOne({
-      where: { id },
-    });
-    if (!existPost) {
-      throw new HttpException(`id为${id}的文章不存在`, 401);
-    }
-    return await this.postsRepository.remove(existPost);
-  }
-}
-
-```
-
-### 12.2 字段校验
-
-不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。在 nest 中常使用 class-validator+类验证器来实现。
-安装：npm install --save class-validator class-transformer
 
 ## 十三、配置接口文档 swagger
 
