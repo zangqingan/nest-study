@@ -1766,10 +1766,8 @@ Nest 支持两种与 MongoDB 数据库集成的方法。
 
 1. 安装过程完成后，将MongooseModule导入到根AppModule中。forRoot()方法接受与Mongoose包中的mongoose.connect()相同的配置对象、所以很方便。
 ```JavaScript
-
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-
 @Module({
   imports: [MongooseModule.forRoot('mongodb://localhost/nest')],
 })
@@ -1777,15 +1775,130 @@ export class AppModule {}
 
 ```
 2. 模型注入、使用Mongoose，所有内容都源自于Schema。每个schema都映射到一个MongoDB集合，并定义了该集合中文档的结构。schemas用于定义Models。Models负责从底层MongoDB数据库创建和读取文档。这是我们知道的。
+
+@Schema() 装饰器将一个类标记为模式定义。它将我们的 Cat 类映射到一个同名的 MongoDB 集合，但在末尾添加了一个附加的“s”，因此最终的 MongoDB 集合名称将是 cats。
+
+@Prop() 装饰器在文档中定义属性、还接受一个选项对象参数如指示属性是否是必需的，指定默认值，或将其标记为不可变、与另一个模型的关联
+
+{ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'Owner' }
+
 ```JavaScript
+
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { HydratedDocument } from 'mongoose';
+
+export type CatDocument = HydratedDocument<Cat>;
+
+@Schema()
+export class Cat {
+  @Prop()
+  name: string;
+
+  @Prop()
+  age: number;
+
+  @Prop()
+  breed: string;
+}
+// 根据类创建 schema
+export const CatSchema = SchemaFactory.createForClass(Cat);
+
+```
+
+3. 在模块中注入、MongooseModule 也是使用 forFeature() 方法来配置模块，其中包括定义应在当前范围内注册哪些模型。
+```JavaScript
+
+import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+import { CatsController } from './cats.controller';
+import { CatsService } from './cats.service';
+import { Cat, CatSchema } from './schemas/cat.schema';
+
+@Module({
+  // 注入、函数对象的name属性返回函数名、可以是一个字符串
+  imports: [MongooseModule.forFeature([{ name: Cat.name, schema: CatSchema }])],
+  controllers: [CatsController],
+  providers: [CatsService],
+})
+export class CatsModule {}
+
+```
+
+4. 在服务内使用 @InjectModel() 装饰器将 Cat 模型注入到 CatsService 中、这时就回到了mongoose包里的用法了使用model操作集合。
+```JavaScript
+
+import { Model } from 'mongoose';
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Cat } from './schemas/cat.schema';
+import { CreateCatDto } from './dto/create-cat.dto';
+
+@Injectable()
+export class CatsService {
+  constructor(@InjectModel(Cat.name) private catModel: Model<Cat>) {}
+
+  async create(createCatDto: CreateCatDto): Promise<Cat> {
+    // 创建方法一、
+    const createdCat = new this.catModel(createCatDto);
+    return createdCat.save();
+     // 创建方法二、
+    return this.catModel.create(createCatDto);
+  }
+
+  async findAll(): Promise<Cat[]> {
+    return this.catModel.find().exec();
+  }
+}
+
+连接#
+
+```
+
+#### 多个数据库连接
+一个项目需要连接多个数据库数据库时、只需要指定连接名即可。注意同名会被覆盖
+```JavaScript
+
+import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+
+@Module({
+  imports: [
+    MongooseModule.forRoot('mongodb://localhost/test', {
+      connectionName: 'cats',
+    }),
+    MongooseModule.forRoot('mongodb://localhost/users', {
+      connectionName: 'users',
+    }),
+  ],
+})
+export class AppModule {}
+
+// 注册时告诉 MongooseModule.forFeature() 函数应该使用哪个连接。
+@Module({
+  imports: [
+    MongooseModule.forFeature([{ name: Cat.name, schema: CatSchema }], 'cats'),
+  ],
+})
+export class CatsModule {}
+
 
 
 ```
 
-### 3.
 
 
-## 十一、安全相关
+### 3. Redis
+
+
+## 5. 缓存
+## 5. 任务调度
+## 5. 队列
+## 5. 文件上传
+## 5. 日志
+## 5. 压缩
+
+
+## 5. 安全相关
 
 ### 11.1 概述
 
@@ -1940,9 +2053,10 @@ ttt(@Res({ passthrough: true}) response: Response) {
 
 
 
-## 十三、配置接口文档 swagger
+## 5. 配置接口文档 swagger
 
 安装：npm install @nestjs/swagger swagger-ui-express -S
+
 
 # 六、实战
 
