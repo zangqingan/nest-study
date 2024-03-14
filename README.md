@@ -1977,8 +1977,9 @@ await this.cacheManager.reset();
 ```
 
 
+## 5.3 版本控制
 
-## 5.3 任务调度
+## 5.4 任务调度
 任务调度(定时任务)可以在固定的日期/时间、重复的时间间隔之后，或者在指定的时间间隔之后执行任意代码（方法/函数）。在Linux世界中，通常使用像CRON这样的包来处理操作系统级别的定时任务。对于Node.js应用程序，有几个包可以模拟类似CRON的功能。Nest提供了@nestjs/schedule包，它集成了流行的Node.js cron包。
 
 ### 1. 使用
@@ -2063,10 +2064,47 @@ handleTimeout() {
 
 5. 要使用只需要把定时任务引入到模块中即可。
 
-## 5.4 版本控制
+
 
 ## 5.5 队列
 
+### 1. 概述
+队列是一种强大的设计模式、可以解决如下问题:
+1. 平滑处理处理高峰。例如，如果用户可以在任意时间启动资源密集型任务，您可以将这些任务添加到队列中，而不是同步执行它们。然后，您可以让工作进程以受控的方式从队列中提取任务。随着应用程序的扩展，您可以轻松地添加新的队列消费者来扩展后端任务处理能力。
+2. 分解可能会阻塞Node.js事件循环的单片任务。例如，如果用户请求需要进行CPU密集型的工作，如音频转码，您可以将此任务委托给其他进程，从而使用户界面进程保持响应。
+3. 在各种服务之间提供可靠的通信通道。例如，您可以在一个进程或服务中排队任务（作业），并在另一个进程中消耗它们。您可以通过监听状态事件来获得有关作业生命周期中的完成、错误或其他状态更改的通知，以及来自任何进程或服务的通知。当队列生产者或消费者失败时，它们的状态会被保留，当节点重新启动时，任务处理可以自动重新启动。
+
+Nest提供了@nestjs/bull包作为对Bull的抽象/包装，Bull是一个受欢迎、得到良好支持且性能优越的基于Node.js的队列系统实现。该包使得在Nest应用程序中以Nest友好的方式集成Bull队列变得非常容易。Bull使用Redis来持久化作业数据，因此您需要在系统中安装Redis。由于它是基于Redis的，您的队列架构可以完全分布式且平台无关。
+
+### 2. 使用
+开始使用@nestjs/bull之前，首先需要安装必要的依赖项。
+
+安装: `$ npm install --save @nestjs/bull bull`
+
+安装完成后，我们可以将BullModule导入到根AppModule中。forRoot()方法用于注册一个bull包配置对象，该对象将用于注册在应用程序中的所有队列（除非另有说明）。配置对象包括以下属性(所有选项都是可选的)：
+1. limiter: RateLimiter - 用于控制队列作业处理速率的选项。可选。
+2. redis: RedisOpts - 用于配置Redis连接的选项。可选。
+3. prefix: string - 所有队列键的前缀。可选。
+4. defaultJobOptions: JobOpts - 用于控制新作业的默认设置的选项。可选。
+5. settings: AdvancedSettings - 高级队列配置设置。通常不需要更改这些设置。
+```JavaScript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
+
+@Module({
+  imports: [
+    BullModule.forRoot({
+      redis: {
+        host: 'localhost',
+        port: 6379,
+      },
+    }),
+  ],
+})
+export class AppModule {}
+
+```
 
 ## 5. 文件上传
 ## 5. 日志
