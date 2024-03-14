@@ -1978,8 +1978,96 @@ await this.cacheManager.reset();
 
 
 
-## 5. 任务调度
-## 5. 队列
+## 5.3 任务调度
+任务调度(定时任务)可以在固定的日期/时间、重复的时间间隔之后，或者在指定的时间间隔之后执行任意代码（方法/函数）。在Linux世界中，通常使用像CRON这样的包来处理操作系统级别的定时任务。对于Node.js应用程序，有几个包可以模拟类似CRON的功能。Nest提供了@nestjs/schedule包，它集成了流行的Node.js cron包。
+
+### 1. 使用
+要开始使用它，首先我们需要安装所需的依赖。
+
+安装: `$ npm install --save @nestjs/schedule`
+
+1. 要启用任务调度，将ScheduleModule导入到根AppModule中，并按如下所示运行forRoot()静态方法。这个方法调用会初始化调度器并注册应用程序中存在的任何声明式的cron jobs(定时任务)、timeouts(超时任务)和intervals(间隔任务)。注册发生在onApplicationBootstrap生命周期钩子发生时，确保所有模块已加载并声明了任何计划的任务。
+```JavaScript
+import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
+
+@Module({
+  imports: [
+    ScheduleModule.forRoot()
+  ],
+})
+export class AppModule {}
+
+```
+
+2. 声明一个定时任务、使用 @Cron()装饰器在包含要执行代码的方法定义之前就可以声明一个cron任务。
+Cron任务可以调度一个任意的函数（方法调用）以自动运行。
+  - 一次，在指定的日期/时间。
+  - 定期运行；定期任务可以在指定的间隔内的指定时间点运行（例如，每小时一次，每周一次，每5分钟一次）。
+```JavaScript
+import { Inectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+
+@Injectable()
+export class TasksService {
+  private readonly logger = new Logger(TasksService.name);
+
+// 声明一个cron任务、这个任务每当当前秒数为45时，handleCron()方法都会被调用。换句话说，该方法将每分钟运行一次，在第45秒标记时运行。
+  @Cron('45 * * * * *')
+  handleCron() {
+    this.logger.debug('Called when the current second is 45');
+  }
+}
+
+// cron模式字符串中的每个位置的解释方式
+* * * * * *
+| | | | | |
+| | | | | day of week
+| | | | months
+| | | day of month
+| | hours
+| minutes
+seconds (optional)
+
+```
+@Cron()装饰器支持所有标准的cron模式、常见如下:
+
+| 名称        |  含义        | 
+| ----------- | ----------- |
+| * * * * * *      | 每秒钟执行一次          | 
+| 45 * * * * *  | 每分钟的第45秒执行一次          | 
+| 0 10 * * * *     | 每小时的第10分钟执行一次           | 
+| 0 */30 9-17 * * *  | 在上午9点到下午5点之间，每30分钟执行一次          | 
+| 0 30 11 * * 1-5   | 周一到周五上午11点30分执行一次         | 
+| 提供一个JavaScript的Date对象 | 在指定的日期执行一次。         | 
+
+3. 定义一个间隔任务、指定时间间隔内运行重复运行。使用@Interval()装饰器、将时间间隔值作为毫秒数传递给装饰器。本质是使用了JavaScript的setInterval()函数。你也可以使用cron任务来安排重复的任务。 
+```JavaScript
+
+@Interval(10000)
+handleInterval() {
+  this.logger.debug('Called every 10 seconds');
+}
+
+```
+
+4. 超时任务、在指定的超时时间内运行（一次），将方法定义前缀为@Timeout()装饰器。内部使用了JavaScript的setTimeout()函数。
+```JavaScript
+
+@Timeout(5000)
+handleTimeout() {
+  this.logger.debug('Called once after 5 seconds');
+}
+
+```
+
+5. 要使用只需要把定时任务引入到模块中即可。
+
+## 5.4 版本控制
+
+## 5.5 队列
+
+
 ## 5. 文件上传
 ## 5. 日志
 ## 5. 压缩
