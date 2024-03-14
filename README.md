@@ -1888,9 +1888,58 @@ export class CatsModule {}
 
 
 ### 3. Redis
+缓存是一种优秀且简单的技术，有助于提高应用的性能。它充当临时数据存储，提供高性能的数据访问能力。Nest提供了一个统一的API，用于各种缓存存储提供程序。当然应该是使用redis的。
+
+安装所需的包：`$ npm install @nestjs/cache-manager cache-manager`
+
+**注意:**
+1. cache-manager 版本 4 使用秒作为 TTL（生存时间） 的单位。
+2. cache-manager（v5）已经切换为使用毫秒。
+
+#### 使用步骤
+为了启用缓存，请导入CacheModule并调用它的register()方法。它可以传入一个配置对象自定义缓存的行为。
+
+```JavaScript
+
+import { Module } from '@nestjs/common';
+import { CacheModule } from '@nestjs/cache-manager';
+import { AppController } from './app.controller';
+
+@Module({
+  imports: [CacheModule.register()],
+  // 自定义
+  imports: [CacheModule.register({
+     ttl: 5, // 自定义过期时间默认值 seconds
+     max: 10, // maximum number of items in cache
+     isGlobal: true,// 全局
+  })],
+  controllers: [AppController],
+})
+export class AppModule {}
+
+// 与缓存管理器实例进行交互，可以使用CACHE_MANAGER令牌将其注入到你的类中
+import { Cache } from 'cache-manager';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+constructor(@Inject(CACHE_MANAGER) private cacheManager: Cache) {}
+// Cache实例（来自cache-manager包）上的get方法用于从缓存中检索项目。如果缓存中不存在该项目，将返回null。
+const value = await this.cacheManager.get('key');
+
+// 要向缓存中添加项目，可以使用set方法
+await this.cacheManager.set('key', 'value');
+
+// 缓存的默认过期时间为5秒。可自己指定(以秒为单位的过期时间)
+await this.cacheManager.set('key', 'value', 1000);
+
+// 要从缓存中删除项目，可以使用del方法：
+await this.cacheManager.del('key');
+
+// 要清除整个缓存，可以使用reset方法：
+await this.cacheManager.reset();
+
+```
 
 
-## 5. 缓存
+
 ## 5. 任务调度
 ## 5. 队列
 ## 5. 文件上传
