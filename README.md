@@ -1428,6 +1428,79 @@ const className = context.getClass().name; // "CatsController"
 
 # 五、其它技术知识
 
+## 5.1 配置
+
+### 1. 概述
+应用程序通常在不同的环境中运行。根据环境的不同，应使用不同的配置设置。在 Node.js 中都是通过 process.env 全局变量来获取外部定义的环境变量。
+
+在 Node.js 应用程序中，通常使用 .env 文件来表示每个环境的键值对(原生里我们是写在js文件中)，其中每个键代表特定的值。然后，只需替换正确的 .env 文件即可在不同的环境中运行应用程序。我们使用了dotenv 这个包来读取指定目录下的 .env配置文件。
+
+在NestJS中它内置了一个模块 ConfigModule 来实现，这个公开了一个 ConfigService，该服务加载适当的 .env 文件。这个模块需要安装 Nest 提供的 @nestjs/config 包、这个包在内部还是使用了 dotenv。
+
+安装: `$ npm i --save @nestjs/config`
+
+### 2. 使用
+安装完成后，就可以导入 ConfigModule。通常情况下，我们会将其导入到根 AppModule 中，并使用 .forRoot() 静态方法来控制其行为。
+
+它从默认位置（项目根目录）加载和解析一个 .env 文件，将 .env 文件中的键值对与分配给 process.env 的环境变量进行合并，并将结果存储在一个私有结构中，您可以通过 ConfigService 访问该结构。
+
+forRoot() 方法会注册 ConfigService 提供者，该提供者提供了一个 get() 方法，用于读取这些已解析/合并的配置变量。它可以接收一个配置对象指定配置文件的位置。
+
+自定义配置文件: 导出一个工厂函数，该函数返回一个配置对象。这个配置对象可以是任意嵌套的纯 JavaScript 对象。
+
+```JavaScript
+
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+
+@Module({
+  imports: [ConfigModule.forRoot()],
+  imports: [
+    ConfigModule.forRoot({
+      // 传入配置文件自定义环境文件路径
+      envFilePath: '.development.env',
+      // 禁用环境变量加载即不加载 .env 文件
+      ignoreEnvFile: true,
+      // 在其他模块中使用 ConfigModule 时声明为全局模块
+      isGlobal: true,
+      // 缓存环境变量、访问 process.env 可能会比较慢
+      // 为true可以提高 get方法 在处理时的性能
+      cache: true,
+      // 自定义配置文件是一个数组，允许加载多个配置文件
+      // 它会和 .env 文件和外部定义的变量合并
+      load: [configuration],
+    });
+  ],
+})
+export class AppModule {}
+
+// 自定义配置文件
+export default () => ({
+  port: parseInt(process.env.PORT, 10) || 3000,
+  database: {
+    host: process.env.DATABASE_HOST,
+    port: parseInt(process.env.DATABASE_PORT, 10) || 5432
+  }
+});
+
+// 在某个特性模块中使用要先导入、除非声明为全局模块。
+// feature.module.ts 
+@Module({
+  imports: [ConfigModule],
+  // ...
+})
+
+// 一样的通过类构造函数注入依赖
+constructor(private configService: ConfigService) {}
+// 注入之后使用 configService.get() 方法通过传递变量名来获取简单的环境变量。
+// 还接受一个可选的第二个参数，用于定义默认值。当键不存在时，将返回该默认值
+this.configService.get() 
+const title = this.configService.get('APP_TITE');
+
+
+```
+
+
 ## 十一、安全相关
 
 ### 11.1 概述
