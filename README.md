@@ -1753,7 +1753,35 @@ export class PostsService {
 对应 typeorm 的更多操作在单独的一个仓库里学习。
 
 
-### 2.
+### 2. MongoDB
+Nest 支持两种与 MongoDB 数据库集成的方法。
+1. 依然使用内置的 TypeORM 模块，该模块具有适用于 MongoDB 的连接器，
+2. 使用 Mongoose，这是最流行的 MongoDB 对象建模工具。
+
+很明显我们使用第二中方法、这也是我们之前学习的。
+
+安装所需的依赖项: `$ npm i @nestjs/mongoose mongoose`
+
+#### 使用步骤
+
+1. 安装过程完成后，将MongooseModule导入到根AppModule中。forRoot()方法接受与Mongoose包中的mongoose.connect()相同的配置对象、所以很方便。
+```JavaScript
+
+import { Module } from '@nestjs/common';
+import { MongooseModule } from '@nestjs/mongoose';
+
+@Module({
+  imports: [MongooseModule.forRoot('mongodb://localhost/nest')],
+})
+export class AppModule {}
+
+```
+2. 模型注入、使用Mongoose，所有内容都源自于Schema。每个schema都映射到一个MongoDB集合，并定义了该集合中文档的结构。schemas用于定义Models。Models负责从底层MongoDB数据库创建和读取文档。这是我们知道的。
+```JavaScript
+
+
+```
+
 ### 3.
 
 
