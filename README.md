@@ -2660,8 +2660,8 @@ findAll(@Session() session: Record<string, any>) {
 ```
 
 ### 3. jwt token 方案
-在 Nest 里实现 jwt 需要引入 @nestjs/jwt 这个包
-安装：npm install @nestjs/jwt
+在 Nest 里实现 jwt 需要引入 @nestjs/jwt 这个包它可以生成和验证 JWT 令牌
+安装：`$ npm install --save @nestjs/jwt`
 
 然后在 AppModule 里引入 JwtModule,那就是全局注册，也可以在指定 module 文件中注册。
 JwtModule 是一个动态模块，通过 register 传入 option。
@@ -2676,6 +2676,7 @@ import { AppService } from './app.service';
 @Module({
   imports: [
     JwtModule.register({
+      global: true, // 注册为全局模块其他任何地方不用再导入 JwtModule
       secret: 'guang',
       signOptions: {
         expiresIn: '7d'
@@ -2694,6 +2695,7 @@ export class AppModule {}
 
 ```JavaScript
 import { Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class AppService {
@@ -2701,11 +2703,11 @@ export class AppService {
     // jwt服务
     private readonly jwtService: JwtService,
   ) {}
-  <!-- 或者定义私有属性 -->
+  // 或者定义私有属性 
   private readonly jwtService: JwtService
 }
-然后添加一个 handler返回即可：使用 jwtService.sign 来生成一个 jwt token，放到 response header 里。
-注意：注入 response 对象之后，默认不会把返回值作为 body 了，需要设置 passthrough 为 true 才可以。
+// 然后添加一个 handler返回即可：使用 jwtService.sign 来生成一个 jwt token，放到 response header 里。
+// 注意：注入 response 对象之后，默认不会把返回值作为 body 了，需要设置 passthrough 为 true 才可以。
 @Get('ttt')
 ttt(@Res({ passthrough: true}) response: Response) {
     const newToken = this.jwtService.sign({
@@ -2715,15 +2717,77 @@ ttt(@Res({ passthrough: true}) response: Response) {
     response.setHeader('token', newToken);
     return 'hello';
 }
+ // 具体实现认证方法
+  async signIn(data: SignInDto) {
+    const { firstName, lastName } = data;
+    console.log(firstName, lastName);
+    // 根据前端传参查找数据库是否存在用户
+    const user = await this.usersService.findOne(firstName, lastName);
+    // 判断用户密码是否一致
+    if (user?.lastName !== lastName) {
+      throw new UnauthorizedException();
+    }
+    // 一样 生成jwt并返回给前端
+    const payload = { sub: user.firstName, username: user.lastName };
+    return {
+      access_token: await this.jwtService.signAsync(payload),
+    };
+  }
+
+// 然后是定义一个守卫来统一处理
+
+import { SetMetadata } from '@nestjs/common';
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+// 一个自定义的 @Public() 装饰器，我们可以将其用于装饰任何方法。用来声明哪些路由是公开的
+@Public()
+@Get()
+findAll() {
+  return [];
+}
 
 
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(private jwtService: JwtService, private reflector: Reflector) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      // 💡 See this condition
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest();
+    const token = this.extractTokenFromHeader(request);
+    if (!token) {
+      throw new UnauthorizedException();
+    }
+    try {
+      const payload = await this.jwtService.verifyAsync(token, {
+        secret: jwtConstants.secret,
+      });
+      // 💡 We're assigning the payload to the request object here
+      // so that we can access it in our route handlers
+      request['user'] = payload;
+    } catch {
+      throw new UnauthorizedException();
+    }
+    return true;
+  }
+
+  private extractTokenFromHeader(request: Request): string | undefined {
+    const [type, token] = request.headers.authorization?.split(' ') ?? [];
+    return type === 'Bearer' ? token : undefined;
+  }
+}
 
 ```
 
-
-
-
-
+## 5.
 
 ## 5. 配置接口文档 swagger
 
