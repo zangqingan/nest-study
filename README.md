@@ -2438,6 +2438,28 @@ MulterModule.register({
 
 ```
 
+### 6. 流式传输文件内容
+在Nest中同样可以对要传输的文件(图像、文档和任何其他文件类型。)进行流式传输减少服务端带宽的压力、是通过 可流式传输的文件类 StreamableFile来实现的。
+它是一个保存要返回的流的类。要创建一个新的StreamableFile，您可以将Buffer或Stream传递给StreamableFile构造函数。
+```JavaScript
+import { Controller, Get, StreamableFile } from '@nestjs/common';
+import { createReadStream } from 'fs';
+import { join } from 'path';
+
+@Controller('file')
+export class FileController {
+  @Get()
+  getFile(): StreamableFile {
+    const file = createReadStream(join(process.cwd(), 'package.json'));
+    return new StreamableFile(file);
+  }
+}
+
+
+```
+
+
+
 
 ## 5. 安全相关
 
