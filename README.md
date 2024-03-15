@@ -2511,6 +2511,35 @@ export class CatsModule {}
 ```
 
 
+## 5.11 静态资源服务器
+在express里是使用 express.static() 内置方法、而koa是使用koa-static中间件。Nest 默认在底层使用 Express 库。因此，适用于 Express 的每种技术也同样适用于 Nest。比如静态资源服务器、模板引擎等。
+只需要安装需要的依赖包、然后再入口文件配置即可
+```JavaScript
+// main.ts
+import { NestFactory } from '@nestjs/core';
+// 要引入express平台的
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create<NestExpressApplication>(
+    AppModule,
+  );
+
+  // 配置静态资源服务器 
+  app.useStaticAssets(join(__dirname, '..', 'public'));
+  // 模板存放位置
+  app.setBaseViewsDir(join(__dirname, '..', 'views'));
+  // 模板引擎
+  app.setViewEngine('hbs');
+
+  await app.listen(3000);
+}
+bootstrap();
+
+
+```
 
 ## 5. 安全相关
 
