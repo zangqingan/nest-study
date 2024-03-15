@@ -2541,66 +2541,92 @@ bootstrap();
 
 ```
 
-## 5. 安全相关
+## 5.12 安全相关
 
-### 11.1 概述
-
-http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。
-而基本所有网站都有登录功能，登录之后再次请求依然是登录状态。
-那么如何实现登录状态的保持呢？
-
-```
-有两种解决方案：
-1.服务端保存 session + cookie 的方案。
+### 1. 概述
+在开始学习原生node时、我们知道http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。
+而基本所有网站或者应用都有登录认证功能，登录之后再次请求依然是登录状态(也就是认证了)。
+那么如何实现登录状态的保持呢？业界基本使用两种解决方案
+1. 服务端保存 session + cookie 的方案。
 第一次登录时后端返回凭证信息，前端存储在cookie中，之后每次http请求都会自动携带上cookie中保存的凭证信息，算是给请求打上了唯一标识。后端根据前端传过来的标识去查找与之对应的数据 session即可。
-缺点：有CSRF(跨站请求伪造)风险，因为 cookie 会在请求时自动带上，那你在一个网站登录了，再访问别的网站，万一里面有个按钮会请求之前那个网站的，那 cookie 依然能带上。而这时候就不用再登录了。
 
-为了解决这个问题，我们一般会验证 referer，就是请求是哪个网站发起的，如果发起请求的网站不对，那就阻止掉。但这样依然不能完全解决问题，万一你用的浏览器也是有问题的，能伪造 referer 呢？
+缺点：有CSRF(跨站请求伪造)风险，因为 cookie 会在请求时自动带上，那你在一个网站登录了，再访问别的网站，万一里面有个按钮会请求之前那个网站的，那 cookie 依然能带上。而这时候就不用再登录了。为了解决这个问题，我们一般会验证 referer，就是请求是哪个网站发起的，如果发起请求的网站不对，那就阻止掉。但这样依然不能完全解决问题，万一你用的浏览器也是有问题的，能伪造 referer 呢？
 
-所以一般会用随机值来解决，每次随机生成一个值返回，后面再发起的请求需要包含这个值才行，否则就认为是非法的。
-
-这个随机值叫做 token，可以放在参数中，也可以放在 请求头 header 中，因为钓鱼网站拿不到这个随机值，就算带了 cookie 也没发通过服务端的验证。
+所以一般会用随机值来解决，每次随机生成一个值返回，后面再发起的请求需要包含这个值才行，否则就认为是非法的。这个随机值叫做 token，可以放在参数中，也可以放在 请求头 header 中，因为钓鱼网站拿不到这个随机值，就算带了 cookie 也没发通过服务端的验证。
 
 还有一个问题当并发量比较高时会使用分布式部署，这时不同服务器之间的 session就会不同。
 这个问题的解决有两种方案：
-
-一种是 session 复制，也就是通过一种机制在各台机器自动复制 session，并且每次修改都同步下。这个有对应的框架来做，比如 java 的 spring-session。
-各台服务器都做了 session 复制了，那你访问任何一台都能找到对应的 session。
-
-还有一种方案是把 session 保存在 redis，这样每台服务器都去那里查，只要一台服务器登录了，其他的服务器也就能查到 session，这样就不需要复制了。
+  - 一种是 session 复制，也就是通过一种机制在各台机器自动复制 session，并且每次修改都同步下。这个有对应的框架来做，比如 java 的 spring-session。各台服务器都做了 session 复制了，那你访问任何一台都能找到对应的 session。
+  - 还有一种方案是把 session 保存在 redis，这样每台服务器都去那里查，只要一台服务器登录了，其他的服务器也就能查到 session，这样就不需要复制了。
 分布式会话的场景，redis + session 的方案更常用一点。
-还好，session 在分布式时的这个问题也算是有解决方案的。
 
-2.客户端保存 jwt token 的方案。
-session + cookie 的方案是把状态数据保存在服务端，再把 id 保存在 cookie 里来实现的。
-既然这样的方案有那么多的问题，那我反其道而行之，不把状态保存在服务端了，直接全部放在请求里，也不放在 cookie 里了，而是放在 请求头 header 里，这样是不是就能解决那一堆问题了呢？
-token 的方案常用 json 格式来保存，叫做 json web token，简称 JWT。它保存在 request header 里的一段字符串（比如用 header 名可以叫 authorization）。
-它由三部分组成：header、payload、verify signature
-header 部分保存当前的加密算法，
-payload 部分是具体存储的数据，
-verify signature 部分是把 header 和 payload 还有 salt 做一次加密之后生成的。
-然后这三部分会分别做Base 64加密后再返回。
-然后一般放到请求头header 的authorization:Bearer xxx.xxx.xxx 字段上。
-请求的时候把这个 header 带上，服务端就可以解析出对应的 header、payload、verify signature 这三部分，然后根据 header 里的算法也对 header、payload 加上 salt 做一次加密，如果得出的结果和 verify signature 一样，就接受这个 token。
+2. 客户端保存 jwt token 的方案。
+session + cookie 的方案是把状态数据保存在服务端，再把 id 保存在 cookie 里来实现的。既然这样的方案有那么多的问题，那我反其道而行之，不把状态保存在服务端了，直接全部放在请求里，也不放在 cookie 里了，而是放在HTTP请求头对象的 header 里，这样是不是就能解决那一堆问题了呢？
 
-流程是用户登录提交用户名和密码-后端接收并认证-认证通过生成 jwt token并返回给前端-前端本地保存返回的jwt token-之后每次请求都在请求头中携带-后端拦截请求并验证-验证通过执行业务逻辑并返回数据-前端展示数据-如果是验证不通过返回错误信息-前端提示错误信息并返回登录页面。至此整个登录流程结束。
+token 的方案常用 json 格式来保存，叫做 json web token，简称 JWT。它是保存在 request header 里的一段字符串（比如用 header 名可以叫 authorization）。
+它由三部分组成：header头部、payload载荷、verify signature 验证签名
+ - header 部分保存当前的加密算法，
+ - payload 部分是具体存储的数据，
+ - verify signature 部分是把 header 和 payload 还有 salt 做一次加密之后生成的。
+
+这三部分会分别做Base 64加密后再返回、然后一般放到请求头header 的authorization:Bearer xxx.xxx.xxx 字段上。
+请求的时候把这个 header 带上，服务端就可以解析出对应的 header、payload、verify signature 这三部分，然后根据 header 里的算法也对 header、payload 加上 salt 做一次加密，如果得出的结果和 verify signature 一样，就接受这个 token。也就是认证成功。
+
+
+所以整个认证流程是: 
+1. 用户登录提交用户名和密码 --> 
+2. 后端接收并认证 --> 
+3. 认证通过生成 jwt token并返回给前端 --> 
+4. 前端本地保存返回的jwt token  -->  
+5. 之后每次请求都在请求头中携带  -->  
+6. 后端拦截请求并验证 --> 
+7. 验证通过执行业务逻辑并返回数据 --> 
+8. 前端展示数据 --> 
+9. 如果是验证不通过返回错误信息 --> 
+10. 前端提示错误信息并返回登录页面。至此整个登录认证流程结束。
 
 但是这个方案也有安全性问题，因为它是把数据直接 Base64 之后就放在了 header 里，那别人就可以轻易从中拿到状态数据，比如用户名等敏感信息，也能根据这个 JWT 去伪造请求。所以 JWT 要搭配 https 来用，让别人拿不到 header。
 
 
+### 2. cookie + session 方案
 
+#### 1. cookies
+HTTP cookie是由用户的浏览器存储的小型数据片段。Cookie的设计目的是成为网站记住有状态信息的可靠机制。当用户再次访问网站时，Cookie会自动随请求一起发送。
+
+安装依赖: `$ npm i cookie-parser`、`$ npm i -D @types/cookie-parser`。
+
+安装完成后，将cookie-parser中间件应用为全局中间件即可。该中间件将解析请求的Cookie头，并将Cookie数据暴露为req.cookies属性，如果提供了密钥，则还将暴露为req.signedCookies属性。这些属性是cookie名称到cookie值的键值对。这样就可以从路由处理程序中读取Cookie。
+```JavaScript
+// main.ts
+import * as cookieParser from 'cookie-parser';
+// somewhere in your initialization file
+app.use(cookieParser());
+
+// 使用
+import { Req,Res } from '@nestjs/common'
+import { Request,Response } from 'express'
+// 获取cookie
+@Get()
+findAll(@Req() request: Request) {
+  console.log(request.cookies); // or "request.cookies['cookieKey']"
+  // or console.log(request.signedCookies);
+}
+// 设置cookie返回
+@Get()
+findAll(@Res({ passthrough: true }) response: Response) {
+  response.cookie('key', 'value')
+}
 
 ```
 
-### 11.2 代码层面解决
-
+#### 2. session
+HTTP会话提供了一种在多个请求之间存储用户信息的方式，这对于MVC应用程序特别有用。
 在 Nest 里实现 session 还是用的 express 的中间件 express-session。
 安装 express-session 和它的 ts 类型定义
-npm install express-session @types/express-session
+`$ npm i express-session` `$ npm i -D @types/express-session`
 
-然后在入口模块里启用它
-
-```
+安装完成后，将 express-session 中间件应用为全局中间件
+```JavaScript
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as session from 'express-session';
@@ -2616,23 +2642,24 @@ async function bootstrap() {
   await app.listen(3000);
 }
 bootstrap();
-
-```
-
-然后在 controller 里就可以注入 session 对象：
-直接使用@Session 装饰器即可。
-
-```
-@Get('sss')
-sss(@Session() session) {
-    console.log(session)
-    session.count = session.count ? session.count + 1 : 1;
-    return session.count;
+import { Req,Res } from '@nestjs/common'
+import { Request,Response } from 'express'
+// 设置了上述配置后，您现在可以在路由处理程序内设置和读取会话值
+@Get()
+findAll(@Req() request: Request) {
+  request.session.visits = request.session.visits ? request.session.visits + 1 : 1;
 }
 
+// 也可以直接使用 @Session() 装饰器从请求中提取会话对象
+import { Session} from '@nestjs/common'
+@Get()
+findAll(@Session() session: Record<string, any>) {
+  session.visits = session.visits ? session.visits + 1 : 1;
+}
 
 ```
 
+### 3. jwt token 方案
 在 Nest 里实现 jwt 需要引入 @nestjs/jwt 这个包
 安装：npm install @nestjs/jwt
 
@@ -2640,7 +2667,7 @@ sss(@Session() session) {
 JwtModule 是一个动态模块，通过 register 传入 option。
 或者是 registerAsync，然后通过 useFactory 异步拿到 option 传入。
 
-```
+```JavaScript
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { AppController } from './app.controller';
@@ -2665,7 +2692,7 @@ export class AppModule {}
 
 注册成功后就可以在 controller 里注入 JwtModule 里的 JwtService 了。
 
-```
+```JavaScript
 import { Injectable } from '@nestjs/common';
 
 @Injectable()
@@ -2692,6 +2719,8 @@ ttt(@Res({ passthrough: true}) response: Response) {
 
 
 ```
+
+
 
 
 
