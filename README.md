@@ -2185,7 +2185,258 @@ app.use(compression());
 ```
 
 
-## 5. 文件上传
+## 5.9 文件上传
+要处理文件上传，Nest提供了一个基于express-multer中间件包的内置模块。Multer处理以multipart/form-data格式发布的数据，该格式主要用于通过HTTP POST请求上传文件。所有nest处理文件上传也不难。
+
+安装Multer的类型定义包: `$ npm i -D @types/multer`
+
+安装了此包后，我们现在可以使用Express.Multer.File类型
+
+`import { Express } from 'express'`
+
+### 1. 单个文件上传
+
+要上传单个文件，只需将FileInterceptor()拦截器绑定到路由处理程序，并使用@UploadedFile()装饰器从请求中提取file。
+
+FileInterceptor 接收两个参数
+1. fieldName、HTML标签的name属性值
+2. options配置对象
+```JavaScript
+// 文件上传
+import { UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Express } from 'express';
+// 控制器
+  // 文件上传
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadFie(@UploadedFile() file: Express.Multer.File) {
+    console.log(file);
+    
+  }
+
+{
+  fieldname: 'file',
+  originalname: 'lg.jpg',
+  encoding: '7bit',
+  mimetype: 'image/jpeg',
+  buffer: Buffer数据,
+  size:253578
+}
+// 可以根据文件元数据，比如文件大小或文件 MIME 类型等对上传内容进行文件格式、大小判断。
+
+```
+
+### 2. 文件校验
+可以给 @UploadedFile 装饰器传入管道、为此Nest 提供了一个内置的 Pipe 来处理常见的使用情况，并促进/标准化添加新的用例。这个 Pipe 叫做 ParseFilePipe。也可以使用ParseFilePipeBuilder 类来组合和构建你的验证器、可以避免手动实例化每个验证器，而是直接传递它们的选项。
+
+Nest提供了两个内置的FileValidator与ParseFilePipe管道结合使用实现文件上传的校验。
+1. MaxFileSizeValidator 检查给定文件的大小是否小于提供的值（以字节为单位）
+2. FileTypeValidator 检查给定文件的MIME类型是否与给定的值匹配。
+
+当然用户也可以自己定义文件校验类、只需要继承 FileValidator 抽象类接口就行
+```JavaScript
+import { UploadedFile, MaxFileSizeValidator,FileTypeValidator, FileValidator, ParseFilePipe, ParseFilePipeBuilder,} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Express } from 'express';
+// 控制器
+  // 文件上传
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  // @UsePipes(FileSizeValidationPipe)// 自定义文件校验管道
+  uploadFie(@UploadedFile(
+    // 使用内置的ParseFilePipe管道
+    new ParseFilePipe({
+      // 在任何验证器失败的情况下要抛出的 HTTP 状态码。默认为 400（BAD REQUEST）。
+      errorHttpStatusCode:405,
+      // 一个工厂函数，接收错误消息并返回一个错误。
+      exceptionFactory
+      // 必传：指定一个文件验证器数组，这些验证器将由 ParseFilePipe 执行
+      validators: [
+        // ... Set of file validator instances here
+        new MaxFileSizeValidator({ maxSize: 1000 }),
+        new FileTypeValidator({ fileType: 'image/jpeg' }),
+      ]
+    })
+
+    // 使用特殊的 ParseFilePipeBuilder 类来组合和构建你的验证器。
+    // 它内置了下面链式调用的方法
+    new ParseFilePipeBuilder()
+    .addFileTypeValidator({
+      fileType: 'jpeg',
+    })
+    .addMaxSizeValidator({
+      maxSize: 1000
+    })
+    .build({
+      errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY
+    }),
+  ) file: Express.Multer.File) {
+    console.log(file);
+    
+  }
+
+// 自定义文件校验器
+export CustomFileValidator extends FileValidator {
+  // 实现抽象方法即可
+  isValid(file?: any): boolean | Promise<boolean>{
+    return 'dddd'
+  }
+
+  buildErrorMessage(file: any): string;{
+    throw new Error('dddd')
+  }
+}
+
+```
+
+### 3. 多个文件上传
+1. 要上传一个文件数组（通过一个单一的字段名标识），可以使用 FilesInterceptor() 装饰器（注意装饰器名称中的Files是复数形式）。这个装饰器接受三个参数：
+   - fieldName: 文件名。
+   - maxCount: 可选数字，用于定义要接受的最大文件数量。
+   - options: 可选的 MulterOptions 对象
+```JavaScript
+import {  UploadedFiles } from '@nestjs/common';
+import {  FilesInterceptor } from '@nestjs/platform-express';
+@Post('upload')
+@UseInterceptors(FilesInterceptor('files'))
+uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
+  console.log(files);
+}
+
+// files 是单文件时的信息对象数组
+[
+  {
+    fieldname: 'files',
+    originalname: 'lg.jpg',
+    encoding: '7bit',
+    mimetype: 'image/jpeg',
+    buffer: Buffer,
+    size: 253578
+  },
+  {
+    fieldname: 'files',
+    originalname: '1.avif',
+    encoding: '7bit',
+    mimetype: 'image/avif',
+    buffer: Buffer,
+    size: 30329
+  }
+]
+
+
+```
+    
+2. 要上传多个文件（每个文件具有不同的字段名称键），请使用 FileFieldsInterceptor() 装饰器。此装饰器接受两个参数：
+   - uploadedFields 一个包含多个对象的数组，每个对象都指定了一个必需的 name 属性，该属性的值为一个字符串，指定了一个字段名称
+   - options: 可选的 MulterOptions 对象
+```JavaScript
+import {  UploadedFiles } from '@nestjs/common';
+import {  FileFieldsInterceptor } from '@nestjs/platform-express';
+@Post('upload')
+@UseInterceptors(FileFieldsInterceptor([
+  { name: 'avatar', maxCount: 1 },
+  { name: 'background', maxCount: 1 },
+]))
+uploadFile(@UploadedFiles() files: { avatar?: Express.Multer.File[], background?: Express.Multer.File[] }) {
+  console.log(files);
+}
+// files是一个对象、结构如下
+{
+  avatar:[
+    {
+      fieldname: 'avatar',
+      originalname: 'lg.jpg',
+      encoding: '7bit',
+      mimetype: 'image/jpeg',
+      buffer: Buffer,
+      size: 253578
+    }
+
+  ],
+  background: [
+    {
+      fieldname: 'background',
+      originalname: '1.avif',
+      encoding: '7bit',
+      mimetype: 'image/avif',
+      buffer: Buffer,
+      size: 30329
+    }
+  ]
+}
+
+```
+
+3. 任意文件名、要上传具有任意字段名称键的所有字段，请使用 AnyFilesInterceptor() 装饰器。此装饰器可以接受一个可选的 options 对象。
+```JavaScript
+import {  UploadedFiles } from '@nestjs/common';
+import {  AnyFilesInterceptor } from '@nestjs/platform-express';
+@Post('upload')
+@UseInterceptors(AnyFilesInterceptor())
+uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
+  console.log(files);
+}
+// files 是一个数组结构如下
+[
+  {
+    fieldname: 'aa',
+    originalname: 'lg.jpg',
+    encoding: '7bit',
+    mimetype: 'image/jpeg',
+    buffer: Buffer,
+    size: 253578
+  },
+  {
+    fieldname: 'bafdf',
+    originalname: '1.avif',
+    encoding: '7bit',
+    mimetype: 'image/avif',
+    buffer: Buffer,
+    size: 30329
+  }
+]
+
+
+```
+
+### 4. 没有文件
+只接受 multipart/form-data 数据类型但不允许上传任何文件，请使用 NoFilesInterceptor装饰器。它会将数据设置为请求体的属性。如果请求中发送了任何文件，将会抛出 BadRequestException。
+```JavaScript
+import {  Body } from '@nestjs/common';
+import {  NoFilesInterceptor } from '@nestjs/platform-express';
+@Post('upload')
+@UseInterceptors(NoFilesInterceptor())
+handleMultiPartData(@Body() body) {
+  console.log(body)
+}
+
+```
+
+### 5. 上传地址
+和multer这个包一样也可以指定上传路径、或者设置统一默认选项在导入 MulterModule 时调用静态的 register() 方法，传入支持的选项。
+```JavaScript
+MulterModule.register({
+  dest: './upload',
+});
+
+@Post('upload')
+  @UseInterceptors(
+    // 针对单独接口
+    FileInterceptor('file', {
+      dest: './upload',
+    }),
+  )
+  uploadFie(
+    @UploadedFile()
+    file: Express.Multer.File,
+  ) {
+    const { buffer, ...rest } = file;
+    console.log(rest);
+    return rest;
+  }
+
+```
 
 
 ## 5. 安全相关
