@@ -2458,6 +2458,57 @@ export class FileController {
 
 ```
 
+## 5.10 网络请求
+nodejs是可以作为中后端、和前端一样发起网络请求的。Nest同样也可以使用任何通用的 Node.js HTTP 客户端库。这里我们使用 Axios、因为Nest 封装了 Axios 并通过内置的 HttpModule 提供访问。HttpModule 导出了 HttpService 类，它提供了基于 Axios 的方法来执行 HTTP 请求。该库还将得到的 HTTP 响应转换为 Observables。Observable可以使用rxjs的firstValueFrom或lastValueFrom来以promise的形式获取请求的数据。
+
+安装: `$ npm i --save @nestjs/axios axios`
+
+### 1. 使用
+安装完成后，要使用 HttpService，首先需要导入 HttpModule。
+接下来，使用普通的构造函数注入来注入 HttpService。
+```JavaScript
+// 模块类
+import { HttpModule, HttpService } from '@nestjs/axios'
+import { map } from 'rxjs';
+@Module({
+  imports: [HttpModule],
+  providers: [CatsService],
+})
+export class CatsModule {}
+
+// 提供者
+@Injectable()
+export class CatsService {
+  constructor(private readonly httpService: HttpService) {}
+
+  findAll(): Observable<AxiosResponse<Cat[]>> {
+    return this.httpService
+      .get('http://localhost:3000/cats')
+      .pipe(map((response) => response.data));;
+  }
+}
+
+
+```
+
+### 2. 配置
+Axios可以通过多种选项进行配置，以自定义HttpService的行为。
+要配置底层的Axios实例，请在导入HttpModule时将一个可选的选项对象传递给其register()方法。这个选项对象将直接传递给底层的Axios构造函数。
+```JavaScript
+
+@Module({
+  imports: [
+    HttpModule.register({
+      timeout: 5000,// 超时
+      maxRedirects: 5,// 最大重定向数
+    }),
+  ],
+  providers: [CatsService],
+})
+export class CatsModule {}
+
+
+```
 
 
 
