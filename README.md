@@ -2787,7 +2787,86 @@ export class AuthGuard implements CanActivate {
 
 ```
 
-## 5.
+## 5.13 授权
+前面说的认证只是知道你是自己人也就是登录了、但是你的等级(权限)不知道。也就是说，身份验证通过之后还需要再做一步权限的校验，也就是授权。
+授权与认证是正交且独立的、授权需要用到认证机制。授权（Authorization）指的是确定用户能够执行什么操作的过程。例如，管理员用户被允许创建、编辑和删除帖子。非管理员用户只能被授权阅读帖子。处理授权业界也是有许多不同的方法和策略、这里介绍常见的3种、它们适用于不同需求。
+
+### 1. 基于 ACL 的权限控制
+给不同用户分配权限最简单的办法就是直接给用户分配权限、比如用户 1 有权限 A、B、C，用户 2 有权限 A，用户 3 有权限 A、B。
+这种记录每个用户有什么权限的方式，叫做访问控制表（Access Control List）。它是一种多对多关系、一个用户可以拥有多种权限。
+一种权限也可以分配给多个用户。存储这种关系需要用户表、角色表、用户-角色的中间表。3个表才能实现这种多对多关系。
+
+**用户表实体:** User 有 id、username、password、createTime、updateTime 5 个字段。
+```JavaScript
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+@Entity()
+export class User {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column({
+        length: 50
+    })
+    username: string;
+
+    @Column({
+        length: 50
+    })
+    password: string;
+
+    @CreateDateColumn()
+    createTime: Date;
+
+    @UpdateDateColumn()
+    updateTime: Date;
+
+    // 通过 @ManyToMany 装饰器声明和 Permisssion 表的多对多关系。
+    @ManyToMany(() => Permission)
+    // 通过 @JoinTable 装饰器声明并指定中间表的名字，执行后会自动生成
+    // 中间表的两个外键也都是主表删除或者更新时，从表级联删除或者更新。
+    @JoinTable({
+        name: 'user_permission_relation'
+    })
+    permissions: Permission[] 
+}
+
+```
+
+**权限表:**  permission 有 id、name、desc、createTime、updateTime 5 个字段，desc 字段可以为空。
+```JavaScript
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+@Entity()
+export class Permission {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column({
+        length: 50
+    })
+    name: string;
+    
+    @Column({
+        length: 100,
+        nullable: true
+    })
+    desc: string;
+
+    @CreateDateColumn()
+    createTime: Date;
+
+    @UpdateDateColumn()
+    updateTime: Date;
+}
+
+```
+
+
+### 1. 基本的RBAC实现
+
+### 2. 基于声明的授权
+
+### 3. 
+
 
 ## 5. 配置接口文档 swagger
 
