@@ -3093,7 +3093,7 @@ app.use(csurf());
 
 ```
 
-### 3. 限流
+### 5. 限流
 保护应用程序免受暴力攻击的常见技术是限速。
 ```JavaScript
 // 安装 @nestjs/throttler 包
