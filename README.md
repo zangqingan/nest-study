@@ -3132,15 +3132,97 @@ export class UsersController {
 // 可以用在类或函数上。
 ```
 
-## 5.14 
-## 5.14 
+## 5.15 OpenAPI 
+OpenAPI 规范是一种语言无关的定义格式，用于描述 RESTful API。Nest 提供了一个专门的模块，通过利用装饰器来生成这样的规范。也就是配置接口文档 swagger。
+```JavaScript
+// 安装所需的依赖：
+$ npm install --save @nestjs/swagger swagger-ui-express
+// 安装完成后在main.ts 文件并使用 SwaggerModule 类初始化 Swagger
 
-## 5. 配置接口文档 swagger
+import { NestFactory } from '@nestjs/core';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';// 配置swagger
+import { AppModule } from './app.module';
 
-安装：npm install @nestjs/swagger swagger-ui-express -S
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  // 配置swagger
+  const config = new DocumentBuilder()
+    .setTitle('nest学习记录')
+    .setDescription('nest学习记录接口文档汇总')
+    .setVersion('1.0')
+    .addBearerAuth() // 接口增加token认证
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  // 设置访问接口地址--> http://localhost:3000/api-docs#/ 查看swagger文档
+  SwaggerModule.setup('api-docs', app, document);
 
+  await app.listen(3000);
+}
+bootstrap();
 
-# 六、实战
+// 在控制器(路由api)文件中定义文档
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+@ApiTags('用户') // swagger文档标题
+export class UserController {
+  constructor(private readonly userService: UserService) {}
+
+  @ApiOperation({ summary: '创建用户' })
+  @Post('register')
+  create(@Body() createUserDto: CreateUserDto) {
+    return this.userService.create(createUserDto);
+  }
+
+  @ApiOperation({ summary: '获取所有用户' })
+  @Get()
+  // @UseGuards(LoginAuthGuard)// 自定义token验证守卫
+  @UseGuards(AuthGuard('jwt')) // passport-jwt策略token验证
+  @UseInterceptors(TestInterceptor) // 方法作用域拦截器
+  findAll(@Req() req) {
+    console.log('req', req.user);
+    return this.userService.findAll();
+  }
+
+  @ApiOperation({ summary: '根据id获取指定用户' })
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.userService.findOne(+id);
+  }
+
+  @ApiOperation({ summary: '根据id更新用户' })
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
+    return this.userService.update(+id, updateUserDto);
+  }
+
+  @ApiOperation({ summary: '根据id删除指定用户' })
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.userService.remove(+id);
+  }
+
+  @ApiOperation({ summary: '用户登陆' })
+  @UseGuards(AuthGuard('local')) // 增加登录导航校验
+  @Post('login')
+  login(@Body() user: LoginDto, @Req() req) {
+    return this.userService.login(req);
+  }
+
+  @ApiOperation({ summary: '是否已登录测试' })
+  @UseGuards(AuthGuard('local'))
+  @Post('test')
+  test() {
+    return 1;
+  }
+}
+
+```
+
+# 六、WebSockets
+
+# 七、微服务
+
+# 八、实战
 
 实现一个简单的博客 Blog 功能，包括以下功能
 [基础的 Article Tag Use 的 CRUD ]
@@ -3178,4 +3260,4 @@ User 相关
 -put /user:id 修改用户 信息
 -delete /user:id 删除用户
 
-# 七、总结
+# 九、总结
