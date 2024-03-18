@@ -2541,7 +2541,7 @@ bootstrap();
 
 ```
 
-## 5.12 安全相关
+## 5.12 认证
 
 ### 1. 概述
 在开始学习原生node时、我们知道http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。
@@ -2899,7 +2899,6 @@ import { SetMetadata } from '@nestjs/common';
 export const Permission = (...permission: string[]) => SetMetadata('permission', permission);
 ```
 
-
 ### 2. 基于 RBAC 的权限控制
 RBAC 是 Role Based Access Control，即基于角色的权限控制是最常用的一种权限控制方案。相比于 ACL 的权限控制，RBAC 是给角色分配权限，然后给用户分配角色。用户--> 角色--> 权限 它们都是多对多的关系。
 好处是当多个用户需要增加同一种角色时，只需增加一个角色然后把权限封装到这个角色里，再把这个角色授予用户即可。
@@ -2972,6 +2971,7 @@ export class Role {
 }
 
 ```
+
 **权限表**
 ```JavaScript
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
@@ -3025,11 +3025,115 @@ for(let i = 0; i < requiredPermissions.length; i++) {
 
 ```
 
+### 3. 基于 策略 的权限控制
 
-### 2. 基于声明的授权
+## 5.14 其它安全相关知识
 
-### 3. 
+### 1. 加密和哈希
+加密是对信息进行编码的过程。这个过程将信息的原始表示（称为明文）转换为另一种形式，称为密文。理想情况下，只有授权的参与者可以将密文解密回到明文，并访问原始信息。加密本身并不防止干扰，但它将可理解的内容拒绝给潜在的拦截者。加密是一个双向函数；使用正确的密钥可以对加密内容进行解密。
 
+哈希(也叫散列)是哈希函数将给定的键转换为另一个值的过程。哈希函数是一个用于根据数学算法生成新的值的函数。
+
+主要是对用户的密码进行加密，防止用户密码泄露。
+
+对于加密，Node.js提供了一个内置的crypto模块，您可以使用它来加密和解密字符串、数字、缓冲区、流等等。我们在原生node里已经学习过了。
+
+对于哈希，我们推荐使用 bcrypt 或 argon2 包。Nest 本身不会在这些模块之上提供额外的封装，以避免引入不必要的抽象。我们之前也学习过。
+```JavaScript
+// 安装、完成后就可以使用 hash 函数。
+$ npm i bcrypt
+$ npm i -D @types/bcrypt
+
+import * as bcrypt from 'bcrypt';
+
+const saltOrRounds = 10;// 自定义的盐
+const salt = await bcrypt.genSalt();// 生一个随机的盐
+
+const password = 'random_password';// 前端传过来的密码
+const hash = await bcrypt.hash(password, saltOrRounds);
+// 比较密码是否一致
+const isMatch = await bcrypt.compare(password, hash);
+
+```
+
+### 2. Helmet
+Helmet 可以通过适当设置HTTP头来帮助保护您的应用免受一些众所周知的网络漏洞。一般来说，Helmet 只是一组设置与安全相关的HTTP头的较小中间件函数。
+```JavaScript
+// 安装所需的包
+$ npm i --save helmet
+// 安装完成后，将其应用为全局中间件
+
+import helmet from 'helmet';
+app.use(helmet());
+
+
+```
+
+### 3. CORS
+跨源资源共享（CORS）是一种机制，允许从另一个域请求资源。在底层，Nest 使用了 Express 的 cors 包。所以使用上是和express 的 cors 包一样。要启用CORS，在Nest应用程序对象上调用 enableCors() 方法。
+```JavaScript
+const app = await NestFactory.create(AppModule, { cors: true });// 使用默认设置启用CORS
+const app = await NestFactory.create(AppModule);
+app.enableCors({});// 启用跨域、可以传入一个配置对象和cors文档是一样的配置项。
+await app.listen(3000);
+
+```
+
+### 4. CSRF 保护
+跨站请求伪造（也称为CSRF或XSRF）是一种恶意利用网站的类型，其中来自Web应用程序信任的用户的未经授权命令被传输。要减轻这种类型的攻击，您可以使用csurf 包。
+```JavaScript
+// 安装所需的包
+$ npm i --save csurf
+// 安装完成后，将 csurf 中间件应用为全局中间件即可。
+
+import * as csurf from 'csurf';
+// ...
+// somewhere in your initialization file
+app.use(csurf());
+
+```
+
+### 3. 限流
+保护应用程序免受暴力攻击的常见技术是限速。
+```JavaScript
+// 安装 @nestjs/throttler 包
+$ npm i --save @nestjs/throttler
+// 安装完成后，ThrottlerModule 可以像其他 Nest 包一样使用 forRoot 或 forRootAsync 方法进行配置。
+// app.module.ts
+@Module({
+  imports: [
+    ThrottlerModule.forRoot({
+      ttl: 60,// 存活时间
+      limit: 10,// ttl 内的最大请求数
+    }),
+  ],
+})
+export class AppModule {}
+// 一旦导入了该模块，可以选择如何绑定 ThrottlerGuard 守卫
+// 全局使用如下方法即可
+
+{
+  provide: APP_GUARD,
+  useClass: ThrottlerGuard
+}
+
+// 可以使用 @SkipThrottle() 装饰器跳过路由、类，或取消对被跳过的类中某个路由的跳过的速率限制。
+// 传入一个布尔值
+@SkipThrottle()
+@Controller('users')
+export class UsersController {
+  @SkipThrottle(false)
+  dontSkip() {
+    return "List users work with Rate limiting.";
+  }
+}
+
+// @Throttle(limit,ttl) 装饰器，它可以用于覆盖全局模块中设置的 limit 和 ttl，以提供更严格或更宽松的安全选项。
+// 可以用在类或函数上。
+```
+
+## 5.14 
+## 5.14 
 
 ## 5. 配置接口文档 swagger
 
