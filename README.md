@@ -2735,7 +2735,7 @@ ttt(@Res({ passthrough: true}) response: Response) {
   }
 
 // 然后是定义一个守卫来统一处理
-
+// public.decorator.ts
 import { SetMetadata } from '@nestjs/common';
 export const IS_PUBLIC_KEY = 'isPublic';
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
@@ -2860,8 +2860,171 @@ export class Permission {
 
 ```
 
+然后还需要一个 PermissionGuard 守卫、这个跟我们之前自定义装饰器的 @Roles装饰器类似的。
+可以通过设置元数据来来判断、不过一般也是将它定义成一个装饰器。
+```Javascript
+// 安装
+$ nest g guard permission --no-spec --flat
+import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/common';
+import { Request } from 'express';
+import { Observable } from 'rxjs';
+import { Reflector } from '@nestjs/core';
 
-### 1. 基本的RBAC实现
+@Injectable()
+export class PermissionGuard implements CanActivate {
+    // 注入依赖
+  constructor(private reflector: Reflector) {}
+
+
+  canActivate(
+    context: ExecutionContext,
+  ): boolean | Promise<boolean> | Observable<boolean> {
+    console.log(context);
+    // 通过设置的元数据信息来判断当前 handler 需要的权限来判断是否返回 true
+    const permission = this.reflector.get<string>('permission', context.getHandler());
+    // 查数据库当前用户对应拥有的权限集合、如果包含 permission就返回true、否则抛出没有权限的异常。
+    return true;
+  }
+}
+
+// 设置元数据
+@Get()
+@SetMetadata('permission','ddd')
+findAll() {}
+// 然后在 PermissionGuard 里通过 reflector 取出来
+
+// 封装成装饰器 
+// permission.decorator.ts
+import { SetMetadata } from '@nestjs/common';
+export const Permission = (...permission: string[]) => SetMetadata('permission', permission);
+```
+
+
+### 2. 基于 RBAC 的权限控制
+RBAC 是 Role Based Access Control，即基于角色的权限控制是最常用的一种权限控制方案。相比于 ACL 的权限控制，RBAC 是给角色分配权限，然后给用户分配角色。用户--> 角色--> 权限 它们都是多对多的关系。
+好处是当多个用户需要增加同一种角色时，只需增加一个角色然后把权限封装到这个角色里，再把这个角色授予用户即可。
+
+**用户表**
+```JavaScript
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+
+@Entity()
+export class User {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column({
+        length: 50
+    })
+    username: string;
+
+    @Column({
+        length: 50
+    })
+    password: string;
+
+    @CreateDateColumn()
+    createTime: Date;
+
+    @UpdateDateColumn()
+    updateTime: Date;
+    
+    // 指定和角色的多对多关系
+    @ManyToMany(() => Role)
+    // 指定中间表名
+    @JoinTable({
+        name: 'user_role_relation'
+    })
+    // 使用的中间表的属性名
+    roles: Role[] 
+}
+
+```
+
+**Role表** 有 id、name、createTime、updateTime 4 个字段。
+```JavaScript
+import { Column, CreateDateColumn, Entity,PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+
+@Entity()
+export class Role {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column({
+        length: 20
+    })
+    name: string;
+
+    @CreateDateColumn()
+    createTime: Date;
+
+    @UpdateDateColumn()
+    updateTime: Date;
+    
+    // 指定角色和权限的多对多关系
+    @ManyToMany(() => Permission)
+    // 指定中间表名
+    @JoinTable({
+        name: 'role_permission_relation'
+    })
+    // 指定中间表的外键名
+    permissions: Permission[] 
+}
+
+```
+**权限表**
+```JavaScript
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+
+@Entity()
+export class Permission {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column({
+        length: 50
+    })
+    name: string;
+    
+    @Column({
+        length: 100,
+        nullable: true
+    })
+    desc: string;
+
+    @CreateDateColumn()
+    createTime: Date;
+
+    @UpdateDateColumn()
+    updateTime: Date;
+}
+
+```
+这样就会生成 user、role、permission 这 3 个表，还有 user_roole_relation、role_permission_relation 这 2 个中间表。这时候关键时使用typeorm时需要指定说明关联表的关联关系 relations 才能查出关联的角色信息。
+
+定义一个 permission 装饰器 @RequirePermission(permissionName)。
+```JavaScript
+import { SetMetadata } from '@nestjs/common';
+export const  RequirePermission = (...permissions: string[]) => SetMetadata('require-permission', permissions);
+// 在守卫里取出
+const requiredPermissions = this.reflector.getAllAndOverride<string[]>('require-permission', [
+  context.getClass(),
+  context.getHandler()
+])
+
+console.log(requiredPermissions);
+// 从角色表中拿出所有权限信息比较当选需要的权限、找到返回true、找不到说明没有权限
+for(let i = 0; i < requiredPermissions.length; i++) {
+  const curPermission = requiredPermissions[i];
+  const found = permissions.find(item => item.name === curPermission);
+  if(!found) {
+    throw new UnauthorizedException('您没有访问该接口的权限');
+  }
+}
+
+
+```
+
 
 ### 2. 基于声明的授权
 
