@@ -210,6 +210,10 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 
 20. 服务器响应
 
+而在这个生命周期内 Nest官方提供了一些生命周期方法。
+首先，递归初始化模块，会依次调用模块内的 controller、provider 的 onModuleInit 方法，然后再调用 module 的 onModuleInit 方法。
+全部初始化完之后，再依次调用模块内的 controller、provider 的 onApplicationBootstrap 方法，然后调用 module 的 onApplicationBootstrap 方法然后监听网络端口。之后 Nest 应用就正常运行了。这个过程中，onModuleInit、onApplicationBootstrap 都是我们可以实现的生命周期方法。provider、controller、module 都支持启动和销毁的生命周期函数，这些生命周期函数都支持 async 的方式。
+
 ## 2.4 Nest 实战目录
 
 使用 Nest CLI 创建的项目会拥有一个初始的项目结构，以鼓励开发人员将每个模块保存在其专用目录中(也就是更加作用自定义模块文件名)。所以根据个人喜好来就行，这只是一种约定。
@@ -229,14 +233,69 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 ├───── app.service.ts 具有单一方法的基本服务(Service)
 ├───── main.ts nest 应用程序的入口文件，
 
+## 2.5 NestJS 常用装饰器速查
+Nest 的功能都是大多通过装饰器来使用的
+
+**模块系统相关**
+1. @Module() 声明模块
+2. @Controller() 声明模块里的 controller 
+3. @Injectable() 声明模块里可以注入的 provider
+4. @Inject() 注入依赖(属性注入、或provider名为字符串时使用)
+5. @Optional() 注入依赖时可选参数
+6. @Global() 声明为全局
+
+**面向 AOP编程相关**
+1. @UseFilters() 注册过滤器
+2. @UseGuards() 注册守卫
+3. @UseInterceptors() 注册拦截器
+4. @UsePipes() 注册管道
+
+**HTTP请求相关**
+1. @Get() get请求
+2. @Post() post请求
+3. @Put() put请求
+4. @Patch() patch请求
+5. @Delete() delete请求
+6. @Query() 获取请求参数、取出 query 部分的参数，比如 /aaa?name=xx 中的 name
+7. @Body() 获取请求体、取出请求 body，通过 dto class 来接收
+8. @Param() 获取请求参数、取出 url 中的参数，比如 /aaa/:id 中的 id
+9. @HttpCode() 修改响应的状态码
+10. @Redirect() 重定向 
+11. @Req()、@Request()注入 request 对象
+12. @Res()、@Response()注入 response 对象，一旦注入了这个 Nest 就不会把返回值作为响应了，除非指定 passthrough 为true
+
+
+
+
+
+## 2.6 NestJS 中AOP的实现
+后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 View。在这个流程中，Nest 还提供了 AOP （Aspect Oriented Programming）的能力，也就是面向切面编程的能力。也就是在调用 Controller 之前和之后加入一个执行通用逻辑的阶段、这样的横向扩展点就叫做切面，这种透明的加入一些切面逻辑的编程方式就叫做 AOP （面向切面编程）。
+
+AOP 的好处是可以把一些通用逻辑分离到切面中，保持业务逻辑的纯粹性，这样切面逻辑可以复用，还可以动态的增删。
+Nest 实现 AOP 的方式更多，一共有五种，包括 中间件(Middleware)、导航守卫(Guard)、管道(Pipe)、拦截器(Interceptor)、过滤器(ExceptionFilter)。
+
+五种 AOP 机制的顺序：
+1. 进入路由前先执行 Middleware，
+2. 然后会调用 Guard，判断是否有权限等，如果没有权限就抛异常。
+3. 抛出的异常会被 ExceptionFilter 处理。
+4. 如果有权限，就会调用到 interceptor，拦截器组织了一个链条，一个个的调用然后进入控制器。
+5. 在调用 controller 具体的 handler 之前，会使用 pipe 对参数做转换或验证处理。
+6. 在调用 controller 的 handler 之后，还可以调用interceptor对响应结果做处理。
+7. 都没问题返回响应。
+
+过滤器就是在返回响应之前对异常做一次处理即可。
+   
+完整流程是：request -> middleware  -> guard -> 请求interceptor -> pipe -> handler -> 响应interceptor -> ExceptionFilter -> response
+
+
 # 三、NestJS 核心基础知识
 
 ## 3.1 控制器 controller
 
 ### 1. 概述
-和原生node、express、koa 里我们抽离的路由类似，nest 的控制器作用一样的: 就是处理客户端传入的请求和向客户端返回响应、nest控制器其实也是路由。
+和原生node、express、koa 里我们抽离的路由类似，nest 的控制器作用一样的: 就是处理客户端传入的请求和向客户端返回响应、nest控制器其实也是路由。即接收 http 请求，调用 Service，返回响应。
 
-只不过在 NestJS 里是使用类和装饰器，而控制器就是使用 @Controller 装饰器装饰的一个类。装饰器的作用是将类与所需的元数据关联起来，并使Nest能够创建路由映射(将请求与相应的控制器关联起来)。
+只不过在 NestJS 里是使用类和装饰器，而控制器就是使用 @Controller 装饰器装饰的一个类。装饰器的作用是将类与所需的元数据关联起来，并使Nest能够创建路由映射(将请求与相应的控制器关联起来)、即表示这个类是可以被注入的、Nest就会把它放入到 IoC 容器中。
 
 在脚手架一节我们知道要使用CLI创建控制器，只需执行`$ nest g controller [name] `命令即可。
 
@@ -424,6 +483,33 @@ formUrlEncoded();
 4. form-data、指定 content-type 为 multipart/form-data、用 boundary 分隔符分割的内容。适合传输文件，而且可以传输多个文件。
 ```js
 // 前端使用 FormData 对象来封装传输的内容
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://unpkg.com/axios@0.24.0/dist/axios.min.js"></script>
+</head>
+<body>
+    <input id="fileInput" type="file" multiple/>
+    <script>
+        const fileInput = document.querySelector('#fileInput');
+
+        async function formData() {
+            const data = new FormData();
+            data.set('name','张三');
+            data.set('age', 20);
+            data.set('file1', fileInput.files[0]);
+            data.set('file2', fileInput.files[1]);
+
+            const res = await axios.post('/api/person/file', data, {
+                headers: { 'content-type': 'multipart/form-data' }
+            });
+            console.log(res);     
+        }
+
+        fileInput.onchange = formData;
+    </script>
+</body>
+</html>
 // Nest 中要使用 FilesInterceptor 来处理其中的 binary 字段，用 @UseInterceptors 来启用，其余字段用 @Body 来取。
 import { AnyFilesInterceptor } from '@nestjs/platform-express';
 export class CreatePersonDto {
@@ -456,6 +542,25 @@ export class PersonController {
   }
 }
 // 前端代码使用 axios 发送 post 请求时默认传输 json格式的数据，所以不需要指定 content-type。
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://unpkg.com/axios@0.24.0/dist/axios.min.js"></script>
+</head>
+<body>
+    <script>
+        async function json() {
+            const res = await axios.post('/api/person', {
+                name: '张三',
+                age: 20
+            });
+            console.log(res);     
+        }
+        json();
+    </script>
+</body>
+</html>
+
 ``` 
 
 
@@ -555,7 +660,7 @@ export class AppModule {}
 ## 3.4 中间件 Middleware
 
 ### 1. 概述
-中间件是 NestJS 中实现 AOP 编程的五种方式之一。和express和koa一样、Nest中也有中间件功能类似，Nest中间件默认情况下与express中间件等效。它是一个在路由处理程序之前调用的函数、也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序的请求-响应周期中的 next() 中间件函数。通常，next中间件函数由一个名为next的变量表示。
+中间件是 NestJS 中实现 AOP 编程的五种方式之一。和express和koa一样、Nest中也有中间件功能类似，Nest中间件默认情况下与express中间件等效。它是一个在路由处理程序之前调用的函数、也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序的请求-响应周期中的 next() 中间件函数。通常，next中间件函数由一个名为next的变量表示。适合更通用的处理逻辑
 
 中间件函数可以执行以下任务：
 1. 执行任何在中间件函数里定义的代码。
@@ -563,29 +668,41 @@ export class AppModule {}
 3. 结束请求-响应周期。
 4. 调用堆栈中的下一个中间件函数。如果当前的中间件函数没有结束请求-响应周期, 它必须调用 next() 将控制传递给下一个中间件函数。否则, 请求将被挂起。
 
+Nest中分为了全局中间件和路由中间件。
+1. 全局中间件：全局中间件是指应用中的所有路由都会生效的中间件。
+```js
+// 在 main.ts 里通过 app.use 使用
+import { Request, Response, NextFunction } from 'express';
+app.use(function(req: Request, res: Response, next: NextFunction) {
+    console.log('before', req.url);
+    next();
+    console.log('after');
+})
+
+```
+2. 路由中间件：路由中间件是指只适用于特定路由的中间件。
 
 ### 2. 使用
 在Nest中中间件有两种定义方法:
 1. 一种是和express中间件一样就是一个函数没有任何特殊要求-函数式中间件。当中间件不需要任何依赖时使用。
 2. 另一种是带有 @Injectable()装饰器的类中实现自定义的Nest中间件。这个类应该实现NestMiddleware 接口-类中间件。
 
-在 Nest 中使用脚手架命令创建一个中间件使用命令 `$ nest g mi middlewareName --no-spec `、如创建一个 logger 中间件 `$ nest g mi common/logger --no-spec`
-使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。
-同时可以使用 express 中的类型指定req、res next钩子的类型。
+在 Nest 中使用脚手架命令创建一个中间件使用命令 `$ nest g mi/middleware  middlewareName --no-spec `、如创建一个 logger 中间件 `$ nest g mi/middleware  common/logger --no-spec`
+使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。同时可以使用 express 中的类型指定req、res next钩子的类型。关注在于可以在中间件中依赖注入其它的服务。
 
 ```javaScript
-// 类中间件-logger 中间件
+// 类中间件-logger 中间件,不知道用的 express 还是 fastify，所以 request、response 是 any，可以手动标注。
 import { Injectable, NestMiddleware } from '@nestjs/common';
-
+import { Request, Response } from 'express';
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
-  use(req: any, res: any, next: () => void) {
+  use(req: Request, res: Response, next: () => void)  {
     // 这里就可以范围到请求和响应对象
     next();// 释放句柄
   }
 }
 
-// 函数式中间件
+// 函数式中间件-也叫全局中间件需要使用 app.use 使用。
 import { Request, Response, NextFunction } from 'express';
 export function logger(req: Request, res: Response, next: NextFunction) {
   console.log(`Request...`);
@@ -596,14 +713,12 @@ export function logger(req: Request, res: Response, next: NextFunction) {
 
 因为在 Nest 中使用类方法实现的中间件也是使用 @Injectable() 装饰器装饰的类(提供者)所以它完全支持依赖注入，所以可以注册到全局模块使用，也可以在指定模块中注入使用，都是通过类构造方法 constructor 实现注入依赖项。
 
-使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure() 方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口实现了这个接口会自动执行模块类的 configure 方法。
+使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure() 方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口、实现了这个接口会自动执行模块类的 configure 方法。
 
 MiddlewareConsumer 是一个辅助类，它提供了几种内置方法来管理中间件。
 1. apply() 方法用来应用中间件,多个时逗号分隔即可。
 2. forRoutes() 方法可以接受一个字符串、多个字符串、一个 RouteInfo 对象、一个控制器类，甚至是多个控制器类。
 3. .exclude 方法用来排除、接受单个字符串、多个字符串或 RouteInfo 对象，用于标识要排除的路由
-
-
 ```javaScript
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
@@ -643,9 +758,10 @@ export class AppModule implements NestModule {
     consumer
       .apply(TestMiddleware) // 应用中间件,多个时逗号分隔即可。
       .forRoutes('*'); // 指定应用的路由或者控制器
-      .forRoutes(CatsController); // 指定控制器
-      .exclude(
-        { path: 'cats', method: RequestMethod.GET },// RouteInfo 对象
+      .forRoutes(CatsController); // 或者指定控制器
+      .forRoutes({ path: 'cats', method: RequestMethod.GET });// 或者RouteInfo 对象
+      .exclude( // 排除对象
+        { path: 'cats', method: RequestMethod.GET },
         { path: 'cats', method: RequestMethod.POST },
         'cats/(.*)',
       )
@@ -670,7 +786,7 @@ await app.listen(3000);
 过滤器也是 NestJS 中实现 AOP 编程的五种方式之一，Nest 中过滤器一般是指: 异常处理过滤器,他们开箱即用返回一些指定的 JSON 信息。在 NestJS 中有一个内置异常处理层、当一个异常没有被应用程序代码处理时(显性声明处理)，它就会被这个异常处理层捕获，然后自动发送一个适当的用户友好响应。
 
 默认情况下，这个操作是由内置的全局异常过滤器执行的，它处理类型为HttpException（以及其子类）的异常。当一个异常是未识别的（既不是HttpException，也不是继承自HttpException的类），内置的异常过滤器会生成以下默认的JSON响应:
-```
+```js
 {
   "statusCode": 500,
   "message": "Internal server error"
@@ -688,6 +804,8 @@ new HttpException('message描述信息', http状态码statusCode);
 @Get()
 async findAll() {
   throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+  throw new HttpException('xxxx', HttpStatus.BAD_REQUEST)
+
 }
 // 当客户端访问时就会返回如下内容：
 {
@@ -703,7 +821,7 @@ async findAll() {
 
 ### 2 使用
 尽管基础（内置）异常过滤器可以自动处理许多情况，但您可能希望对异常层具有完全控制。
-这时就创建一个异常过滤器，负责捕获 HttpException 类的实例，并为其实现自定义响应逻辑。使用 CLI 脚手架命令快速生成一个过滤器 `$ nest g f http-exception --no-spec`、 `$ nest g f common/http-exception --no-spec`。
+这时就创建一个异常过滤器，负责捕获 HttpException 类的实例，并为其实现自定义响应逻辑。使用 CLI 脚手架命令快速生成一个过滤器 `$ nest g f/filter  http-exception --no-spec`、 `$ nest g f/filter  common/http-exception --no-spec`。
 
 每一个过滤器都应该实现 ExceptionFilter 接口、实现接口要求提供具有指定签名的 catch(exception: T, host: ArgumentsHost) 方法。其中，T 表示异常的类型。
 
@@ -712,7 +830,6 @@ async findAll() {
 定义了异常过滤器之后、就是使用。在 Nest 里过滤器和中间件、守卫、拦截器类似，也是有全局作用域过滤器、控制器作用域、方法作用域三种。有两种方法注册绑定过滤器、
 1. 使用 @UseFilters 装饰器注册方法作用域这样只应用于单个路由处理程序、也可以应用于控制器级别。与 @Catch() 装饰器类似，它可以接受一个过滤器实例，或者一个逗号分隔的过滤器实例列表。也可以传递类（而不是实例），将实例化的责任交给框架，并启用依赖注入。尽可能使用类来应用过滤器，而不是实例。这样做可以减少内存使用，因为 Nest 可以在整个模块中轻松重用相同类的实例。 
 2. 使用 app 实例的 useGlobalFilters 方法注册绑定的就是全局级别。
-
 
 ```javaScript
  /**
@@ -773,14 +890,14 @@ app.useGlobalFilters(new HttpExceptionFilter());
 
 ### 1. 概述
 
-它也是 NestJS 中实现 AOP 编程的五种方式之一，在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类(提供者)，PipeTransform<T, R> 是每个管道必须要实现的泛型接口。泛型 T 表明输入的 value 的类型，R 表明 transfrom() 方法的返回类型。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。管道有两个典型的用例:
+它也是 NestJS 中实现 AOP 编程的五种方式之一，它是对参数通用逻辑抽出的切面。在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类(提供者)，PipeTransform<T, R> 是每个管道必须要实现的泛型接口。泛型 T 表明输入的 value 的类型，R 表明 transfrom() 方法的返回类型。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。管道有两个典型的用例:对参数做一些检验和转换。
 1. 转换: 将用户输入数据转换为所需的形式后再输出(例如，从字符串到整数)。
 2. 验证: 对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
   
 在这两种情况下，管道参数(arguments) 会由控制器的路由处理程序进行操作。
 
 ### 2. 内置管道
-Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包导出。
+Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包导出。它们都实现了 PipeTransform 接口。
 
 1. ValidationPipe: 用于验证请求数据，通常用于验证请求体数据、查询参数、路由参数等。它使用了类似于 class-validator 库的装饰器来进行验证。如果验证失败，它会抛出 ValidationException 异常。
 
@@ -824,11 +941,12 @@ app.useGlobalPipes(new ValidationPipe());
 ```
 
 ### 4. 自定义管道
-使用 CLI 脚手架创建一个管道使用命令即可 `$ nest g pi <name>`、`$ nest g pi common/validation-pipe`。
+使用 CLI 脚手架创建一个管道使用命令即可 `$ nest g pi/pipe  <name>`、`$ nest g pi/pipe  common/validation-pipe`。
 
-为实现 PipeTransfrom接口，每个管道必须声明 transfrom() 方法。该方法有两个参数：
+自定义 Pipe 要实现 PipeTransform 接口，实现 transform 方法，里面可以对传入的参数值 value 做参数验证，比如格式、类型是否正确，不正确就抛出异常。也可以做转换，返回转换后的值。 transfrom() 方法有两个参数：
 1. value 当前处理的方法参数(在被路由处理程序方法接收之前)
 2. metadata 当前处理的方法参数的元数据。
+
 元数据对象具有以下属性:
 ```javaScript
 
@@ -900,7 +1018,7 @@ async create(@Body() createCatDto: CreateCatDto) {
 
 ```
 
-还有一种比较常用的验证管道类型是:**类验证器**、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类添加一些装饰器来校验。
+还有一种比较常用的验证管道类型是:**类验证器**、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类中添加一些装饰器来校验。
 
 安装依赖: `$ npm i --save class-validator class-transformer`
 
@@ -920,8 +1038,9 @@ export class ValidationPipePipe implements PipeTransform<any> {
     if (!metatype || !this.toValidate(metatype)) {
       return value;
     }
-    // plainToInstance 方法将普通的 JavaScript 参数对象转换为可验证的类型对象
+    // plainToInstance 方法将普通的 JavaScript 参数对象转换为可验证的 dto class 的实例对象。
     const object = plainToInstance(metatype, value);
+    // 调用 class-validator 包的 validate api 对它做验证。如果验证不通过，就抛一个异常。
     const errors = await validate(object);
     if (errors.length > 0) {
       throw new BadRequestException('Validation failed');
@@ -964,16 +1083,12 @@ async create(@Body() createCatDto: CreateCatDto) {
 ## 3.7 导航守卫 Guard
 
 ### 1. 概述
-导航也是 NestJS 中实现 AOP 编程的五种方式之一，顾名思义 Guard 可以根据某些自定义的条件在调用某个 Controller 之前返回 true 或 false 决定放不放行、也就是进不进入这个路由。本质上 Nest 守卫也是一个带有 @Injectable()装饰器装饰的类，同时守卫要实现CanActivate 接口。
+导航也是 NestJS 中实现 AOP 编程的五种方式之一，导航守卫就一个职责：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。即在调用某个 Controller 之前返回 true 或 false 决定放不放行(也就是进不进入这个路由)。而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。本质上 Nest 守卫也是一个带有 @Injectable()装饰器装饰的类，同时守卫要实现 CanActivate 接口、实现 canActivate 方法，这个方法函数应该返回一个布尔值true/false，指示当前请求是否被允许。如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。守卫会在所有中间件之后执行，但在拦截器或管道之前执行、由守卫引发的任何异常都将由异常层(全局异常过滤器和应用于当前上下文的任何异常过滤器)处理。作用类似express、koa里的鉴权中间件。
 
-导航守卫就一个职责：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。也就是决定给定的请求是否进入路由进而由路由处理程序处理，也就是前端请求这个接口路径时处不处理。而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。
-
-每个守卫类都必须实现一个 canActivate()方法。这个方法函数应该返回一个布尔值，指示当前请求是否被允许。如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。守卫会在所有中间件之后执行，但在拦截器或管道之前执行、由守卫引发的任何异常都将由异常层(全局异常过滤器和应用于当前上下文的任何异常过滤器)处理。作用类似express、koa里的鉴权中间件。
-
-canActivate() 函数接受一个参数，即 ExecutionContext 实例。ExecutionContext 继承自 ArgumentsHost。通过它我们可以获取对 Request 对象的引用、一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。
+canActivate() 方法接受一个参数，即 ExecutionContext 实例。ExecutionContext 继承自 ArgumentsHost。通过它我们可以获取对 Request 对象的引用、一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。
 
 ### 2. 使用
-使用 CLI 脚手架创建一个守卫使用命令如下命令即可 `nest g gu AuthGuard --no-spec --flat`、这里我们创建一个验证守卫。
+使用 CLI 脚手架创建一个守卫使用命令如下命令即可 `nest g gu/guard  AuthGuard --no-spec --flat`、这里我们创建一个验证守卫。
 
 这里我们可以通过 @SetMetadata 装饰器自定义元数据来向路由处理程序附加自定义元数据的能力。但直接在路由中使用@SetMetadata()不是一个良好的实践。相反，创建您自己的装饰器。为了访问路由的角色（自定义元数据），我们将使用Reflector辅助类，它由框架提供并从@nestjs/core包中公开。
 
@@ -1049,7 +1164,7 @@ export class CatsController {}
 
 ### 1. 概述
 
-拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，功能上它和中间件是很类似的。在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。
+拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，功能上它和中间件是很类似的也是在目标 Controller 方法前后加入一些逻辑。在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。区别在于 interceptor 可以拿到调用的 controller 和 handler、作用就是可以给它们加上数据元信息然后可以拿到，而中间件获取不到。interceptor 更适合处理与具体业务相关的逻辑。
 
 **作用**
 1. 在函数执行之前/之后绑定额外的逻辑
@@ -1058,10 +1173,9 @@ export class CatsController {}
 4. 扩展基本函数行为
 5. 根据所选条件完全重写函数 (例如, 缓存目的)
 
-它本质也是一个使用 @Injectable 装饰器装饰的类，这个类实现了 NestInterceptor 接口。每个拦截器也实现了 intercept 方法。
+它本质也是一个使用 @Injectable 装饰器装饰的类，这个类要实现 NestInterceptor 接口、实现 intercept 方法。
 该方法接收两个参数：
-1. 第一个是 ExecutionContext 实例 context(与守卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。在拦截器中 context.getClass()可以获取当前路由的类,
-context.getHandler()可以获取到路由将要执行的方法
+1. 第一个是 ExecutionContext 实例 context(与守卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。在拦截器中 context.getClass()可以获取当前路由的类,context.getHandler()可以获取到路由将要执行的方法
 2. 第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法。在intercept()方法的实现中没有调用handle()方法，路由处理程序方法将根本不会被执行。
 
 也就是说在最终路由处理程序执行之前和之后都可以实现自定义逻辑。
@@ -1070,13 +1184,11 @@ context.getHandler()可以获取到路由将要执行的方法
 
 **响应映射**
 
-我们已经知道handle()返回一个Observable。这个流包含来自路由处理程序返回的值，因此我们可以使用RxJS的map()操作符轻松地对其进行变换。
+我们已经知道handle()返回一个Observable。这个流、包含来自路由处理程序返回的值，因此我们可以使用RxJS的map()操作符轻松地对其进行变换。
 
 ### 2. 使用
-使用 CLI 脚手架命令可以快速生成一个拦截器: `nest g itc test --no-spec --flat`
-、如创建一个记录用户交互的拦截器 `$ nest g gu common/auth --no-spec`
+使用 CLI 脚手架命令可以快速生成一个拦截器: `nest g itc test --no-spec --flat`、如创建一个记录用户交互的拦截器 `$ nest g gu common/auth --no-spec`
 ```javaScript
-
 import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
 import { Observable } from 'rxjs';
 
@@ -1118,6 +1230,8 @@ app.useGlobalInterceptors(new TransformInterceptor());
 
 比如：定义一个数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理。
 
+RxJS 是一个组织异步逻辑的库，它有很多 operator，可以极大的简化异步逻辑的编写。数据源叫做 observable
+
 ```JavaScript
 /**
  * 数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理
@@ -1158,12 +1272,12 @@ Nest是基于一种称为装饰器的语言特性构建的。一个ES2016装饰�
 
 ### 2. 使用
 除了 Nest 提供的装饰器之外、用户还可以根据需要自定义装饰器。
-
+`nest g decorator aaa --flat`
 ```JavaScript
 // 在Node.js世界中，通常的做法是将属性附加到request对象上。然后，在每个路由处理程序中手动提取它们
 // 例如 const user = req.user;
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-// 定义
+// 自定义参数装饰器
 export const User = createParamDecorator(
   // 这个 data 就是传入装饰器的参数，@User(data)
   (data: unknown, ctx: ExecutionContext) => {
@@ -1171,13 +1285,46 @@ export const User = createParamDecorator(
     return request.user;
   },
 );
-// 使用、定义一个装饰器直接取出
+
+// 之前使用@SetMetadata定义元数据
 @Get()
+@SetMetadata('roles', ['admin'])
+@useGuards(AuthGuard)
+async findOne(@User() user: UserEntity) {
+  console.log(user);
+}
+// 在 guard 里使用 reflector 来取 metadata
+import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  @Inject(Reflector)
+  private reflector: Reflector;
+
+  canActivate(
+    context: ExecutionContext,
+  ): boolean | Promise<boolean> | Observable<boolean> {
+
+    console.log(this.reflector.get('roles', context.getHandler()));
+
+    return true;
+  }
+}
+
+// 自定义其它装饰器
+import { SetMetadata } from '@nestjs/common';
+export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+// 使用自定义装饰器
+@Get()
+@Roles('admin')//这个自定义装饰器就是对上面的装饰器进行了封装
 async findOne(@User() user: UserEntity) {
   console.log(user);
 }
 
 ```
+
 
 # 四、NestJS 进阶知识
 
@@ -1189,13 +1336,13 @@ async findOne(@User() user: UserEntity) {
 而提供者是怎么实例化的、这个是通过控制反转(IOC)技术实现的。原理是将依赖项的实例化委托给IoC容器(在 Nest 里就是NestJS运行时系统)、而不是手动 new 实例化。
 
 在 Nest 中将提供者注入到我们的控制器类中是通过类的构造函数实现的、然后将提供者注册到Nest的IoC容器中(也就是模块中)。这个过程有三个关键步骤
-1. 使用 @Injectable() 装饰器声明的类可以由Nest IoC容器管理。
-2. 使用构造函数注入声明对提供者令牌的依赖、constructor(private catsService: CatsService)相当于声明了一个  CatsService 令牌标识,键值对同名。
+1. 使用 @Injectable() 装饰器声明的类说明它是可注入、可以由Nest IoC容器管理。
+2. 使用构造函数注入声明对提供者令牌的依赖、constructor(private catsService: CatsService)相当于声明了一个  CatsService 令牌标识,键值对同名。或者使用属性的方式声明依赖时一样(通过 @Inject()装饰器声明)。前者是构造器注入，后者是属性注入，两种都可以。
 3. 在模块类中将 CatsService 令牌与真正的 CatsService 类关联起来(即注册)、类似于es对象的键值对名一致所以缩写了。
    
-如此、当Nest IoC容器实例化 CatsController 时，它首先会查找任何依赖项。当它找到CatsService依赖项时，它会在CatsService令牌上进行查找，该令牌会根据上面的注册步骤返回CatsService类。然后Nest将创建一个CatsService的实例，将其缓存并返回，或者如果已经缓存了一个实例，则返回现有的实例。
+如此、当Nest IoC容器实例化 CatsController 时，它首先会查找任何依赖项。当它找到CatsService依赖项时，它会在CatsService令牌上进行查找，该令牌会根据上面的注册步骤返回CatsService类。然后Nest将创建一个CatsService的实例，将其缓存并返回，或者如果已经缓存了一个实例，则返回现有的实例。nest 在背后自动做了对象创建和依赖注入的工作。
 
-通过注册的完整写法、我们就可以理解注册过程。在这里，我们明确地将CatsService令牌与CatsService类关联起来。
+通过注册的完整写法、我们就可以理解注册过程。在这里，我们明确地将CatsService令牌与CatsService类关联起来。本质就是IoC 机制是在 class 上标识哪些是可以被注入的，它的依赖是什么，然后从入口开始扫描这些对象和依赖，自动创建和组装对象。
 
 ```JavaScript
 
@@ -1241,7 +1388,7 @@ export class AppModule {}
 ```
 
 ### 2. 自定义提供者
-当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类令牌定义提供者时需要使用 @Inject() 装饰器引入。
+当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类令牌名定义提供者时需要使用 @Inject() 装饰器引入。
 
 ```JavaScript
 {
@@ -1270,6 +1417,7 @@ const configServiceProvider = {
   providers: [configServiceProvider],
 })
 export class AppModule {}
+// 
 
 ```
 
@@ -1301,9 +1449,7 @@ export class CatsRepository {
 ```
 
 3. 工厂提供者: useFactory 、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。
-
-在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。
-这种叫异步提供者。
+在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。
 ```JavaScript
 // 提供者通常提供服务，但它们不仅限于此用途。提供者可以提供任何值。
 const configFactory = {
@@ -1316,6 +1462,24 @@ const configFactory = {
 
 @Module({
   providers: [configFactory],
+})
+export class AppModule {}
+
+// 通过 inject 参数注入其它提供者
+// 通过 inject 声明了两个 token，一个是字符串 token 的 person，一个是 class token 的 AppService。
+// 也就是注入这两个 provider
+const configFactory = {
+  provide: 'person3',
+  useFactory(person: { name: string }, appService: AppService) {
+    return {
+      name: person.name,
+      desc: appService.getHello()
+    }
+  },
+  inject: ['person', AppService]
+}
+@Module({
+  providers: [configFactory,AppService,{provide: 'person', useValue: {name: 'zhangsan'}}],
 })
 export class AppModule {}
 
@@ -1342,11 +1506,11 @@ export class AppModule {}
 
 ```
 
-**导出** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。
+**导出** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。这样就可以在其它模块中注入导入的提供者。很多都需要时可以定义为全局模块、使用 @Global() 装饰器。不过尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
 
 ```JavaScript
 // 只在当前模块作用域
-const connectionFactory = {
+export const connectionFactory = {
   provide: 'CONNECTION',
   useFactory: (optionsProvider: OptionsProvider) => {
     const options = optionsProvider.get();
@@ -1362,6 +1526,15 @@ const connectionFactory = {
   exports: [connectionFactory],
 })
 export class AppModule {}
+
+// 其它模块需要使用时导入即可
+import { connectionFactory } from '../connectionFactory';
+@Module({
+  // 导入其它模块
+  imports:[connectionFactory]
+})
+export class BModule {}
+
 
 
 ```
@@ -1429,9 +1602,9 @@ export class AppModule {}
 
 从这个例子可以看出
 1. register() 是一个静态方法、因为是在 ConfigModule 类上调用它，而不是在类的实例上调用。实际上这个方法可以有任意的名称，但按照惯例，我们应该将它称为 forRoot()、forFeature()  或 register()。
-   - register() 创建模块时，您希望为调用模块配置特定的动态模块，仅供调用模块使用。例如，对于 Nest 的 @nestjs/axios 模块：HttpModule.register({ baseUrl: 'someUrl' } )。如果在另一个模块中使用 HttpModule.register({ baseUrl: 'somewhere else' })，它将具有不同的配置。您可以为尽可能多的模块执行此操作。
-   - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。
-   - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。
+   - register() 创建模块时，您希望为调用模块配置特定的动态模块，仅供调用模块使用。例如，对于 Nest 的 @nestjs/axios 模块：HttpModule.register({ baseUrl: 'someUrl' } )。如果在另一个模块中使用 HttpModule.register({ baseUrl: 'somewhere else' })，它将具有不同的配置。您可以为尽可能多的模块执行此操作。用一次注册一次
+   - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。只注册一次，用多次，一般在 AppModule 引入
+   - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。用了 forRoot 之后，用 forFeature 传入局部配置，一般在具体模块里 imports
 2. register() 方法由自己定义，因此我们可以接受任何我们喜欢的输入参数。
 3. register() 方法必须返回类似于模块的东西，因为其返回值出现在熟悉的 imports 列表中。
 
@@ -1511,12 +1684,12 @@ export class ConfigService {
 ```
 
 ## 4.3 执行上下文(Execution Context)
-Nest提供了几个实用的类，帮助您轻松编写跨多个应用程序上下文（例如基于Nest HTTP服务器的、微服务和WebSockets应用程序上下文）运行的应用程序。
+Nest提供了几个实用的类，帮助您轻松编写跨多个应用程序上下文（例如基于Nest HTTP服务器的、微服务和WebSockets应用程序上下文）运行的应用程序。不同类型的应用程序上下文它能拿到的参数是不同的，比如 http 服务可以拿到 request、response 对象，而 ws 服务就没有，如何让 Guard、Interceptor、Exception Filter 跨多种上下文复用是Nest需要考虑的。
 
-这些实用工具提供有关当前执行上下文的信息，可用于构建通用的守卫、过滤器和拦截器，可以适用于广泛的控制器、方法和执行上下文。
+在Nest中提供了ArgumentHost 和 ExecutionContext 两个类解决、是从 '@nestjs/common' 包中导出。
 
 ### 1. ArgumentsHost 类
-ArgumentsHost类提供了一些方法，用于检索传递给处理程序的参数。它允许选择适当的上下文（例如HTTP、RPC（微服务）或WebSockets）来从中检索参数、可以使用ArgumentsHost的 getType()方法来实现。(这个类可以叫当前应用上下文)
+ArgumentsHost类提供了一些方法，用于检索传递给处理程序的参数。它允许选择适当的上下文（例如HTTP、RPC（微服务）或WebSockets）来从中检索参数、可以使用ArgumentsHost的 getType()方法来实现。(这个类可以叫当前应用上下文)也就是用于切换 http、ws、rpc 等上下文类型的，可以根据上下文类型取到对应的 argument。
 ```JavaScript
 if (host.getType() === 'http') {
   // do something that is only important in the context of regular HTTP requests (REST)
@@ -1542,7 +1715,8 @@ host.switchToWs(): WsArgumentsHost;
 
 ```
 
-在希望访问它的地方，Nest框架会提供ArgumentsHost的实例，通常作为一个 host 参数进行引用。我们现阶段主要是对于HTTP服务器应用程序、此时host对象封装了Express的[request，response，next]数组，其中request是请求对象，response是响应对象，next是控制应用程序的请求-响应周期的函数。可以通过以下方法获取
+在希望访问它的地方，Nest框架会提供 ArgumentsHost 的实例，通常命名为一个 host 参数进行引用。我们现阶段主要是对于HTTP服务器应用程序、此时host对象封装了Express的[request，response，next]数组，其中request是请求对象，response是响应对象，next是控制应用程序的请求-响应周期的函数。可以通过以下方法获取
+
 ```JavaScript
 const ctx = host.switchToHttp();// 切换到HTTP请求上下文
 const request = ctx.getRequest<Request>();//获取请求上下文中的 request 对象
@@ -1551,7 +1725,7 @@ const response = ctx.getResponse<Response>();//获取请求上下文中的 respo
 ```
 
 ### 2. ExecutionContext 类
-ExecutionContext 扩展了 ArgumentsHost(也就死继承自ArgumentsHost)，提供有关当前执行过程的更多详细信息。
+ExecutionContext 扩展了 ArgumentsHost(也就是继承自ArgumentsHost、是它的子类)，提供有关当前执行过程的更多详细信息。
 与 ArgumentsHost 一样，Nest 在你可能需要的地方提供了 ExecutionContext 的实例，通常作为一个 context 参数进行引用。例如 guard 的 canActivate() 方法和 interceptor 的 intercept() 方法。(也可以叫执行上下文)。
 
 能够访问当前类和处理程序方法的引用提供了很大的灵活性。最重要的是，它使我们有机会从守卫或拦截器内部访问通过 @SetMetadata() 装饰器设置的元数据。
@@ -1567,6 +1741,62 @@ context.getClass()
 
 const methodKey = context.getHandler().name; // "create"
 const className = context.getClass().name; // "CatsController"
+
+```
+
+## 4.5  元数据和反射
+Metadata 元数据存在类或者对象上，如果给类或者类的静态属性添加元数据，那就保存在类上，如果给实例属性添加元数据，那就保存在对象上，用类似 [[metadata]] 的 key 来存的。
+
+Reflect.defineMetadata 和 Reflect.getMetadata 分别用于设置和获取某个类的元数据，如果最后传入了属性名，还可以单独为某个属性设置元数据。
+
+Nest 原理通过装饰器给 class 或者对象添加 metadata，并且开启 ts 的 emitDecoratorMetadata 来自动添加类型相关的 metadata，然后运行的时候通过这些元数据来实现依赖的扫描，对象的创建等等功能。而 metadata 的 api 还在草案阶段，需要使用 reflect-metadata 这个 polyfill 包才行。所以 Nest 的装饰器都是依赖 reflect-metadata 实现的，而且还提供了一个 @SetMetadata 的装饰器让我们可以给 class、method 添加一些 metadata。
+```js
+// 原始api
+Reflect.defineMetadata(metadataKey, metadataValue, target);
+Reflect.defineMetadata(metadataKey, metadataValue, target, propertyKey);
+let result = Reflect.getMetadata(metadataKey, target);
+let result = Reflect.getMetadata(metadataKey, target, propertyKey);
+
+// 上面的api可以支持装饰器的方式使用
+@Reflect.metadata(metadataKey, metadataValue)
+class C {
+
+  @Reflect.metadata(metadataKey, metadataValue)
+  method() {
+  }
+}
+
+// Reflect.metadata 装饰器当然也可以再封装一层
+function Type(type) {
+    return Reflect.metadata("design:type", type);
+}
+function ParamTypes(...types) {
+    return Reflect.metadata("design:paramtypes", types);
+}
+function ReturnType(type) {
+    return Reflect.metadata("design:returntype", type);
+}
+
+@ParamTypes(String, Number)
+class Example {
+  constructor(text, i) {
+  }
+
+  @Type(String)
+  get name() { return "text"; }
+
+  @Type(Function)
+  @ParamTypes(Number, Number)
+  @ReturnType(Number)
+  add(x, y) {
+    return x + y;
+  }
+}
+// 获取这个类和对象的元数据
+let obj = new Example("a", 1);
+
+let paramTypes = Reflect.getMetadata("design:paramtypes", obj, "add"); 
+// [Number, Number]
 
 ```
 
@@ -2293,7 +2523,7 @@ app.use(compression());
 
 
 ## 5.9 文件上传
-要处理文件上传，Nest提供了一个基于express-multer中间件包的内置模块。Multer处理以multipart/form-data格式发布的数据，该格式主要用于通过HTTP POST请求上传文件。所有nest处理文件上传也不难。
+要处理文件上传，Nest提供了一个基于express-multer中间件包的内置模块。Multer处理以 multipart/form-data 格式发布的数据，该格式主要用于通过HTTP POST请求上传文件。所有nest处理文件上传也不难。
 
 安装Multer的类型定义包: `$ npm i -D @types/multer`
 
@@ -2564,6 +2794,13 @@ export class FileController {
 
 
 ```
+
+### 7. 大文件切片上传
+
+### 8. OSS 上传
+OSS （Object Storage Service）对象存储服务来上传下载文件、以阿里云 OSS 为例。
+安装需要依赖：`npm install ali-oss`
+
 
 ## 5.10 网络请求
 nodejs是可以作为中后端、和前端一样发起网络请求的。Nest同样也可以使用任何通用的 Node.js HTTP 客户端库。这里我们使用 Axios、因为Nest 封装了 Axios 并通过内置的 HttpModule 提供访问。HttpModule 导出了 HttpService 类，它提供了基于 Axios 的方法来执行 HTTP 请求。该库还将得到的 HTTP 响应转换为 Observables。Observable可以使用rxjs的firstValueFrom或lastValueFrom来以promise的形式获取请求的数据。
