@@ -2447,6 +2447,104 @@ export class AppModule {}
 之前我们是自己收集信息然后写入本地文件中。
 Nest内置了一个基于文本的日志记录器，在应用程序引导和其他情况下（例如显示捕获的异常，即系统日志）中使用。此功能通过@nestjs/common包中的Logger类提供。对于更高级的日志功能，您可以使用任何Node.js日志包（如Winston）来实现完全自定义的生产级日志记录系统。
 
+### 1. 内置日志对象
+Nest中内置了一个 Logger 对象，该对象可用于记录应用程序日志。
+```js
+import { Logger } from '@nestjs/common';
+// 注册属性
+  private logger = new Logger();
+
+// 路由handler中使用
+    this.logger.debug('aaa', AppService.name);
+    this.logger.error('bbb', AppService.name);
+    this.logger.log('ccc', AppService.name);
+    this.logger.verbose('ddd', AppService.name);
+    this.logger.warn('eee', AppService.name);
+// 这里的 verbose、debug、log、warn、error 就是日志级别，第一个参数是日志的内容。第二个 AppService.name 是 context，也就是当前所在的上下文，这个日志是受 Nest 控制的，可以在创建应用的时候指定是否开启、也可以自己决定输出什么级别的日志。
+NestFactory.create(AppModule,{
+  logger:false,
+  logger:['error','warn']
+})
+
+```
+
+### 2. 使用 winston 
+它是 Node 最流行的日志框架、安装 `npm i winston`、在Nest种集成 winston 本质就是自定义logger 。
+然后需要安装 dayjs 格式化日期 `npm install dayjs`
+安装 chalk 来打印颜色 `npm install --save chalk@4`
+
+它有7种日志级别：
+1. error - 0
+2. warn - 1
+3. info - 2
+4. http - 3
+5. verbose - 4
+6. debug - 5
+7. silly - 6
+
+```js
+
+import { ConsoleLogger, LoggerService, LogLevel } from '@nestjs/common';
+import * as chalk from 'chalk';
+import * as dayjs from 'dayjs';
+import { createLogger, format, Logger, transports } from 'winston';
+
+export class MyLogger implements LoggerService {
+
+    private logger: Logger;
+
+    constructor() {
+        super();
+    
+        this.logger = createLogger({
+            level: 'debug',
+            transports: [
+                new transports.Console({
+                    format: format.combine(
+                        format.colorize(),
+                        format.printf(({context, level, message, time}) => {
+                            const appStr = chalk.green(`[NEST]`);
+                            const contextStr = chalk.yellow(`[${context}]`);
+        
+                            return `${appStr} ${time} ${level} ${contextStr} ${message} `;
+                        })
+                    ),
+                }),
+                new transports.File({
+                   format: format.combine(
+                       format.timestamp(),
+                       format.json()
+                   ),
+                   filename: '111.log',
+                   dirname: 'log'
+               })
+            ]
+        });
+    }
+
+    log(message: string, context: string) {
+        const time = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
+
+        this.logger.log('info', message, { context, time });
+    }
+
+    error(message: string, context: string) {
+        const time = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
+
+        this.logger.log('info', message, { context, time });
+    }
+
+    warn(message: string, context: string) {
+        const time = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
+
+        this.logger.log('info', message, { context, time });
+    }
+}
+
+
+
+```
+
 
 ## 5.7 事件
 Event Emitter包（@nestjs/event-emitter）提供了一个简单的观察者实现，允许您订阅和监听应用程序中发生的各种事件。事件作为应用程序各个方面解耦的很好方式，因为单个事件可以有多个不相互依赖的监听器。
