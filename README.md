@@ -3664,7 +3664,80 @@ export class UserController {
 
 # 七、微服务
 
-# 八、实战
+# 八、Docker
+
+## 8.1 快速上手
+Docker 是一个开源的应用容器引擎，基于 Go 语言和 C 语言开发。这里我们是通过Windows的桌面版本使用、docker desktop 可以可视化的管理它们，很方便。快速上手。Docker 提供了 Docker Hub 镜像仓库，可以把本地镜像 push 到仓库或者从仓库 pull 镜像到本地。
+images 是本地的所有镜像，containers 是镜像跑起来的容器。 volume 挂载将本地挂载的目录映射到容器中。
+```js
+// 拉取镜像
+docker pull nginx:latest
+// 运行镜像
+docker run --name nginx-test2 -p 80:80 -v /tmp/aaa:/usr/share/nginx/html -e KEY1=VALUE1 -d nginx:latest 
+-p 是端口映射
+-v 是指定数据卷挂载目录
+-e 是指定环境变量
+-d 是后台运行
+
+// 执行run命令后会返回一个hash值它是容器的id。
+// 通过用 docker ps 来获取容器列表的，默认是运行中的。
+docker ps
+docker ps -a 显示全部的
+
+// image 镜像列表也可以通过 docker images 命令获取
+docker images
+
+// 其它常见命令
+docker start：启动一个已经停止的容器
+docker rm：删除一个容器
+docker stop：停止一个容器
+
+
+```
+
+## 8.2 dockerfile 
+在 dockerfile 里声明要做哪些事情，docker build 的时候就会根据这个 dockerfile 来自动化构建出一个镜像来。
+
+```js
+# 创建一个基于node的镜像
+FROM node:latest
+
+# 使用 18 版本的 node 镜像，它底层使用 alpine 3.14 的基础镜像。
+FROM node:18-alpine3.14 
+
+WORKDIR /app
+
+COPY . .
+
+RUN npm config set registry https://registry.npmmirror.com/
+
+RUN npm install -g http-server
+# 指定容器需要暴露的端口
+EXPOSE 8080
+# 指定容器跑起来时执行的命令
+CMD ["http-server", "-p", "8080"]
+
+
+// FROM：基于一个基础镜像来修改
+// WORKDIR：指定当前工作目录
+// COPY：把容器外的内容复制到容器内
+// EXPOSE：声明当前容器要访问的网络端口，比如这里起服务会用到 8080
+// RUN：在容器内执行命令
+// CMD：容器启动的时候执行的命令
+
+// 根据 dockerfile 来生成镜像
+docker build -t custom-image:self-image .
+-t 是指定名字和标签、custom-image 是镜像名，self-image 是镜像的标签
+
+// docker 容器内跑的是 linux 系统，各种镜像的 dockerfile 都会继承 linux 镜像作为基础镜像。
+// 但其实这个 linux 镜像可以换成更小的版本，也就是 alpine。
+// docker 是分层存储的，dockerfile 里的每一行指令是一层，会做缓存。
+// 每次 docker build 的时候，只会从变化的层开始重新构建，没变的层会直接复用。
+
+```
+
+
+# 九、实战
 
 实现一个简单的博客 Blog 功能，包括以下功能
 [基础的 Article Tag Use 的 CRUD ]
@@ -3702,5 +3775,5 @@ User 相关
 -put /user:id 修改用户 信息
 -delete /user:id 删除用户
 
-# 九、总结
+# 十、总结
 Nest作为一个Web应用程序使用至此可以说是学习结束。至于 WebSockets、微服务、或者独立应用程序的开发，可以等待下一次学习。
