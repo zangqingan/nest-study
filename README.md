@@ -1879,28 +1879,23 @@ const title = this.configService.get('APP_TITE');
 Nest 是数据库无关的，允许您轻松集成任何 SQL 或 NoSQL 数据库。依然是MySQL、mongodb、redis三个数据库为主。不同在于为了与 SQL 和 NoSQL 数据库集成，Nest 提供了 @nestjs/typeorm 包。它使用的是 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上来操作数据库、它和我们使用的 mongoose 包类似的。
 
 ### 1. MySQL
-
-这里我们选择 typeORM 这个库来操作关系型数据库mysql。
+在 nodejs里可以 用 mysql2 和 typeorm 两种方式来操作 MysSQL 数据库。前者还是要写SQL语句、不推荐使用，后者是ORM技术( Object Relational Mapping)，对象关系映射。也就是说把关系型数据库的表映射成面向对象的一个类 class，表的字段映射成对象的属性映射，表与表的关联映射成属性的关联、最终会自动生成SQL语句。所以这里我们选择 typeORM 这个库来操作关系型数据库mysql、好处就是对表的增删改查就变成了对对象的操作。
 
 安装：`$ npm install --save @nestjs/typeorm typeorm mysql2`
 
 安装必须的包之后就可以在 Nest 中进行配置进而通过代码实现对数据库的增删改查了。
 
 #### 使用步骤
+将 typeorm 集成进 Nest中是比较简单的,步骤如下:
 
-1. 完成安装后将 TypeOrmModule 导入到根 AppModule 中、在 nest 项目中注册 typeORM。注册完成后，TypeORM 的 DataSource 和 EntityManager 对象将可在整个项目中进行注入（无需导入任何模块）。
-
+1. 完成安装后将 TypeOrmModule 导入到根 AppModule 中、在 nest 项目中注册使用动态模块的方式注册 typeORM。注册完成后 TypeORM 的 DataSource 和 EntityManager 对象将可在整个项目中进行注入（无需导入任何模块）。
 ```JavaScript
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { PostsModule } from './modules/posts/posts.module';
-import { TagsModule } from './modules/tags/tags.module';
+
 // 连接MySQL数据库
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { UserModule } from './modules/user/user.module';
-// 全局中间件
-import { TestMiddleware } from './common/middlewares/test.middleware';
 
 // 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
 @Module({
@@ -1918,20 +1913,10 @@ import { TestMiddleware } from './common/middlewares/test.middleware';
       autoLoadEntities: true, // 自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
       synchronize: false, // 是否自动同步实体文件(即是否建表),生产环境建议关闭否则可能会丢失生产数据 - 不同步
     }),
-    PostsModule,
-    TagsModule,
-    UserModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-// 导出根模块类，它已经经过@Module 装饰器 装饰了。
-export class AppModule implements NestModule {
-  // 实现中间件注册
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TestMiddleware).forRoutes('*');
-  }
-}
 
 ```
 
@@ -1941,10 +1926,8 @@ orm 有两种方式实现对具体的数据库表的操作:
 
 两者都可以实现对数据库表的 curd 操作，但是 Repository 操作仅限于具体实体也就是指定的单个表名。所以一般我们使用后者。
 
-2. 创建实体 Entity
-
-Entity 就是由 @Entity 装饰器装饰的一个类，TypeORM 会为此类模型创建数据库表。
-其中 @Entity 装饰器 传入的参数就是实际创建的数据库表名。还有字段名的定义、约束、校验等都是在这里定义的。一般都是单独放在 entities 目录下。
+2. 创建实体 Entity,Entity 就是由 @Entity 装饰器装饰的一个类，TypeORM 会为此类模型创建数据库表。
+其中 @Entity 装饰器 传入的参数就是实际创建的数据库表名。还有字段名的定义、约束、校验等都是在这里定义的。一般都是单独放在 entities 目录下,同时文件名一般为 xxx.entity.ts/xxx.entity.js。
 
 ```JavaScript
 import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
@@ -1977,15 +1960,13 @@ export class PostsEntity {
 
 ```
 
-3. 在 module 中注入要使用那些存储库
-
-使用 TypeOrmModule.forFeature() 方法来定义在当前范围内注册哪些仓库。有了这个设置，我们可以使用 @InjectRepository() 装饰器将 UsersRepository 注入到 UsersService 中
-
+3. 在 module 中注入要使用那些存储库,使用 TypeOrmModule.forFeature() 方法来定义在当前范围内注册哪些仓库。有了这个设置，我们可以使用 @InjectRepository() 装饰器将 UsersRepository 注入到 UsersService 中
 ```JavaScript
 // posts.module.ts
 import { Module } from '@nestjs/common';
 import { PostsController } from './posts.controller';
 import { PostsService } from './posts.service';
+// 引入实体类并注册实体类
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PostsEntity } from './entities/posts.entity';
 @Module({
@@ -1998,13 +1979,10 @@ export class PostsModule {}
 
 ```
 
-4. 在 service 文件中使用仓库
-
-模块文件中注入之后就可以在服务类中注册使用了,使用 @InjectRepository(实体类名)的形式注册。之后通过这个变量就可以实现对对应数据库表的 curd。
-
+4. 在 service 文件中使用仓库,模块文件中导入实体类之后就可以在服务类中注册使用了,使用 @InjectRepository(实体类名)的形式注册,之后通过这个变量就可以实现对对应数据库表的 curd。
 ```JavaScript
 import { HttpException, Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectRepository,InjectEntityManager  } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PostsEntity } from './entities/posts.entity';
 
@@ -2021,24 +1999,20 @@ export interface PostsRo {
 
 @Injectable()
 export class PostsService {
+  // 注入实体管理器,这样每个 api 都要带上对应的 Entity,所以一般是不用这个方法的
+  @InjectEntityManager()
+  private manager: EntityManager;
+
+  // 注入实体类仓库操作数据库-属性注入
+  @InjectRepository(PostsEntity) 
+  private postsRepository: Repository<PostsEntity>,
+
   constructor(
-    @InjectRepository(PostsEntity) // 注入实体类仓库操作数据库
+    // 注入实体类仓库操作数据库-构造函数注入
+    @InjectRepository(PostsEntity) 
     private readonly postsRepository: Repository<PostsEntity>,
   ) {}
 
-  /**
-   * 测试路由
-   * @returns string
-   */
-  getHello(): string {
-    return 'Hello World! test router';
-  }
-  getQuery(params: number, query: QueryItf): object {
-    return { id: params, value: query.value, name: query.name };
-  }
-  postQuery(params: number, body: QueryItf): object {
-    return { id: params, value: body.value, name: body.name };
-  }
   /**
    * 创建文章
    * @param post
@@ -2053,6 +2027,7 @@ export class PostsService {
     if (doc) {
       throw new HttpException('文章已存在', 401);
     }
+    // return this.manager.save(User, createUserDto);
     return await this.postsRepository.save(post);
   }
 
@@ -2122,10 +2097,10 @@ export class PostsService {
 ```
 
 #### 字段校验
-不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。而实体是类形式的、那么在 nest 中也使用之前学习过的 class-validator class-transformer 两个包来实现。
+不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。而实体是类形式的、那么在 nest 中也可以使用之前学习过的 class-validator class-transformer 两个包来实现即可。非常的方便简单.
 
 #### CRUD操作
-对应 typeorm 的更多操作在单独的一个仓库里学习。
+对应 typeorm 的更多操作在单独的一个[仓库](https://github.com/zangqingan/typeorm-study)里学习,不过要注意的是表关系在实际开发中是逻辑声明的,也就是开发者约定关联关系而不是真的声明. 查的时候照样连表查询即可.
 
 
 ### 2. MongoDB
