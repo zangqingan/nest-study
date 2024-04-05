@@ -2,15 +2,19 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
 import { Injectable, HttpException, HttpStatus, Inject } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { InjectEntityManager, InjectRepository } from '@nestjs/typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
+import { Permission } from './entities/permission.entity';
 
 @Injectable()
 export class UserService {
   // 也可以注入成属性
   // @Inject(JwtService)
   // private jwtService: JwtService,
+
+  @InjectEntityManager()
+  private entityManager: EntityManager;
 
   constructor(
     @InjectRepository(User)
@@ -51,6 +55,10 @@ export class UserService {
    * @returns all users
    */
   async findAll() {
+    const permission1 = new Permission();
+    permission1.name = 'create_aaa';
+    permission1.desc = '新增 aaa';
+    await this.entityManager.save([permission1]);
     const result = await this.userRepository.find();
     return result;
   }

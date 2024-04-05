@@ -1,6 +1,15 @@
-import { Column, Entity, PrimaryGeneratedColumn, BeforeInsert } from 'typeorm';
+import {
+  Column,
+  Entity,
+  PrimaryGeneratedColumn,
+  BeforeInsert,
+  ManyToMany,
+  JoinTable,
+} from 'typeorm';
 import { Exclude, Expose, Transform } from 'class-transformer';
 import * as bcrypt from 'bcryptjs';
+import { Permission } from './permission.entity';
+
 @Entity('user-1')
 export class User {
   @PrimaryGeneratedColumn()
@@ -19,10 +28,10 @@ export class User {
   @Column()
   avatar: string; //头像
 
-  @Column({
-    name: 'pass_salt',
-  })
-  passSalt: string; //加密盐值
+  // @Column({
+  //   name: 'pass_salt',
+  // })
+  // passSalt: string; //加密盐值
 
   @Column()
   email: string; // 邮箱
@@ -52,4 +61,13 @@ export class User {
     // 指定使用10轮生成的盐值
     this.password = await bcrypt.hashSync(this.password, 10);
   }
+
+  /**
+   * 基于ACL的权限控制
+   */
+  @ManyToMany(() => Permission)
+  @JoinTable({
+    name: 'user_permission_relation',
+  })
+  permissions: Permission[];
 }

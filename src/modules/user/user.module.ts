@@ -6,6 +6,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { User } from './entities/user.entity';
+import { Permission } from './entities/permission.entity';
 // 注入策略
 import { LocalStrategy } from 'src/common/guards/local.strategy';
 import { JwtStrategy } from 'src/common/guards/jwt.strategy';
@@ -17,7 +18,11 @@ const jwtModuleA = JwtModule.register({
 });
 @Module({
   // 注册实体类
-  imports: [TypeOrmModule.forFeature([User]), PassportModule, jwtModuleA],
+  imports: [
+    TypeOrmModule.forFeature([User, Permission]),
+    PassportModule,
+    jwtModuleA,
+  ],
   controllers: [UserController],
   providers: [UserService, LocalStrategy, JwtStrategy],
   exports: [jwtModuleA],
