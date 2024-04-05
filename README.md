@@ -2998,23 +2998,28 @@ token 的方案常用 json 格式来保存，叫做 json web token，简称 JWT�
  - payload 部分是具体存储的数据，
  - verify signature 部分是把 header 和 payload 还有 salt 做一次加密之后生成的。
 
-这三部分会分别做Base 64加密后再返回、然后一般放到请求头header 的authorization:Bearer xxx.xxx.xxx 字段上。
+这三部分会分别做Base 64加密后再返回、然后一般放到请求头header 的 authorization:Bearer xxx.xxx.xxx 字段上。
 请求的时候把这个 header 带上，服务端就可以解析出对应的 header、payload、verify signature 这三部分，然后根据 header 里的算法也对 header、payload 加上 salt 做一次加密，如果得出的结果和 verify signature 一样，就接受这个 token。也就是认证成功。
+而把状态数据都保存在 payload 部分，这样就实现了有状态的 http。
 
 
 所以整个认证流程是: 
-1. 用户登录提交用户名和密码 --> 
+1. 前端用户登录提交用户名和密码 --> 
 2. 后端接收并认证 --> 
-3. 认证通过生成 jwt token并返回给前端 --> 
-4. 前端本地保存返回的jwt token  -->  
-5. 之后每次请求都在请求头中携带  -->  
+3. 后端认证通过生成 jwt token并返回给前端 --> 
+4. 前端本地(localStorage、sessionStorage)保存返回的jwt token  -->  
+5. 前端之后每次请求都在请求头中携带jwt token  -->  
 6. 后端拦截请求并验证 --> 
 7. 验证通过执行业务逻辑并返回数据 --> 
 8. 前端展示数据 --> 
 9. 如果是验证不通过返回错误信息 --> 
 10. 前端提示错误信息并返回登录页面。至此整个登录认证流程结束。
 
-但是这个方案也有安全性问题，因为它是把数据直接 Base64 之后就放在了 header 里，那别人就可以轻易从中拿到状态数据，比如用户名等敏感信息，也能根据这个 JWT 去伪造请求。所以 JWT 要搭配 https 来用，让别人拿不到 header。
+这个方案就没有第一种的问题，但是这个方案也有安全性问题，因为它是把数据直接 Base64 之后就放在了 header 里，那别人就可以轻易从中拿到状态数据，比如用户名等敏感信息，也能根据这个 JWT 去伪造请求。所以 JWT 要搭配 https 协议来用，让别人拿不到 header。
+
+性能问题：JWT 把状态数据都保存在了 header 里，每次请求都会带上，比起只保存个 id 的 cookie 来说，请求的内容变多了，性能也会差一些。所以 JWT 里一般也不要保存太多数据。
+
+没法让 JWT 失效：session 因为是存在服务端的，那我们就可以随时让它失效，而 JWT 不是，因为是保存在客户端，那我们是没法手动让他失效的。比如踢人、退出登录、改完密码下线这种功能就没法实现。
 
 
 ### 2. cookie + session 方案
@@ -3054,7 +3059,7 @@ HTTP会话提供了一种在多个请求之间存储用户信息的方式，这�
 安装 express-session 和它的 ts 类型定义
 `$ npm i express-session` `$ npm i -D @types/express-session`
 
-安装完成后，将 express-session 中间件应用为全局中间件
+安装完成后，将 express-session 中间件应用为全局中间件在入口模块里启用它。
 ```JavaScript
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
@@ -3065,12 +3070,21 @@ async function bootstrap() {
 
   app.use(session({
     secret: 'guang',// 指定加密的密钥 secret
-    resave: false,// 每次访问时是否都会更新 session
-    saveUninitialized: false // 是否初始化一个空的 session 对象
+    resave: false,// 每次访问时是否都会更新 session，不管有没有修改 session 的内容，而 false 是只有 session 内容变了才会去更新 session。
+    name: 'ww' // 生成客户端cookie 的名字 默认 connect.sid
+    saveUninitialized: false // 不管是否设置 session，都会初始化一个空的 session 对象。
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // 在生产环境启用 HTTPS
+      maxAge: 3600000, // 有效期一小时（可自定义）
+     },
+    rolling: true, // 每次请求都更新 session 过期时间
   }));
   await app.listen(3000);
 }
 bootstrap();
+
+// 在 controller 里就可以注入 session 对象
 import { Req,Res } from '@nestjs/common'
 import { Request,Response } from 'express'
 // 设置了上述配置后，您现在可以在路由处理程序内设置和读取会话值
@@ -3106,7 +3120,7 @@ import { AppService } from './app.service';
   imports: [
     JwtModule.register({
       global: true, // 注册为全局模块其他任何地方不用再导入 JwtModule
-      secret: 'guang',
+      secret: 'qingan', // 指定 secret
       signOptions: {
         expiresIn: '7d'
       }
@@ -3116,6 +3130,34 @@ import { AppService } from './app.service';
   providers: [AppService],
 })
 export class AppModule {}
+
+// 也可以单独定义一个模块只在某些模块里用
+import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
+// 登录校验
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { UserService } from './user.service';
+import { UserController } from './user.controller';
+import { User } from './entities/user.entity';
+// 注入策略
+import { LocalStrategy } from 'src/common/guards/local.strategy';
+import { JwtStrategy } from 'src/common/guards/jwt.strategy';
+
+// 定义 jwt 模块方便注入
+const jwtModuleA = JwtModule.register({
+  secret: 'test123456', // 指定加密 jwt 的密钥
+  signOptions: { expiresIn: '4h' }, // 设置过期时间 expiresIn 设置为4小时
+});
+@Module({
+  // 注册实体类
+  imports: [TypeOrmModule.forFeature([User]), PassportModule, jwtModuleA],
+  controllers: [UserController],
+  providers: [UserService, LocalStrategy, JwtStrategy],
+  exports: [jwtModuleA],
+})
+export class UserModule {}
+
 
 
 ```
@@ -3156,6 +3198,7 @@ ttt(@Res({ passthrough: true}) response: Response) {
     if (user?.lastName !== lastName) {
       throw new UnauthorizedException();
     }
+    // 上面的判断可以封装成一个守卫
     // 一样 生成jwt并返回给前端
     const payload = { sub: user.firstName, username: user.lastName };
     return {
@@ -3213,7 +3256,55 @@ export class AuthGuard implements CanActivate {
     return type === 'Bearer' ? token : undefined;
   }
 }
+// 也可以使用nest提供的守卫 
+import { AuthGuard } from '@nestjs/passport';
+// passport-jwt策略token验证-使用本地的策略文件，要自定义 local.strategy.ts
+  @ApiOperation({ summary: '用户登陆' })
+  @UseGuards(AuthGuard('local')) // 增加登录导航校验守卫
+  @Post('login')
+  login(@Body() user: LoginDto, @Req() req) {
+    return this.userService.login(req);
+  }
+import { IStrategyOptions, Strategy } from 'passport-local';
+import { PassportStrategy } from '@nestjs/passport';
+import {
+  BadRequestException,
+  Injectable,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { User } from '../../modules/user/entities/user.entity';
+// 解密
+import * as bcrypt from 'bcryptjs';
+@Injectable()
+export class LocalStrategy extends PassportStrategy(Strategy) {
+  constructor(
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
+  ) {
+    super({
+      usernameField: 'username',
+      passwordField: 'password',
+    } as IStrategyOptions);
+  }
 
+  async validate(username: string, password: string): Promise<any> {
+    const user = await this.userRepository.findOne({
+      where: { username },
+    });
+    if (!user) {
+      throw new BadRequestException('用户名不正确！');
+    }
+    if (!bcrypt.compareSync(password, user.password)) {
+      throw new HttpException('密码错误', HttpStatus.BAD_REQUEST);
+    }
+    console.log('user', user);
+    return user; // 会自动挂载在req.user对象下
+  }
+}
+// 策略也是一个提供者可以注入的。
 ```
 
 ## 5.13 授权

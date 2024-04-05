@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Put } from '@nestjs/common';
+import { Controller, Get, Post, Put, Session, Req, Res } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AppService } from './app.service';
+import { Request, Response } from 'express';
 // @Controller(‘hello’) 当你访问3000/hello的时候你就能 导航 到这个controoler来了
 @ApiTags('公共接口')
 @Controller()
@@ -30,5 +31,13 @@ export class AppController {
   @Put('list/:id')
   update() {
     return this.appService.update();
+  }
+
+  // 测试session
+  @Get('session1')
+  getSession1(@Session() session) {
+    console.log(session);
+    const result = session ? session + 1 : 1;
+    return result;
   }
 }

@@ -38,20 +38,20 @@ import { createClient } from 'redis';
   providers: [
     AppService,
     // 配置redis
-    {
-      provide: 'REDIS_CLIENT',
-      async useFactory() {
-        const client = createClient({
-          socket: {
-            host: 'localhost',
-            port: 6379,
-          },
-        });
-        client.on('error', (err) => console.log('Redis Client Error', err));
-        await client.connect();
-        return client;
-      },
-    },
+    // {
+    //   provide: 'REDIS_CLIENT',
+    //   async useFactory() {
+    //     const client = createClient({
+    //       socket: {
+    //         host: 'localhost',
+    //         port: 6379,
+    //       },
+    //     });
+    //     client.on('error', (err) => console.log('Redis Client Error', err));
+    //     await client.connect();
+    //     return client;
+    //   },
+    // },
   ],
 })
 // 导出根模块类，它已经经过@Module 装饰器 装饰了。

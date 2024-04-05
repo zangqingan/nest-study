@@ -24,6 +24,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(username: string, password: string): Promise<any> {
+    console.log('local');
     const user = await this.userRepository.findOne({
       where: { username },
     });
@@ -31,7 +32,7 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       throw new BadRequestException('用户名不正确！');
     }
     if (!bcrypt.compareSync(password, user.password)) {
-      throw new HttpException('密码错误', HttpStatus.BAD_REQUEST);
+      throw new HttpException('密码错误1', HttpStatus.BAD_REQUEST);
     }
     return user; // 会自动挂载在req.user对象下
   }

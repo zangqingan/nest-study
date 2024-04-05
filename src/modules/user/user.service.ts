@@ -1,13 +1,17 @@
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User } from './entities/user.entity';
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class UserService {
+  // 也可以注入成属性
+  // @Inject(JwtService)
+  // private jwtService: JwtService,
+
   constructor(
     @InjectRepository(User)
     private userRepository: Repository<User>,
@@ -27,12 +31,15 @@ export class UserService {
       where: { username },
     });
     if (isExist) {
-      throw new HttpException('用户名已存在', HttpStatus.BAD_REQUEST);
+      throw new HttpException('用户名已存在11', HttpStatus.BAD_REQUEST);
     }
+    // 不存在新建插入数据库
     try {
       // 创建实体插入对象
+      // 密码要加密
       const newUser = await this.userRepository.create(createUserDto);
       // 返回新增的用户对象
+      // console.log('newUser', newUser);
       return await this.userRepository.save(newUser);
     } catch (error) {
       throw new HttpException(error, HttpStatus.INTERNAL_SERVER_ERROR);

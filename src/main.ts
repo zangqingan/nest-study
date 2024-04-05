@@ -17,12 +17,23 @@ import { HttpExceptionFilter } from './common/filter/http-exception/http-excepti
 // 守卫测试
 import { TestGuard } from './common/guards/test.guard';
 
+// 使用session + cookie实现登录
+import * as session from 'express-session';
+
 /** 其它全局相关的东西 end */
 
 // 3. 定义一个异步启动函数 bootstrap 专门用来引导项目启动
 async function bootstrap() {
   // 4. 调用 NestFactory 类的create 方法创建nest应用实例
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // 配置session
+  app.use(
+    session({
+      secret: 'qingan',
+      resave: false,
+      saveUninitialized: false,
+    }),
+  );
   // app.setGlobalPrefix('api'); // 设置全局路由前缀
   // 注册全局错误过滤器
   app.useGlobalFilters(new HttpExceptionFilter());

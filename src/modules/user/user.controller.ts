@@ -12,6 +12,8 @@ import {
   Req,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
+// 自定义AuthGuard
+import { LocalAuthGuard } from '../../common/guards/local.auth.guard';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { UserService } from './user.service';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -38,11 +40,10 @@ export class UserController {
 
   @ApiOperation({ summary: '获取所有用户' })
   @Get()
-  // @UseGuards(LoginAuthGuard)// 自定义token验证守卫
-  @UseGuards(AuthGuard('jwt')) // passport-jwt策略token验证
+  @UseGuards(LoginAuthGuard) // 自定义登录验证守卫
   @UseInterceptors(TestInterceptor) // 方法作用域拦截器
-  findAll(@Req() req) {
-    console.log('req', req.user);
+  findAll() {
+    console.log('findAll');
     return this.userService.findAll();
   }
 
@@ -65,9 +66,9 @@ export class UserController {
   }
 
   @ApiOperation({ summary: '用户登陆' })
-  @UseGuards(AuthGuard('local')) // 增加登录导航校验
+  @UseGuards(LocalAuthGuard) // 增加登录导航校验
   @Post('login')
-  login(@Body() user: LoginDto, @Req() req) {
+  login(@Req() req) {
     return this.userService.login(req);
   }
 

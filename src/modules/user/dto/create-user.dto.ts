@@ -1,6 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 // 增加验证
 import { IsNotEmpty, IsString } from 'class-validator';
+enum Roles {
+  root = 'root',
+  author = 'author',
+  visitor = 'visitor',
+}
 export class CreateUserDto {
   @ApiProperty({ description: '用户名' })
   @IsNotEmpty({ message: '用户名必填' })
@@ -24,5 +29,5 @@ export class CreateUserDto {
 
   @ApiProperty({ description: '用户角色' })
   @IsString()
-  readonly role: string;
+  readonly role: Roles;
 }
