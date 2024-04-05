@@ -9,7 +9,7 @@ export class AppController {
   // 使用 @Get @Put @Post @Delete 装饰器来定义HTTP请求类型。如果你给他传递了参数那么这个参数就是它的路径 如下
   // 结合前面的代码，当我们使用get访问 http://localhost:3000/的时候就能得到 “Hello World!” string的返回
   @Get()
-  getHello(): string {
+  async getHello(): Promise<string> {
     return this.appService.getHello();
   }
   // 可以匹配到 post请求，http://localhost:3000/list
