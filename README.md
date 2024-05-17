@@ -161,7 +161,7 @@ nest g service posts
 
 还有一个快速创建 Contoller、Service、Module 以及 DTO 文件的方式:
 比如创建一个用户 user 模块
-nest generate resource user 
+ 
 nest g res user 
 这样就快速生成了一个 curd 模块,它同样会自动在 AppModule 引入.
 
@@ -3675,7 +3675,8 @@ async function bootstrap() {
     .build();
   const document = SwaggerModule.createDocument(app, config);
   // 设置访问接口地址--> http://localhost:3000/api-docs#/ 查看swagger文档
-  SwaggerModule.setup('api-docs', app, document);
+  SwaggerModule.setup('api-docs', app, document, { jsonDocumentUrl: 'api-docs.json' });
+  // http://localhost:3000/api-docs.json 地址是json格式，可以导入apifox等软件中自动同步接口文档 
 
   await app.listen(3000);
 }
@@ -3736,6 +3737,68 @@ export class UserController {
     return 1;
   }
 }
+
+// @ApiTags(...) 用于为控制器或特定路由方法添加标签，这些标签在 Swagger UI 中作为分类显示。
+@ApiTags("users")
+@Controller("users")
+export class UsersController {
+  @Get()
+  findAll() {
+    // 方法实现
+  }
+}
+// @ApiOperation({ summary: '...' }) 用于提供单个路由操作的简短描述。它通常用于详细说明一个具体的 API 功能。
+@Get()
+@ApiOperation({ summary: '查找所有用户' })
+findAll() {
+  // 方法实现
+}
+
+// @ApiResponse({ status: ..., description: ..., type: ... })
+// 定义方法的响应类型及状态码。type 选项用于指定返回数据的类型，这对生成精确的响应模型极为重要。
+@Get()
+@ApiResponse({
+  status: 200,
+  description: 'Success',
+  type: User
+})
+findAll() {
+  // 方法实现
+}
+
+// @ApiParam({ name: ..., description: ..., required: ..., type: ... })
+// 用于描述路径参数的细节，例如在 URL 中的 {id}。
+@Get(':id')
+@ApiParam({ name: 'id', description: 'User ID', required: true, type: Number })
+findOne(@Param('id') id: string) {
+  // 方法实现
+}
+
+// @ApiBody({ description: ..., type: ..., required: ... })
+// 用于定义 API 请求体的细节。它非常有用，特别是对于 POST 和 PUT 请求。
+@Post()
+@ApiBody({ description: 'User payload', type: CreateUserDto, required: true })
+create(@Body() createUserDto: CreateUserDto) {
+  // 方法实现
+}
+
+// @ApiQuery({ name: ..., description: ..., required: ..., type: ... })
+// 用于描述查询参数，例如在 GET 请求中通过 URL 传递的参数。
+@Get()
+@ApiQuery({ name: 'role', description: 'Filter by role', required: false, type: String })
+findByRole(@Query('role') role: string) {
+  // 方法实现
+}
+
+// @ApiProperty(...) 用于 DTO 类中的属性，以提供关于字段的具体信息，如类型、描述、是否必需等。
+export class CreateUserDto {
+  @ApiProperty({ description: "用户名", example: "Moment" })
+  name: string;
+
+  @ApiProperty({ description: "用户邮箱", example: "moment@qq.com" })
+  email: string;
+}
+这些装饰器共同工作，能够为你的 NestJS 应用生成丰富、结构化且易于导航的 API 文档。这不仅有助于开发者理解和使用 API，而且通过这种自动化的文档方式，可以大大减少手动编写和维护 API 文档的工作。
 
 ```
 
