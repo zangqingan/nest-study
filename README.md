@@ -14,6 +14,10 @@ Nest 基础：Nest 各种功能的使用，包括 IOC、AOP、全局模块、动
 扩展高级：mysql、mongodb、redis、rabbitmq、nacos 等后端中间件学一遍，也会学习 pm2、docker、docker compose 等部署方案。
 目标是学习之后自己能前后端一起做一个项目上线即可。
 
+**目录说明**
+1. [nest-single](nest做server服务)
+2. [nest-microservice](nest做微服务)
+
 # 二、NestJS 概述
 
 ## 2.1 Nest 介绍及安装
@@ -47,10 +51,10 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
 脚手架创建项目：
 `nest new project-name` // 创建项目
 项目运行
-`npm run start:dev` 其它启动命令查看包管理文件即可。
-此命令将使用 HTTP 服务器启动应用程序，以侦听 src/main.ts 文件中所定义的端口。
+`npm run start:dev` 其它启动命令查看包管理文件即可。此命令将使用 HTTP 服务器启动应用程序，以侦听 src/main.ts 文件中所定义的端口。
 
-使用脚手架生成的 nest 项目时会生成一个样板应用程序结构(称为标准模式)、以鼓励开发人员将每个模块保存在其对应的专用目录中(也就是更加作用自定义模块文件名)。在我们之前学习原生node、express、koa时都是自己抽离划分的模块、而一个基本的 nest 模块也是按照 mvc 模式拆分的分成三个组成：模块 module、控制器 controller(NestJS 的路由 由 控制器负责)、服务 service, 同时它们都有专门的脚手架命令用来快速生成。
+使用脚手架生成的 nest 项目时会生成一个样板应用程序结构(称为标准模式)、以鼓励开发人员将每个模块保存在其对应的专用目录中(也就是更加作用自定义模块文件名)。在我们之前学习原生node、express、koa时都是自己抽离划分的模块、而一个基本的 nest 模块也是按照 mvc 模式拆分的分成三个组成：模块 module、控制器 controller(NestJS 的路由由控制器负责)、服务 service, 同时它们都有专门的脚手架命令用来快速生成。
+
 初始目录结构如下
 ```
 项目名(文件名)
@@ -58,10 +62,10 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
 +-- node_modules[目录]              // 项目使用的包目录，开发使用和上线使用的都在里边
 +-- src[目录]                       // 源文件/代码，程序员主要编写的目录
 |  +-- app.controller.spec.ts      // 对于基本控制器的单元测试样例
-|  +-- app.controller.ts           // 控制器文件，可以简单理解为路由文件
+|  +-- app.controller.ts           // 控制器文件，可以简单理解为路由文件(一般项目里不用或者写公共的路由。)
 |  +-- app.module.ts               // 模块文件，在NestJS世界里主要操作的就是模块
 |  +-- app.service.ts              // 服务文件，提供的服务文件，业务逻辑编写在这里
-|  +-- app.main.ts                 // 项目的入口文件，里边包括项目的主模块和监听端口号
+|  +-- main.ts                 // 项目的入口文件，里边包括项目的主模块和监听端口号（全家的配置：拦截器等）
 +-- test[目录]                      // 测试文件目录，对项目测试时使用的目录，比如单元测试...
 |  +-- app.e2e-spec.ts             // e2e测试，端对端测试文件，测试流程和功能使用
 |  +-- jest-e2e.json               // jest测试文件，jset是一款简介的JavaScript测试框架
@@ -113,16 +117,16 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
 | :---        |    :----:   |          ---: |
 | module      | mo          | 生成一个模块声明会自动在 AppModule 里引入   |
 | controller  | co          | 生成一个控制器声明      |
-| service     | s           | 生成一个服务声明      |
+| service     | s           | 生成一个服务声明        |
 | middleware  | mi          | 生成一个中间件声明      |
-| interface   | itf         | 生成一个接口      |
+| interface   | itf         | 生成一个接口            |
 | interceptor | itc         | 生成一个拦截器声明      |
-| guard       | gu          | 生成一个守卫声明      |
-| gateway     | ga          | 生成一个网关声明      |
+| guard       | gu          | 生成一个守卫声明        |
+| gateway     | ga          | 生成一个网关声明        |
 | filter      | f           | 生成一个过滤器声明      |
-| pipe        | pi          | 生成一个管道声明      |
-| class       | cl          | 生成一个新的类      |
-| resource    | res         | 快速生成一个CRUD模块      |
+| pipe        | pi          | 生成一个管道声明        |
+| class       | cl          | 生成一个新的类          |
+| resource    | res         | 快速生成一个CRUD模块    |
 
 可选参数一般就一个、即不生成测试测试文件(默认是强制生成的)。其它常见参数如下:
 1. --spec 默认值即生成测试文件
@@ -157,7 +161,7 @@ co-- controller
 3:创建服务类
 nest g service posts
 
-注意创建顺序： 先创建 Module, 再创建 Controller 和 Service, 这样创建出来的文件控制器和服务会在 Module 中自动注册。反之，后创建 Module, Controller 和 Service,会被注册到最外层的根模块文件 app.module.ts 上。
+注意创建顺序： 先创建 Module, 再创建 Controller 和 Service, 这样创建出来的文件控制器和服务会在 当前创建的Module 中自动注册、当前模块也会在根模块中自动引入。反之，后创建 Module, Controller 和 Service,会被注册到最外层的根模块文件 app.module.ts 上。
 
 还有一个快速创建 Contoller、Service、Module 以及 DTO 文件的方式:
 比如创建一个用户 user 模块
@@ -297,17 +301,17 @@ Nest 实现 AOP 的方式更多，一共有五种，包括 中间件(Middleware)
 
 只不过在 NestJS 里是使用类和装饰器，而控制器就是使用 @Controller 装饰器装饰的一个类。装饰器的作用是将类与所需的元数据关联起来，并使Nest能够创建路由映射(将请求与相应的控制器关联起来)、即表示这个类是可以被注入的、Nest就会把它放入到 IoC 容器中。
 
-在脚手架一节我们知道要使用CLI创建控制器，只需执行`$ nest g controller [name] `命令即可。
+在脚手架一节我们知道要使用CLI创建控制器，只需执行`$ nest g controller/co [name] `命令即可。
 
-和express里定义了路由要在入口文件引入才能起作用一样，在定义了控制器之后Nest仍然是不知道控制器存在的，因此不会创建此类的实例。在Nest里控制器总是属于某一个模块类，所以要把它导入到 @Module() 装饰器对应的 controllers 选项中,这样 Nest 就可以轻松反射（reflect）出哪些控制器（controller）必须被安装挂载,也就可以直接使用它,控制器本身只做路由的控制跳转这样有利于业务的抽离。
+和express里定义了路由要在入口文件引入才能起作用一样，在定义了控制器之后Nest仍然是不知道控制器存在的，因此不会创建此类的实例。在Nest里控制器总是属于某一个模块类，所以要把它导入到 @Module() 装饰器对应的类的 controllers 选项中,这样 Nest 就可以轻松反射（reflect）出哪些控制器（controller）必须被安装挂载(new 初始化),也就可以直接使用它,控制器本身只做路由的控制跳转这样有利于业务的抽离。
 
 ### 2. 使用
 简单理解就是之前在express、koa里的路由相关的东西都使用了装饰器代替。
 这些装饰器它们的作用和 express 里的 req、res 对象类似、不过是 nest 帮忙封装成了装饰器，可以直接使用罢了。
-常见的如下：它们都是从'@nestjs/common' 模块导出的。
+常见的如下：它们都是从'@nestjs/common' 模块导出的。主要也是三种: 类装饰器、方法装饰器、属性装饰器。
 `import { Controller, Get, Post, Put, Patch, Delete, HttpCode, Headers, Redirect, Request, Response, Body, Param, Query,} from '@nestjs/common';`
 
-1. @Controller() 装饰器，是一个类装饰器，用来装饰一个控制器类。
+1. 类装饰器 @Controller() 装饰器，用来装饰一个控制器类。
 可以传入一个字符串值，作为路由路径前缀。
 也可以传入一个对象，常用有三个配置属性
 ```js
@@ -321,7 +325,8 @@ export class CatsController {}
 
 ```
 
-2. 方法装饰器，nest 提供了所有标准 HTTP 方法对应的请求方法装饰器，用来装饰具体的请求方法(类里定义的方法)。同样的这些装饰器也可以传入一个路径参数，它会拼接在 @Controller() 装饰器参数后面。而express、koa里直接使用路由方法。
+2. 方法装饰器，nest 提供了所有标准 HTTP 方法对应的请求方法装饰器，用来装饰具体的请求方法(类里定义的方法)而express、koa里直接使用路由方法。同样的这些装饰器也可以传入一个路径参数，它会拼接在 @Controller() 装饰器参数后面。例如：路径前缀 customers 与装饰器 @Get('profile') 组合会为 GET /customers/profile 请求生成路由映射。当方法和路径都匹配时就会执行装饰的方法。
+
 注意: 这个路径参数可以是字符串、或者模式匹配的路由。
 
 ```js
@@ -329,46 +334,47 @@ export class CatsController {}
 app.get('/cat',callback)
 router.post('/cat',callback)
 //nestjs
-@Get()
-@Post()
-@Put()
-@Patch()
-@Delete()
-@All()
-callback(){
-  //.....
+export class CatsController {
+   @Get()
+   @Post()
+   @Put()
+   @Patch()
+   @Delete()
+   @All()
+   callback(){
+     //.....
+   }
+  //  其它常见的方法装饰器
+   @HttpCode() 用来指定返回的 http 状态码
+   @Header() 指定自定义的响应头
+   @Headers() 装饰器获取请求头信息
+   @Redirect(url,statusCode) 将响应重定向到特定的URL、接受两个参数url和statusCode，两者都是可选的。如果省略statusCode，其默认值为302（Found）。
+  // 例子
+   @Post()
+   @HttpCode(204)
+   @Header('Cache-Control', 'none')
+   create() {
+     return 'This action adds a new cat';
+   }
+
+   @Get('docs')
+   @Redirect('http://nestjs.inode.club', 302)
+   getDocs(@Query('version') version) {
+     if (version && version === '5') {
+       // 返回这个结构的对象会覆盖 @Redirect() 装饰器
+       return { url: 'http://nestjs.inode.club/v5/' };
+     }
+   }
 }
 
-@HttpCode() 用来指定返回的 http 状态码
-@Header() 指定自定义的响应头
-@Headers() 装饰器获取请求头信息
-@Redirect(url,statusCode) 将响应重定向到特定的URL、接受两个参数url和statusCode，两者都是可选的。如果省略statusCode，其默认值为302（Found）。
-
-@Post()
-@HttpCode(204)
-@Header('Cache-Control', 'none')
-create() {
-  return 'This action adds a new cat';
-}
-
-@Get('docs')
-@Redirect('http://nestjs.inode.club', 302)
-getDocs(@Query('version') version) {
-  if (version && version === '5') {
-    // 返回这个结构的对象会覆盖 @Redirect() 装饰器
-    return { url: 'http://nestjs.inode.club/v5/' };
-  }
-}
-
-路由参数
 
 ```
 
-3. 属性装饰器，用来装饰方法里的形式参数。
+3. 属性装饰器，用来装饰方法里的形式参数。在原生node、express、koa中，一个请求都会设计一个请求对象 request 和一个响应对象 response，他们在回调函数中作为参数的顺序是固定的，但在nestjs中，参数的顺序是随意的，所以需要使用属性装饰器来装饰参数，让nestjs知道参数的顺序。
+
 其中@Request(), @Req() 装饰器都会获取到请求 request 对象，跟 express 里的 req 对象一样
 其中@Response(), @Res() 装饰器都会获取到请求 response 对象，跟 express 里的 req 对象一样
 
-```js
 获取 get 请求参数和动态路由参数和 express 里一样都是在请求对象里。
 req.query 和 req.params
 
@@ -380,55 +386,86 @@ req.query === @Query() 直接获取 query 查询对象
 req.params === @Param()直接获取 params 查询对象、将特定的参数标记传递给装饰器，然后在方法体中直接按名称引用路由参数。
 req.body === @Body()直接获取请求体 body 对象
 
-@Get('getQueryAndParam/:id?')
-getQuery(
- @Param('id') id: number,
- @Query() query: { value: number; name: string },
-) {
+注意：query 和 params 都是一个对象，它们都可以再传入一个键名字符串，用来获取对象中对应的值，相当于直接解构。
 
-}
+基本上和之前在express、koa中一样的，不过是变成了装饰器使用罢了。
 
-@Post('postQuery/:id?')
-postQuery(
- @Param('id') id: number,
- @Body() body: { value: number; name: string },
-){
+```js
 
-}
-```
+import { Controller, Get, Req, Param, Query, Body } from '@nestjs/common';
+import { Request, Response } from 'express';
 
-使用脚手架创建一个 cats 控制器
-```javaScript
-// cats.controller.ts 
-// 定义一个控制器、必须使用@Controller()装饰器装饰。
-import { Controller, Get } from '@nestjs/common';
-// 使用 @Controller 装饰器装饰的类就是一个控制器、它可以接收一个可选的字符串参数作为路由路径前缀。
-// 方便地将一组相关的路由分组，并减少重复的代码。
 @Controller('cats')
 export class CatsController {
-  @Get()
-  findAll(): string {
-    return 'This action returns all cats';
-  }
+   @Get()
+   findAll(@Req() req: Request): string {
+     console.log(req.params);
+     console.log(req.query);
+     return 'This action returns all cats';
+   }
+
+   // 使用装饰器获取请求参数和路由参数
+   @Get('getQueryAndParam/:id?')
+   getQuery(
+    @Param('id') id: number,
+    @Query() query: { value: number; name: string },
+   ) {
+
+   }
+
+
+   @Post()
+   create(@Req() req: Request): string {
+     console.log(req.body);
+     console.log(req.headers);
+       return 'This action adds a new cat';
+   }
+
+   //  使用装饰器获取请求体
+   @Post('postQuery/:id?')
+   @Header('Cache-Control', 'none')
+   postQuery(
+    @Param('id') id: number,
+    @Body() body: { value: number; name: string },
+   ){
+
+   }
+
+   @Post()
+   create(@Response() res: Response): string {
+    // 这时可以使用特定类库的响应对象。但是一般是不用的，因为它会变得依赖于平台失去与依赖于 Nest 标准响应处理的 Nest 功能的兼容性。
+     console.log(res.status(200));
+     console.log(res.redirect('http://nestjs.inode.club/v5/'));
+     console.log(res.json({
+      message: 'Hello world',
+    }));
+     res.redirect('http://nestjs.inode.club/v5/')
+       return 'This action adds a new cat';
+   }
+
+   //  使用装饰器重定向
+   @Get('docs')
+   @HttpCode(200)
+   @Redirect('http://nestjs.inode.club', 302)
+   getDocs(@Query('version') version) {
+     if (version && version === '5') {
+       // 返回这个结构的对象会覆盖 @Redirect() 装饰器
+       return { url: 'http://nestjs.inode.club/v5/' };
+     }
+   }
 }
-// 必须在某个模块类的 @Module() 装饰器中的controllers 数组里注册，没有其它模块则注册到根 AppModule 模块类中。
-// app.module.ts
-import { Module } from '@nestjs/common';
-import { CatsController } from './cats/cats.controller';
-
-@Module({
-  // 注册
-  controllers: [CatsController],
-})
-export class AppModule {}
-
 ```
 
+### 3. 后端提供 http 接口时传输数据的方式
 这里讨论一下后端提供 http 接口时传输数据，而这种数据传输的方式主要有 5 种：
-1. url param 路由参数、把参数写在 url 中的形式。服务端框架或者单页应用的路由都支持从 url 中取出参数
+
+1. url param 路由参数('/param/:id')、把参数写在 url 中的形式。服务端框架或者单页应用的路由都支持从 url 中取出参数
 ```js
-http://guang.zxg/person/1111
-// nest中通过 @Param() 装饰器获取路由参数 
+// 前端路由配置 path: '/person/:id'
+// http://guang.zxg/person/1111
+// 在nest中通过 @Req() req: Request ==> req.params.id ==> 1111
+// 或者直接通过 @Param() params 装饰器获取路由参数 params.id => 1111
+// 也可以传入参数名直接获取对应的值
 @Controller('api/person')
 export class PersonController {
   @Get(':id')
@@ -440,9 +477,11 @@ export class PersonController {
 ```
 2. query 查询字符串、把参数写在 url 中 ？后面的用 & 分隔的字符串传递数据,其中非英文的字符和一些特殊字符要经过编码，可以使用 encodeURIComponent 的 api 来编码。
 ```js
-http://guang.zxg/person?name=王&age=20
-query = {name:'王',age:20}
-// 在nest中通过 @Query() 装饰器获取 query 查询对象
+// query = {name:'王',age:20}
+// http://guang.zxg/person?name=王&age=20
+// 在nest中通过 @Req() req: Request ==> req.query.name ==> '王'
+// 或者直接使用 @Query() 装饰器获取 query 查询对象 query ==> {name:'王',age:20}
+// 也可以传入参数名直接获取对应的值
 @Controller('api/person')
 export class PersonController {
   @Get('find')
@@ -452,20 +491,8 @@ export class PersonController {
 }
 
 ```
-3. form-urlencoded、form 表单提交数据、指定 content-type 是 application/x-www-form-urlencoded需要对内容做 url encode。内容和query一样也是&分隔的、不过是放在请求体里。不适合传输大数量的数据。
+3. form-urlencoded、form 表单提交数据、指定 content-type 是 application/x-www-form-urlencoded需要对内容做 url encode。内容和query一样也是键值对之间使用&分隔、键和值使用=连接、不过是放在请求体里。不适合传输大数量的数据。普通的表单上传使用(也就是不包括文件上传)。
 ```js
-interface CreatePersonDto {
-  name: string;
-  age: number;
-}
-// 通过 @Body() 装饰器获取请求体 body 对象
-@Controller('api/person')
-export class PersonController {
-  @Post()
-  body(@Body() createPersonDto: CreatePersonDto) {
-    return `received: ${JSON.stringify(createPersonDto)}`
-  }
-}
 // 前端代码使用 post 方式请求，指定 content-type 为 application/x-www-form-urlencoded
 async function formUrlEncoded() {
   const res = await axios.post('/api/person', Qs.stringify({
@@ -478,9 +505,21 @@ async function formUrlEncoded() {
 }
 formUrlEncoded();
 
+interface CreatePersonDto {
+  name: string;
+  age: number;
+}
+// 通过 @Body() 装饰器获取请求体 body 对象
+@Controller('api/person')
+export class PersonController {
+  @Post()
+  body(@Body() createPersonDto: CreatePersonDto) {
+    return `received: ${JSON.stringify(createPersonDto)}`
+  }
+}
 
 ```
-4. form-data、指定 content-type 为 multipart/form-data、用 boundary 分隔符分割的内容。适合传输文件，而且可以传输多个文件。
+4. form-data、指定 content-type 为 multipart/form-data、用 boundary 分隔符分割的内容。适合传输文件，而且可以传输多个文件。常见表单中的上传附件(图片、文件等)或二进制数据、也支持普通表单的。
 ```js
 // 前端使用 FormData 对象来封装传输的内容
 <!DOCTYPE html>
@@ -531,16 +570,8 @@ export class PersonController {
 
 
 ```
-5. json、指定content-type 为 application/json、不适合传输文件。
+1. json、指定content-type 为 application/json、不适合传输文件。和表单数据的获取一样也是通过 @Body() 装饰器获取请求体 body 对象、只不过是传输类型不一样、Nest 内部会根据 content type 做区分，使用不同的解析方式。
 ```js
-// 和表单数据的获取一样也是通过 @Body() 装饰器获取请求体 body 对象、只不过是传输类型不一样、Nest 内部会根据 content type 做区分，使用不同的解析方式。
-@Controller('api/person')
-export class PersonController {
-  @Post()
-  body(@Body() createPersonDto: CreatePersonDto) {
-    return `received: ${JSON.stringify(createPersonDto)}`
-  }
-}
 // 前端代码使用 axios 发送 post 请求时默认传输 json格式的数据，所以不需要指定 content-type。
 <!DOCTYPE html>
 <html lang="en">
@@ -561,7 +592,25 @@ export class PersonController {
 </body>
 </html>
 
+@Controller('api/person')
+export class PersonController {
+  @Post()
+  body(@Body() createPersonDto: CreatePersonDto) {
+    return `received: ${JSON.stringify(createPersonDto)}`
+  }
+}
+
 ``` 
+
+### 4. 控制器中常用的装饰器速查
+
+| 装饰器名称   | 描述     |
+| :---        |         ---: |
+| Controller()      | 声明为控制器类   |
+| Get, Post, Put, Patch, Delete, All  | 常见的http请求方法      |
+| HttpCode, Headers, Redirect, Request, Response  | http请求头对象设置、响应头对象设置相关     |
+| Body, Param, Query  | 获取前端数据方式     |
+|.....   | 其它            |
 
 
 
@@ -3805,6 +3854,60 @@ export class CreateUserDto {
 # 六、WebSockets
 
 # 七、微服务
+当一个应用越来越大以后会难以维护和扩展，这时可以通过微服务的方式把业务逻辑拆分到不同的微服务里。
+
+Nest是原生地支持微服务的开发架构、在Nest中，微服务本质上是一个使用与HTTP不同的传输层的应用程序。微服务之间默认通过 tcp 方式通信，在 nest 里需要用到 @nestjs/microservices 这个包。
+
+## 7.1 快速上手
+本质上还是使用 `$ nest new microservice-app` 命令创建项目,
+但是需要安装 `$ pnpm i --save @nestjs/microservices ` 这个包。
+同时入口文件 main.ts 要使用NestFactory类的createMicroservice()方法，同时指定 tcp 的端口。而不再是create()方法。
+
+```js
+
+import { NestFactory } from '@nestjs/core';
+import { Transport, MicroserviceOptions } from '@nestjs/microservices';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.createMicroservice<MicroserviceOptions>(
+    AppModule,
+    {
+      transport: Transport.TCP, // 指定传输器
+      // TCP 传输器的配置
+      options: {
+        // host: '127.0.0.1', // 连接主机名
+        port: 8888, // 传输器的行为的配置对象
+        // retryAttempts: 5,// 重试消息的次数(默认:0)
+        // retryDelay: 3000, // 重试消息的间隔时间(默认:0)'
+      },
+    },
+  );
+  await app.listen();
+}
+bootstrap();
+
+
+```
+
+## 7.2 客户端
+Nest应用程序的客户端可以使用ClientProxy类与Nest微服务交换消息或发布事件。
+就比如在一个http server里要引入连接微服务的客户端、它也需要安装微服务相关的包。
+`$ pnpm install @nestjs/microservices --save`
+
+```js
+// 然后再app模块中引入 ClientsModule 动态模块
+
+
+```
+
+
+
+## 7.3 模式
+微服务是通过模式来识别消息和事件、简单说就是识别消息和事件。
+
+
+
 
 # 八、Docker
 
