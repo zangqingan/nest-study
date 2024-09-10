@@ -618,28 +618,46 @@ export class PersonController {
 ## 3.2 提供者 provider
 
 ### 1. 概述
-提供者是Nest中的一个基本概念。各种功能和业务代码具体实现的地方都可以看作是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间件、管道等全都是 Providers，即提供各种问题具体解决方法的人。比如控制器应该只处理HTTP请求、而将更复杂的任务(如: 数据库的查询、数据的处理等)委托给提供者。
+提供者是Nest中的一个基本概念。各种功能和业务代码具体实现的地方都可以看作是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间件、管道等全都是 Providers，即提供各种问题具体解决方法的人。控制器应该只处理HTTP请求分发路由、而将更复杂的任务(如: 数据库的查询、数据的处理等)委托给提供者。
 
-在 NestJS 里就是被 @Injectable 装饰器装饰的JavaScript类就是 Providers ，提供者的主要思想是它可以通过类的构造器方法即 constructor 方法注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。本质上就是使用了 @Injectable 装饰器装饰的类就可以被 Nest IoC 容器(反转控制容器)管理。
+在 NestJS 里就是被 @Injectable 装饰器装饰的JavaScript类就是 Providers也就是说提供者本质上就是一个JavaScript类而已，提供者的主要思想是它可以通过类的构造器方法即 constructor 方法或者基于属性实现注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。本质上就是使用了 @Injectable 装饰器装饰的类就可以被 Nest IoC 容器(反转控制容器)管理。
 
-在 NestJS 中提供者最常见是作为 service 服务，所以文件命名一般是 xxx.service.js/ts、也可以是过滤器 xxx.filter.js/ts、也可以是拦截器 xxx.interceptor.js/ts。
-等等反正就是一个用  @Injectable  装饰器装饰的类。
+在 NestJS 中提供者最常见是作为 service 服务，所以文件命名一般是 xxx.service.js/ts、也可以是过滤器 xxx.filter.js/ts、也可以是拦截器 xxx.interceptor.js/ts。等等反正就是一个用  @Injectable  装饰器装饰的类、而且作为服务时通常是给某个控制器注入、或者给某个模块注入。
 
 ### 2. 使用
-使用 CLI 创建一个服务提供者是很简单的、只需执行`$ nest g s [name] --no-spec`命令即可。跟之前express、koa里抽离的服务一样、要使用就必须引入。
-在定义了一个服务之后就可以通过**依赖注入**的方法在一个控制器类的内部使用它了、具体实现方法是通过类构造函数 constructor 注入依赖项的。然后还要将服务添加某个模块类的   @Module() 装饰器的 providers 数组里进行注册(没有就是根模块)、注册后Nest就能够解析 CatsController 类的依赖关系进而实例化需要的服务类。
-```javaScript
+使用 CLI 创建一个服务提供者是很简单的、只需执行`$ nest g service/s [name] --no-spec`命令即可。跟之前express、koa里抽离的服务一样、要使用就必须引入。
+
+在定义了一个服务之后就可以通过**依赖注入**的方法在一个控制器类的内部使用它了。
+具体实现方法有两种：
+
+1. 是通过控制器类的类构造函数 constructor(){} 注入依赖项的。
+2. 是通过控制器类的属性注入依赖项、在属性上使用 @Inject('token') 装饰器。
+
+然后还要将服务添加模块类的 @Module() 装饰器的 providers 数组里进行注册(没有就是根模块)、注册后Nest就能够解析 CatsController 类的依赖关系进而实例化需要的服务类。
+
+原理：实际就是将类的实例化委派给了 Nest 的 IoC 容器中、这个过程有三个关键步骤。
+1. 提供者必须使用 @Injectable() 装饰器声明为可注入的，这样它就可以由Nest IoC容器管理。
+2. 声明一个依赖于 CatsService 令牌(token)的构造函数注入或属性注入，如在 cats.controller.ts 中constructor(private readonly catsService: CatsService)。
+3. 在一个模块类中将标记 CatsService令牌(token) 与 cats.service.ts文件中的 CatsService 类相关联。
+
+如此当 Nest IoC 容器实例化 CatsController 时，它首先查找所有依赖项。 当找到 CatsService 依赖项时，它将对 CatsService令牌(token)执行查找，返回关联 CatsService 类。 然后 Nest 将创建 CatsService 实例，将其缓存并返回，或者如果已经缓存，则返回现有实例。这样也就实现了依赖注入。
+
+```js
+// cats.service.ts
 import { Injectable } from '@nestjs/common';
 // 必须使用 @Injectable 装饰器装饰。
 @Injectable()
 export class CatsService {}
 
+// cats.controller.ts
+import { Inject } from 'nestjs/common';
 import { CatsService } from './cats.service';
 @Controller('cats')
 export class CatsController {
-  // 通过类构造函数注入服务提供者、之后就可以在方法里使用了。
-  // 之后 Nest 的 IoC 容器就会查找之前注册的提供者实例化，将其缓存并返回。如果已经缓存，则直接返回现有实例。这样就可以直接使用了。
-  constructor(private readonly catsService: CatsService) {}
+
+  @Inject(CatsService) private readonly catsService:CatsService; // 基于属性注入服务
+
+  constructor(private readonly catsService: CatsService) {} // 基于构造函数注入服务提供者
 
   @Post()
   async create(@Body() createCatDto: CreateCatDto) {
@@ -651,9 +669,24 @@ export class CatsController {
     return this.catsService.findAll();
   }
 }
+
+// cats.module.ts
+// 在模块中注册
+import { Module } from '@nestjs/common';
+
+@Module({
+  controllers: [CatsController],
+  providers: [CatsService], // 添加 CatsService 注册到 providers 数组中
+  // 上面的providers本质上是一种简写，等价于
+  providers: [{
+    provide: CatsService, // 指定 token,这里直接使用了类名，也可以是一个字符串名。只用@Inject()注入时传入的参数。
+    useClass: CatsService // 指定对象的类，Nest 会自动对它做实例化后用来注入。(IOC 容器干的活)
+  }]
+})
+export class CatsModule {}
+
 ```
 
-### 3. 自定义提供者
 
 ## 3.3 模块 module
 
@@ -1385,6 +1418,7 @@ async findOne(@User() user: UserEntity) {
 而提供者是怎么实例化的、这个是通过控制反转(IOC)技术实现的。原理是将依赖项的实例化委托给IoC容器(在 Nest 里就是NestJS运行时系统)、而不是手动 new 实例化。
 
 在 Nest 中将提供者注入到我们的控制器类中是通过类的构造函数实现的、然后将提供者注册到Nest的IoC容器中(也就是模块中)。这个过程有三个关键步骤
+
 1. 使用 @Injectable() 装饰器声明的类说明它是可注入、可以由Nest IoC容器管理。
 2. 使用构造函数注入声明对提供者令牌的依赖、constructor(private catsService: CatsService)相当于声明了一个  CatsService 令牌标识,键值对同名。或者使用属性的方式声明依赖时一样(通过 @Inject()装饰器声明)。前者是构造器注入，后者是属性注入，两种都可以。
 3. 在模块类中将 CatsService 令牌与真正的 CatsService 类关联起来(即注册)、类似于es对象的键值对名一致所以缩写了。
@@ -1411,7 +1445,6 @@ export class CatsController {
 }
 
 // 将提供者注册到Nest的IoC容器中
-
 import { Module } from '@nestjs/common';
 import { CatsController } from './cats/cats.controller';
 import { CatsService } from './cats/cats.service';
@@ -1437,11 +1470,11 @@ export class AppModule {}
 ```
 
 ### 2. 自定义提供者
-当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类令牌名定义提供者时需要使用 @Inject() 装饰器引入。
+当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类名令牌名定义提供者时需要使用 @Inject() 装饰器引入。
 
-```JavaScript
+```js
 {
-  provide: '令牌名', //除了是类名、还可以使用字符串、JavaScript的symbols或TypeScript的枚举作为标识符值。 
+  provide: '令牌名', //除了是类名、还可以使用字符串、JavaScript的symbols或TypeScript的枚举作为标识符值的符号类型。 
   // 提供者的类型
   useClass: '类提供者'
   useValue: '值提供者'
@@ -1450,10 +1483,32 @@ export class AppModule {}
 
 }
 ```
+1. 标准提供者(类提供者的简写形式)
+providers属性接受一个提供者数组、且是通过一个类名列表提供了这些提供者。本质是类名直接作为token令牌(称为类提供者)而已、如果是一个类名、那么Nest会自动实例化它。如果是一个字符串或者符号作为依赖注入的令牌token(统称为非类提供者)，这时候就需要使用@Inject()装饰器这个装饰器只接受一个参数——令牌。
+```js
+@Module({
+  controllers: [CatsController],
+  providers: [CatsService],
+})
+// 本质上是类提供者的简写
+providers: [
+  {
+    provide: CatsService,
+    useClass: CatsService,
+  },
+];
+```
+2. 类提供者(useClass)、 也就是我们默认使用的标准形式、直接使用类名称作为令牌，这时nest会自动实例化它。令牌对应的类还可以根据环境变量动态确认。
+```js
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { UserController } from './user/user.controller';
+import { UserService } from './user/user.service';
+import { OtherUserService } from './user/otherUser.service';
 
-1. 类提供者: useClass 也就是我们默认使用的标准形式、它可以动态确定一个令牌应该解析到哪个类。
-```JavaScript
-// 根据当前环境，我们希望Nest提供不同的配置服务实现。
+// 提供者注册对象也是可以抽离的
+// 根据环境选择不同的配置
 const configServiceProvider = {
   provide: ConfigService,
   useClass:
@@ -1462,44 +1517,73 @@ const configServiceProvider = {
       : ProductionConfigService,
 };
 
-@Module({
-  providers: [configServiceProvider],
-})
-export class AppModule {}
-// 
 
-```
-
-2. 值提供者: useValue 对于注入常量值、将外部库放入Nest容器中或用模拟对象替换真实实现非常有用。此时不同于基于构造函数的依赖注入、需要使用@Inject()装饰器注入自定义的提供者、这个装饰器接受一个参数 - 标识符。
-```JavaScript
-// 自定义提供者：同时使用字符串类型的标识符
-import { connection } from './connection';
 @Module({
+  imports: [],
+  controllers: [AppController, UserController],
   providers: [
+    AppService,
+    configServiceProvider,
     {
-      provide: 'CONNECTION',
-      useValue: connection,
+      provide: UserService,
+      useClass: process.env.NODE_ENV === 'development'?UserService:OtherUserService,
     },
   ],
 })
 export class AppModule {}
-@Injectable()
-export class CatsRepository {
-  constructor(
-    // 基于类构造函数的依赖注入
-    private readonly catsService: CatsService,
-    // 自定义提供者使用 @Inject装饰器注入
-    @Inject('CONNECTION') private readonly conMsg,
-  ) {}
-  // 也可以当作属性注入
-  @Inject('CONNECTION')
-  private readonly conMsg;
+```
+3. 值提供者 (useValue)、注入常量值、将外部库放入 Nest 容器或使用模拟对象替换实际实现非常有用。此时不同于基于构造函数的依赖注入、需要使用@Inject()装饰器注入自定义的提供者、这个装饰器接受一个参数 - 标识符。
+```js
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { UserController } from './user/user.controller';
+
+// 值注入
+const user = {
+  name: '张三',
+  age: 18,
+};
+@Module({
+  imports: [],
+  controllers: [AppController, UserController],
+  providers: [
+    AppService,
+    {
+      provide: 'person',
+      useValue: user,
+    },
+  ],
+})
+export class AppModule {}
+
+
+import {
+  Controller,
+  Get,
+  Inject,
+} from '@nestjs/common';
+
+@Controller('user')
+export class UserController {
+  // 使用属性注入方式获取值提供者提供的值
+  @Inject('person')
+  private readonly person: { name: string; age: number };
+
+  // 使用构造方法注入
+  constructor(@Inject('person') person: { name: string; age: number }) {}
+
+  @Get('person')
+  getPerson() {
+    return this.person;
+  }
 }
+
 ```
 
-3. 工厂提供者: useFactory 、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。
-在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。
-```JavaScript
+4. 工厂提供者(useFactory)、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。
+
+```js
 // 提供者通常提供服务，但它们不仅限于此用途。提供者可以提供任何值。
 const configFactory = {
   provide: 'CONFIG',
@@ -1513,10 +1597,7 @@ const configFactory = {
   providers: [configFactory],
 })
 export class AppModule {}
-
-// 通过 inject 参数注入其它提供者
-// 通过 inject 声明了两个 token，一个是字符串 token 的 person，一个是 class token 的 AppService。
-// 也就是注入这两个 provider
+// 注入其它provide
 const configFactory = {
   provide: 'person3',
   useFactory(person: { name: string }, appService: AppService) {
@@ -1525,6 +1606,9 @@ const configFactory = {
       desc: appService.getHello()
     }
   },
+  // 通过 inject 参数注入其它提供者
+  // 通过 inject 声明了两个 token，一个是字符串 token 的 person，一个是 class token 的AppService。
+  // 也就是注入这两个 provider
   inject: ['person', AppService]
 }
 @Module({
@@ -1534,7 +1618,7 @@ export class AppModule {}
 
 ```
 
-4. 别名提供者: useExisting、允许为现有的提供者创建别名、这样可以创建两种访问同一提供者的方式。
+5. 别名提供者(useExisting)、允许为现有的提供者创建别名、这样可以创建两种访问同一提供者的方式。
 ```JavaScript
 
 @Injectable()
@@ -1555,7 +1639,7 @@ export class AppModule {}
 
 ```
 
-**导出** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。这样就可以在其它模块中注入导入的提供者。很多都需要时可以定义为全局模块、使用 @Global() 装饰器。不过尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
+**导出提供者** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。这样就可以在其它模块中注入导入的提供者。很多都需要时可以定义为全局模块、使用 @Global() 装饰器。不过尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
 
 ```JavaScript
 // 只在当前模块作用域
@@ -1571,8 +1655,8 @@ export const connectionFactory = {
 @Module({
   providers: [connectionFactory],
   // 导出其它模块可以引入
-  exports: ['CONNECTION'],
-  exports: [connectionFactory],
+  exports: ['CONNECTION'], // 令牌
+  exports: [connectionFactory],// 完整对象
 })
 export class AppModule {}
 
