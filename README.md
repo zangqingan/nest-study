@@ -272,24 +272,7 @@ Nest 的功能都是大多通过装饰器来使用的
 
 
 
-## 2.6 NestJS 中AOP的实现
-后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，请求会先发送给 Controller，由它调度 Model 层的 Service 来完成业务逻辑，然后返回对应的 View。在这个流程中，Nest 还提供了 AOP （Aspect Oriented Programming）的能力，也就是面向切面编程的能力。也就是在调用 Controller 之前和之后加入一个执行通用逻辑的阶段、这样的横向扩展点就叫做切面，这种透明的加入一些切面逻辑的编程方式就叫做 AOP （面向切面编程）。
 
-AOP 的好处是可以把一些通用逻辑分离到切面中，保持业务逻辑的纯粹性，这样切面逻辑可以复用，还可以动态的增删。
-Nest 实现 AOP 的方式更多，一共有五种，包括 中间件(Middleware)、导航守卫(Guard)、管道(Pipe)、拦截器(Interceptor)、过滤器(ExceptionFilter)。
-
-五种 AOP 机制的顺序：
-1. 进入路由前先执行 Middleware，
-2. 然后会调用 Guard，判断是否有权限等，如果没有权限就抛异常。
-3. 抛出的异常会被 ExceptionFilter 处理。
-4. 如果有权限，就会调用到 interceptor，拦截器组织了一个链条，一个个的调用然后进入控制器。
-5. 在调用 controller 具体的 handler 之前，会使用 pipe 对参数做转换或验证处理。
-6. 在调用 controller 的 handler 之后，还可以调用interceptor对响应结果做处理。
-7. 都没问题返回响应。
-
-过滤器就是在返回响应之前对异常做一次处理即可。
-   
-完整流程是：request -> middleware  -> guard -> 请求interceptor -> pipe -> handler -> 响应interceptor -> ExceptionFilter -> response
 
 
 # 三、NestJS 核心基础知识
@@ -693,26 +676,27 @@ export class CatsModule {}
 ### 1. 概述
 模块是 nest 的精髓所在，是控制反转 IoC 容器实现所在。Module 是 NestJS 中一个大的一个内容，它是整个 module 功能模块的收口，功能和特性和 Angular 保持一致。
 
-在 Nest 中模块就是一个 @Module 装饰器装饰的类。 @Module 装饰器提供了元数据，Nest 用它来组织应用程序的结构。一般来说各个模块最终会在根模块 AppModule汇总、然后在入口文件main.ts里引入执行。
+在 Nest 中模块就是一个 @Module() 装饰器装饰的类。 @Module() 装饰器提供了元数据(就是一个配置对象)，Nest 用它来组织应用程序的结构。一般来说各个模块最终会在根模块 AppModule汇总、然后在入口文件main.ts里引入执行。
 
 根模块: 每个应用程序至少有一个模块、是Nest用于构建应用程序图的起点、是Nest用于解析模块和提供者之间关系和依赖关系的内部数据结构。
 
-```
-@Module() 装饰器接受一个单一的对象作为参数，其属性描述了模块。
-如果你需要把这个模块暴露到全局使用可以加 一个装饰器 @Global、全局模块应该仅注册一次，通常由根模块或核心模块完成。
-@Global()
+```js
+// @Module() 装饰器接受一个单一的描述模块属性的配置对象作为参数。
+// 如果你需要把这个模块暴露到全局使用可以加 一个装饰器 @Global、全局模块应该仅注册一次，通常由根模块或核心模块完成。
+
+@Global() // 声明为全局模块
 @Module({
   controllers:[], // 这里注册了的控制器也会被自动实例化
-  imports:[], // 可以导入 其他 module 或者 provider
-  exports:[], // 如果你这个模块中的 provider 要在别的模块中使用你必须要在这里声明导出 provider ，当然你也可以把这个 module 导出其他地方 import 一下这样其他模块中的 provider 也是可以使用的。
+  imports:[], // 可以导入其他 module 或者 provider
+  exports:[], // 如果你这个模块中的 provider 要在别的模块中使用你必须要在这里声明导出 provider ，当然你也可以把这个 module 导出，其他地方 import 一下这样其他模块中的 provider 也是可以使用的。
   providers:[] // 在这里注册了的提供者会被 Nest 注入器自动实例化，并且可以至少在整个模块中共享。
 })
 ```
 
 ### 2. 使用
-使用 CLI 创建一个模块也是很简单的、只需执行`$ nest g mo [name] --no-spec`命令即可。然后把该模块相关的所有内容都移动到了cats 目录中成一个特性模块。这样只需要在根模块里 imports 数组里注册这个特性模块即可。
+使用 CLI 创建一个模块也是很简单的、只需执行`$ nest g module/mo [name] --no-spec`命令即可。然后把该模块相关的所有内容都移动到了cats 目录中成一个功能(特性)模块。这样只需要在根模块里 imports 数组里注册这个功能(特性)模块即可。
 
-```javaScript
+```js
 import { Module } from '@nestjs/common';
 import { CatsController } from './cats.controller';
 import { CatsService } from './cats.service';
@@ -737,12 +721,41 @@ export class AppModule {}
 
 ```
 
-### 3. 动态模块
 
-## 3.4 中间件 Middleware
 
-### 1. 概述
-中间件是 NestJS 中实现 AOP 编程的五种方式之一。和express和koa一样、Nest中也有中间件功能类似，Nest中间件默认情况下与express中间件等效。它是一个在路由处理程序之前调用的函数、也就是在请求进入控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序的请求-响应周期中的 next() 中间件函数。通常，next中间件函数由一个名为next的变量表示。适合更通用的处理逻辑
+
+## 3.4 NestJS 实现 AOP 编程的五种方式
+后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，一次http请求的完整流程是：请求会先经过控制器（Controller），然后 Controller  调用Model 层的 Service服务 来完成业务逻辑(如数据库读写等)，最后返回结果给前端。
+也就是: 请求request -> Controller -> Service -> Repository -> 返回response给前端。
+
+在这个流程中，Nest 还提供了 AOP （Aspect Oriented Programming）的能力，也就是面向切面编程的能力。也就是在调用 Controller 之前和之后加入一个执行通用逻辑的阶段、这样的横向扩展点就叫做切面，这种透明的加入一些切面逻辑的编程方式就叫做 AOP （面向切面编程）。
+
+AOP 的好处是可以把一些通用逻辑分离到切面中，保持业务逻辑的纯粹性，这样切面逻辑可以复用，还可以动态的增删。
+Nest 实现 AOP 编程的方式一共有五种: 
+1. 中间件(Middleware)、
+2. 导航守卫(Guard)、
+3. 管道(Pipe)、
+4. 拦截器(Interceptor)、
+5. 过滤器(ExceptionFilter)。
+
+五种 AOP 机制的顺序：
+1. 进入路由前先执行 Middleware，
+2. 然后会调用 Guard，判断是否有权限等，如果没有权限就抛异常。
+3. 抛出的异常会被 异常过滤器 ExceptionFilter 处理。
+4. 如果有权限，就会调用到 interceptor，拦截器组织了一个链条，一个个的调用然后进入控制器。
+5. 在调用 controller 具体的 handler 之前，会使用 pipe 对参数做转换或验证处理。
+6. 在调用 controller 的 handler 之后，还可以调用interceptor对响应结果做处理。
+7. 都没问题返回响应。
+
+过滤器就是在返回响应之前对异常做一次处理即可。
+   
+完整流程是：request -> middleware  -> guard -> 请求interceptor -> pipe -> Controller(handler) -> 响应interceptor -> ExceptionFilter -> response
+
+
+### 1 中间件 Middleware
+
+#### 1. 概述
+中间件是 NestJS 中实现 AOP 编程的五种方式之一。和express和koa一样、Nest中也有中间件功能类似，Nest中间件默认情况下与express中间件等效。它是一个在路由处理程序之前调用的函数、也就是在请求进入controller控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序的请求-响应周期中的 next() 中间件函数。通常，next中间件函数由一个名为next的变量表示。
 
 中间件函数可以执行以下任务：
 1. 执行任何在中间件函数里定义的代码。
@@ -752,30 +765,22 @@ export class AppModule {}
 
 Nest中分为了全局中间件和路由中间件。
 1. 全局中间件：全局中间件是指应用中的所有路由都会生效的中间件。
-```js
-// 在 main.ts 里通过 app.use 使用
-import { Request, Response, NextFunction } from 'express';
-app.use(function(req: Request, res: Response, next: NextFunction) {
-    console.log('before', req.url);
-    next();
-    console.log('after');
-})
-
-```
 2. 路由中间件：路由中间件是指只适用于特定路由的中间件。
 
-### 2. 使用
-在Nest中中间件有两种定义方法:
+#### 2. 使用
+在Nest中可以在函数中或在具有 @Injectable() 装饰器的类中实现自定义 Nest中间件、即中间件有两种定义方法:
 1. 一种是和express中间件一样就是一个函数没有任何特殊要求-函数式中间件。当中间件不需要任何依赖时使用。
-2. 另一种是带有 @Injectable()装饰器的类中实现自定义的Nest中间件。这个类应该实现NestMiddleware 接口-类中间件。
+2. 另一种是带有 @Injectable()装饰器的类中实现自定义的Nest中间件。这个类应该实现 NestMiddleware 接口-类中间件。
 
 在 Nest 中使用脚手架命令创建一个中间件使用命令 `$ nest g mi/middleware  middlewareName --no-spec `、如创建一个 logger 中间件 `$ nest g mi/middleware  common/logger --no-spec`
-使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。同时可以使用 express 中的类型指定req、res next钩子的类型。关注在于可以在中间件中依赖注入其它的服务。
 
-```javaScript
+使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。同时可以使用 express 中的类型指定req、res next钩子的类型。这种中间件可以依赖注入其它的服务。
+
+```js
 // 类中间件-logger 中间件,不知道用的 express 还是 fastify，所以 request、response 是 any，可以手动标注。
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response } from 'express';
+
 @Injectable()
 export class LoggerMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: () => void)  {
@@ -790,6 +795,15 @@ export function logger(req: Request, res: Response, next: NextFunction) {
   console.log(`Request...`);
   next();
 };
+// 在 main.ts 里通过 app.use 使用
+import { logger } from './logger';
+import { Request, Response, NextFunction } from 'express';
+app.use(logger);
+app.use(function(req: Request, res: Response, next: NextFunction) {
+    console.log('before', req.url);
+    next();
+    console.log('after');
+})
 
 ```
 
@@ -801,14 +815,13 @@ MiddlewareConsumer 是一个辅助类，它提供了几种内置方法来管理�
 1. apply() 方法用来应用中间件,多个时逗号分隔即可。
 2. forRoutes() 方法可以接受一个字符串、多个字符串、一个 RouteInfo 对象、一个控制器类，甚至是多个控制器类。
 3. .exclude 方法用来排除、接受单个字符串、多个字符串或 RouteInfo 对象，用于标识要排除的路由
-```javaScript
+
+```js
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { PostsModule } from './modules/posts/posts.module';
 import { TagsModule } from './modules/tags/tags.module';
-// 连接MySQL数据库
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { UserModule } from './modules/user/user.module';
 // 中间件
 import { TestMiddleware } from './common/middlewares/test.middleware';
@@ -816,16 +829,6 @@ import { TestMiddleware } from './common/middlewares/test.middleware';
 // 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
 @Module({
   imports: [
-    TypeOrmModule.forRoot({
-      type: 'mysql',
-      host: 'localhost',
-      port: 3306,
-      username: 'root',
-      password: 'wanggeng123456',
-      database: 'nest-vue-bms',
-      autoLoadEntities: true, //自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
-      synchronize: false, // 是否自动同步实体文件,生产环境建议关闭 - 不同步
-    }),
     PostsModule,
     TagsModule,
     UserModule,
@@ -839,27 +842,34 @@ export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(TestMiddleware) // 应用中间件,多个时逗号分隔即可。
-      .forRoutes('*'); // 指定应用的路由或者控制器
-      .forRoutes(CatsController); // 或者指定控制器
-      .forRoutes({ path: 'cats', method: RequestMethod.GET });// 或者RouteInfo 对象
       .exclude( // 排除对象
         { path: 'cats', method: RequestMethod.GET },
         { path: 'cats', method: RequestMethod.POST },
         'cats/(.*)',
       )
+      .forRoutes('*') // 指定应用的路由或者控制器
+      .forRoutes(CatsController) // 或者指定控制器
+      .forRoutes({ path: 'cats', method: RequestMethod.GET })// 或者RouteInfo 对象
+
   }
 }
 
 // 全局注册中间件就是使用 app 的 use 方法注册、对每个已注册的路由生效。
+export function logger(req, res, next) {
+  console.log(`Request...`);
+  next();
+};
 const app = await NestFactory.create(AppModule);
 app.use(logger);
 await app.listen(3000);
 
 ```
 
-### 3. 日志收集和记录中间件
+#### 3. 日志收集和记录中间件实践
 
-使用 Nestjs 中的两个技术点 中间件 +拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
+使用 Nestjs 中的两个技术点 中间件 + 拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
+
+
 
 ## 3.5 过滤器 ExceptionFilter
 
@@ -1676,7 +1686,7 @@ export class BModule {}
 ## 4.2 模块相关
 
 ### 1. 静态模块
-模块是 Nest 实现依赖注入的关键所在、它定义了一组组件，如提供者和控制器，它们作为整个应用程序的模块部分相互配合。它们为这些组件提供了执行上下文或范围。例如，在模块中定义的提供者可以在不导出它们的情况下对模块的其他成员可见。当提供者需要在模块外部可见时，首先从其宿主模块导出，然后导入到其消费模块中。但是我们使用的基本是常规或静态模块绑定。看如下例子
+模块是 Nest 实现依赖注入的关键所在、它定义了一组组件，如提供者和控制器，它们作为整个应用程序的模块部分相互配合。它们为这些组件提供了执行上下文或范围。例如，在模块中定义的提供者可以在不导出它们的情况下对模块的其他成员可见。当提供者需要在模块外部可见时，首先从其宿主模块 exports 导出，然后 imports 导入到其消费模块中。但是我们使用的基本是常规或静态模块绑定。看如下例子
 ```JavaScript
 // UsersModule提供和导出一个 UsersService 。UsersModule是UsersService的宿主模块。
 import { Module } from '@nestjs/common';
@@ -1715,7 +1725,7 @@ export class AuthService {
 
 ### 2. 动态模块
 通过静态模块绑定，消费模块没有机会影响宿主模块的提供者配置。只能用不能修改。
-而如果有一个通用的模块，需要在不同的用例中以不同的方式运行(类似于“插件”)、其中一个通用工具需要在被消费者使用之前进行一些配置。这时就使用动态模块功能、动态模块会提供一个API方法以便消费模块在导入时自定义该模块的属性和行为，而不是使用我们到目前为止所见到的静态绑定。示例
+而如果有一个通用的模块，需要在不同的用例中以不同的方式运行(类似于“插件”)、其中一个通用工具需要在被消费者使用之前进行一些配置。这时就使用动态模块功能、动态模块会提供一个API方法以便消费模块在导入时自定义该模块的属性和行为，而不是使用我们到目前为止所见到的静态绑定。其实就是能够将参数传递到要导入的模块中，以便我们可以更改其行为。示例
 
 ```JavaScript
 import { Module } from '@nestjs/common';
@@ -1734,14 +1744,18 @@ export class AppModule {}
 ```
 
 从这个例子可以看出
-1. register() 是一个静态方法、因为是在 ConfigModule 类上调用它，而不是在类的实例上调用。实际上这个方法可以有任意的名称，但按照惯例，我们应该将它称为 forRoot()、forFeature()  或 register()。
-   - register() 创建模块时，您希望为调用模块配置特定的动态模块，仅供调用模块使用。例如，对于 Nest 的 @nestjs/axios 模块：HttpModule.register({ baseUrl: 'someUrl' } )。如果在另一个模块中使用 HttpModule.register({ baseUrl: 'somewhere else' })，它将具有不同的配置。您可以为尽可能多的模块执行此操作。用一次注册一次
-   - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。只注册一次，用多次，一般在 AppModule 引入
-   - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。用了 forRoot 之后，用 forFeature 传入局部配置，一般在具体模块里 imports
+1. register() 是一个静态方法、因为是在 ConfigModule 类上调用它，而不是在类的实例上调用。
 2. register() 方法由自己定义，因此我们可以接受任何我们喜欢的输入参数。
 3. register() 方法必须返回类似于模块的东西，因为其返回值出现在熟悉的 imports 列表中。
 
-实际上，register() 方法返回的就是一个 DynamicModule。动态模块只是在运行时创建的模块，具有与静态模块完全相同的属性，以及一个额外的名为 module 的属性。对于动态模块，模块选项对象的所有属性都是可选的，除了 module。所以 ConfigModule 声明必须是如下结构。可以看出调用 ConfigModule.register(...) 返回一个具有属性的 DynamicModule 对象，这些属性本质上与我们迄今为止通过 @Module() 装饰器提供的元数据相同。
+实际上这个方法可以有任意的名称，但按照惯例，我们应该将它称为 forRoot()、forFeature()  或 register()。
+   - register() 创建模块时，您希望为调用模块配置特定的动态模块，仅供调用模块使用。例如，对于 Nest 的 @nestjs/axios 模块：HttpModule.register({ baseUrl: 'someUrl' } )。如果在另一个模块中使用 HttpModule.register({ baseUrl: 'somewhere else' })，它将具有不同的配置。您可以为尽可能多的模块执行此操作。用一次模块传一次配置。
+   - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。只注册一次，用多次，而且一般在 AppModule 里 import 引入。
+   - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。用了 forRoot 之后，用 forFeature 传入局部配置，一般在具体模块里 imports
+
+实际上，register() 方法返回的就是一个 DynamicModule。动态模块只是在运行时创建的模块，具有与静态模块完全相同的属性，以及一个额外的名为 module 的属性。对于动态模块，模块选项对象的所有属性都是可选的，除了 module。所以 ConfigModule 声明必须是如下结构。可以看出调用 ConfigModule.register(...) 返回一个具有属性的 DynamicModule 对象，这些属性本质上与我们迄今为止通过 @Module() 装饰器声明的模块一致提供的元数据也相同。
+
+本质是调用类的静态方法、然后这个静态方法必须返回具有完全相同接口的对象，外加一个称为module的附加属性。 module属性用作模块的名称，并且应与模块的类名相同、因为它的返回值出现在熟悉的导入imports 列表中。
 
 ```JavaScript
 
@@ -1763,7 +1777,7 @@ export class ConfigModule {
 
 ### 3. 模块配置
 显而易见的解决方案是在静态的 register() 方法中向 ConfigModule 传递一个选项对象
-本质上这个配置对象是给 模块 里的服务用的、所以关键是在运行时，我们首先需要将options对象绑定到 Nest IoC 容器，然后让 Nest 将其注入到我们的 ConfigService 中。提供者不仅可以是服务，还可以是任何值，因此我们完全可以使用依赖注入来处理一个简单的options对象。
+本质上这个配置对象是给 模块 里的服务用的、所以关键是在运行时，我们首先需要将options对象绑定到 Nest IoC 容器，然后让 Nest 将其注入到我们的 ConfigService 中。提供者不仅可以是服务，还可以是任何值，因此我们完全可以使用依赖注入来处理一个简单的options对象。将传入的 options对象作为值提供者useValue，然后通过 @Inject('token') 来注入这个对象进而获取到传入的数据对象options。
 
 而动态模块返回的本质上与我们迄今为止通过 @Module() 装饰器提供的元数据相同。
 
@@ -1778,7 +1792,7 @@ export class ConfigModule {
     return {
       module: ConfigModule,
       providers: [
-        // 声明为提供者注入到 服务里。
+        // 声明为值提供者注入到服务里。
         {
           provide: 'CONFIG_OPTIONS',
           useValue: options,
@@ -1877,7 +1891,7 @@ const className = context.getClass().name; // "CatsController"
 
 ```
 
-## 4.5  元数据和反射
+## 4.4  元数据和反射
 Metadata 元数据存在类或者对象上，如果给类或者类的静态属性添加元数据，那就保存在类上，如果给实例属性添加元数据，那就保存在对象上，用类似 [[metadata]] 的 key 来存的。
 
 Reflect.defineMetadata 和 Reflect.getMetadata 分别用于设置和获取某个类的元数据，如果最后传入了属性名，还可以单独为某个属性设置元数据。
