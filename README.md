@@ -989,6 +989,125 @@ export class AuthGuard implements CanActivate {
 
 ```
 
+### 3 拦截器 Interceptor
+
+#### 1. 概述
+
+拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，功能上它和中间件是很类似的也是在目标 Controller 方法前后加入一些逻辑。区别在于 interceptor 可以拿到调用的 controller 和 handler、作用就是可以给它们加上数据元信息然后可以拿到，而中间件获取不到。在 NestJS 中可以处理请求处理过程中的请求和响应,所以 interceptor 更适合处理与具体业务相关的逻辑、例如身份验证、日志记录、数据转换等。
+
+**作用**
+1. 在函数执行之前/之后绑定额外的逻辑
+2. 转换从函数返回的结果
+3. 转换从函数抛出的异常
+4. 扩展基本函数行为
+5. 根据所选条件完全重写函数 (例如, 缓存目的)
+
+它本质也是一个使用 @Injectable 装饰器装饰的类，这个类要实现 NestInterceptor 接口的 intercept 方法。
+该方法接收两个参数：
+1. 第一个是 ExecutionContext 实例 context(与守卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。在拦截器中 context.getClass()可以获取当前路由的类,context.getHandler()可以获取到路由将要执行的方法名称。
+2. 第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法。在intercept()方法的实现中没有调用handle()方法，路由处理程序方法将根本不会被执行。
+
+也就是说在最终路由处理程序执行之前和之后都可以实现自定义逻辑、之前就叫请求拦截器、之后就叫响应拦截器。
+1. 在intercept()方法中编写在调用handle()之前执行的代码
+2. handle()方法返回一个Observable，我们可以使用强大的RxJS操作符进一步操控响应、并将最终结果返回给调用方
+
+**响应映射**
+
+我们已经知道handle()返回一个Observable。这个流、包含来自路由处理程序返回的值，因此我们可以使用RxJS的map()操作符轻松地对其进行变换。
+
+#### 2. 使用
+使用 CLI 脚手架命令可以快速生成一个拦截器: `nest g itc test --no-spec --flat`、如创建一个记录用户交互的拦截器 `$ nest g itc common/itc --no-spec`
+
+与守卫一样，拦截器也可以是控制器作用域、方法作用域、全局作用域。拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。
+1. @UseInterceptors() 装饰器绑定控制器作用域、方法作用域
+2. app 对象的 useGlobalInterceptors() 方法全局绑定。使用这种方法注册的拦截器不能插入依赖项, 因为它们不属于任何模块。
+
+```js
+// itc.interceptor.ts
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class ItcInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle();
+  }
+}
+
+import {UseInterceptors} from '@nestjs/common';
+// 1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
+@UseInterceptors(LoggingInterceptor)
+export class CatsController {}
+
+// 2.方法作用域：就是只针对某个指定的方法进行拦截。
+export class CatsController {
+  @ApiOperation({ summary: '获取所有用户' })
+  @Get()
+  @UseInterceptors(TestInterceptor) // 方法作用域拦截器
+  findAll() {
+    return this.userService.findAll();
+  }
+}
+
+// 3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册。
+app.useGlobalInterceptors(new TransformInterceptor()); 
+// 如果希望给全局守卫注入其它依赖使用如下方法，因为守卫也是使用@Injectable()装饰器的类所以是可注入的，也就是作为提供者。只不过此时提供者的名字是固定的 APP_INTERCEPTOR。
+import { Module } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { LoggerInterceptor } from './logger.interceptor';
+
+@Module({
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: LoggingInterceptor,
+    },
+  ],
+})
+export class AppModule {}
+
+```
+
+#### 3. 序列化
+序列化是在对象在网络响应中返回之前发生的过程。在这个阶段，我们可以定义规则来转换和清理要返回给客户端的数据。例如，敏感数据如密码应始终从响应中排除。或者，某些属性可能需要进行额外的转换，比如只发送实体的部分属性。
+
+比如：定义一个数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理。
+
+RxJS 是一个组织异步逻辑的库，它有很多 operator(操作方法)，可以极大的简化异步逻辑的编写。数据源叫做 observable
+
+```js
+/**
+ * 数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理
+ */
+import {
+  CallHandler,
+  ExecutionContext,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
+import { map, Observable } from 'rxjs';
+
+
+@Injectable()
+export class TransformInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(
+      map((data) => {
+        return {
+          data,
+          code: 200,
+          msg: '请求成功',
+        };
+      }),
+    );
+  }
+}
+
+
+
+```
+
+
 ## 3.5 过滤器 ExceptionFilter
 
 ### 1. 概述
@@ -1290,110 +1409,6 @@ async create(@Body() createCatDto: CreateCatDto) {
 }
 ```
 
-
-## 3.8 拦截器 Interceptor
-
-### 1. 概述
-
-拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，功能上它和中间件是很类似的也是在目标 Controller 方法前后加入一些逻辑。在 NestJS 中可以处理请求处理过程中的请求和响应,例如身份验证、日志记录、数据转换等。区别在于 interceptor 可以拿到调用的 controller 和 handler、作用就是可以给它们加上数据元信息然后可以拿到，而中间件获取不到。interceptor 更适合处理与具体业务相关的逻辑。
-
-**作用**
-1. 在函数执行之前/之后绑定额外的逻辑
-2. 转换从函数返回的结果
-3. 转换从函数抛出的异常
-4. 扩展基本函数行为
-5. 根据所选条件完全重写函数 (例如, 缓存目的)
-
-它本质也是一个使用 @Injectable 装饰器装饰的类，这个类要实现 NestInterceptor 接口、实现 intercept 方法。
-该方法接收两个参数：
-1. 第一个是 ExecutionContext 实例 context(与守卫完全相同的对象)。ExecutionContext 继承自 ArgumentsHost。在拦截器中 context.getClass()可以获取当前路由的类,context.getHandler()可以获取到路由将要执行的方法
-2. 第二个参数是一个 CallHandler 。CallHandler 接口实现了 handle()方法。使用该方法在拦截器中的某个位置调用路由处理程序方法。在intercept()方法的实现中没有调用handle()方法，路由处理程序方法将根本不会被执行。
-
-也就是说在最终路由处理程序执行之前和之后都可以实现自定义逻辑。
-1. 在intercept()方法中编写在调用handle()之前执行的代码
-2. handle()方法返回一个Observable，我们可以使用强大的RxJS操作符进一步操控响应、并将最终结果返回给调用方
-
-**响应映射**
-
-我们已经知道handle()返回一个Observable。这个流、包含来自路由处理程序返回的值，因此我们可以使用RxJS的map()操作符轻松地对其进行变换。
-
-### 2. 使用
-使用 CLI 脚手架命令可以快速生成一个拦截器: `nest g itc test --no-spec --flat`、如创建一个记录用户交互的拦截器 `$ nest g gu common/auth --no-spec`
-```javaScript
-import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
-import { Observable } from 'rxjs';
-
-@Injectable()
-export class LoggingInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    return next.handle();
-  }
-}
-
-```
-
-与管道和守卫一样，拦截器可以是控制器作用域、方法作用域或全局作用域。拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。
-1. @UseInterceptors 装饰器绑定控制器作用域、方法作用域
-2. app 对象的 useGlobalInterceptors 方法全局绑定。
-
-```javaScript
-// 1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
-@UseInterceptors(LoggingInterceptor)
-export class CatsController {}
-
-// 2.方法作用域：就是只针对某个指定的方法进行拦截。
-export class CatsController {
-  @ApiOperation({ summary: '获取所有用户' })
-  @Get()
-  @UseInterceptors(TestInterceptor) // 方法作用域拦截器
-  findAll() {
-    return this.userService.findAll();
-  }
-}
-
-// 3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册
-app.useGlobalInterceptors(new TransformInterceptor());
-
-```
-
-### 3. 序列化
-序列化是在对象在网络响应中返回之前发生的过程。在这个阶段，我们可以定义规则来转换和清理要返回给客户端的数据。例如，敏感数据如密码应始终从响应中排除。或者，某些属性可能需要进行额外的转换，比如只发送实体的部分属性。
-
-比如：定义一个数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理。
-
-RxJS 是一个组织异步逻辑的库，它有很多 operator，可以极大的简化异步逻辑的编写。数据源叫做 observable
-
-```JavaScript
-/**
- * 数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理
- */
-import {
-  CallHandler,
-  ExecutionContext,
-  Injectable,
-  NestInterceptor,
-} from '@nestjs/common';
-import { map, Observable } from 'rxjs';
-
-
-@Injectable()
-export class TransformInterceptor implements NestInterceptor {
-  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
-    return next.handle().pipe(
-      map((data) => {
-        return {
-          data,
-          code: 200,
-          msg: '请求成功',
-        };
-      }),
-    );
-  }
-}
-
-
-
-```
 
 
 ## 3.9 自定义装饰器
