@@ -1361,9 +1361,9 @@ async create(
 
 
 
-## 3.5 过滤器 ExceptionFilter
+### 5 过滤器 ExceptionFilter
 
-### 1. 概述
+#### 1. 概述
 
 过滤器也是 NestJS 中实现 AOP 编程的五种方式之一，Nest 中过滤器一般是指: 异常处理过滤器,他们开箱即用返回一些指定的 JSON 信息。在 NestJS 中有一个内置异常处理层、当一个异常没有被应用程序代码处理时(显性声明处理)，它就会被这个异常处理层捕获，然后自动发送一个适当的用户友好响应。
 
@@ -1380,13 +1380,19 @@ Nest 提供了一个内置的 HttpException 类，可以从@nestjs/common包中�
 HttpException 类接收两个必填参数用来决定返回的信息、默认情况下，返回的 JSON 响应体也包含两个属性。
 new HttpException('message描述信息', http状态码statusCode);
 1. message:基于状态的 HTTP 错误的简短描述。
-2. statusCode:默认为 status 参数中提供的 HTTP 状态码
+2. statusCode:默认为 status 参数中提供的有效的 HTTP 状态码、最佳实践是使用从@nestjs/common导入的 HttpStatus枚举。
 
-```JavaScript
+```js
+// HttpStatus 它是从 @nestjs/common 包导入的辅助枚举器。
 @Get()
 async findAll() {
   throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
   throw new HttpException('xxxx', HttpStatus.BAD_REQUEST)
+  // 也可以传入一个对象
+  throw new HttpException({
+    status: HttpStatus.FORBIDDEN,
+    error: 'This is a custom message',
+  }, HttpStatus.FORBIDDEN);
 
 }
 // 当客户端访问时就会返回如下内容：
@@ -1397,23 +1403,41 @@ async findAll() {
 
 ```
 
-内置HTTP异常: Nest提供了一组标准异常，这些异常都是从基本的HttpException继承而来的。它们在@nestjs/common包中公开，代表了许多常见的HTTP异常。使用也是一样的手动抛出即可
+#### 2 内置HTTP异常
+为了减少样板代码，Nest 提供了一系列继承自核心异常 HttpException 的可用异常。所有这些都可以在 @nestjs/common包中找到，它们代表了许多常见的HTTP异常。使用也是一样的手动抛出即可。
+1. BadRequestException
+2. UnauthorizedException
+3. NotFoundException
+4. ForbiddenException
+5. NotAcceptableException
+6. RequestTimeoutException
+7. ConflictException
+8. GoneException
+9. PayloadTooLargeException
+10. UnsupportedMediaTypeException
+11. UnprocessableException
+12. InternalServerErrorException
+13. NotImplementedException
+14. BadGatewayException
+15. ServiceUnavailableException
+16. GatewayTimeoutException
 
 
-
-### 2 使用
+#### 3 自定义
 尽管基础（内置）异常过滤器可以自动处理许多情况，但您可能希望对异常层具有完全控制。
-这时就创建一个异常过滤器，负责捕获 HttpException 类的实例，并为其实现自定义响应逻辑。使用 CLI 脚手架命令快速生成一个过滤器 `$ nest g f/filter  http-exception --no-spec`、 `$ nest g f/filter  common/http-exception --no-spec`。
+这时就创建一个异常过滤器，负责捕获 HttpException 类的实例，并为其实现自定义响应逻辑。
+使用 CLI 脚手架命令快速生成一个过滤器 `$ nest g f/filter  http-exception --no-spec`、 `$ nest g f/filter  common/http-exception --no-spec`。
 
 每一个过滤器都应该实现 ExceptionFilter 接口、实现接口要求提供具有指定签名的 catch(exception: T, host: ArgumentsHost) 方法。其中，T 表示异常的类型。
 
 @Catch(HttpException) 装饰器会将必要的元数据绑定到异常过滤器上，告诉 Nest，这个特定的过滤器正在寻找类型为 HttpException 的异常，而不是其他类型的异常。如果要捕获每个未处理的异常（无论异常类型如何）参数列表留空。
 
 定义了异常过滤器之后、就是使用。在 Nest 里过滤器和中间件、守卫、拦截器类似，也是有全局作用域过滤器、控制器作用域、方法作用域三种。有两种方法注册绑定过滤器、
+
 1. 使用 @UseFilters 装饰器注册方法作用域这样只应用于单个路由处理程序、也可以应用于控制器级别。与 @Catch() 装饰器类似，它可以接受一个过滤器实例，或者一个逗号分隔的过滤器实例列表。也可以传递类（而不是实例），将实例化的责任交给框架，并启用依赖注入。尽可能使用类来应用过滤器，而不是实例。这样做可以减少内存使用，因为 Nest 可以在整个模块中轻松重用相同类的实例。 
 2. 使用 app 实例的 useGlobalFilters 方法注册绑定的就是全局级别。
 
-```javaScript
+```js
  /**
  * 创建一个统一的异常处理器-在错误发生时做一个统一的过滤处理后再返回给前端
  */
@@ -1465,11 +1489,26 @@ export class CatsController {}
 
 // 全局作用域过滤器：在入口文件中使用useGlobalFilters装饰器设置全局
 app.useGlobalFilters(new HttpExceptionFilter());
+// 同样全局还有一种可以注入依赖的方式
+import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+
+@Module({
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: HttpExceptionFilter,
+    },
+  ],
+})
+export class AppModule {}
 
 ```
 
+### 6 总结
+NestJS面向AOP编程的五种方式，各有各的用处而且用处基本是固定的。
 
-## 3.9 自定义装饰器
+## 3.5 自定义装饰器
 
 ### 1. 概述
 Nest是基于一种称为装饰器的语言特性构建的。一个ES2016装饰器是一个返回函数的表达式，它可以接受目标、名称和属性描述符作为参数。您可以通过在要装饰的内容的顶部加上@字符来应用它。装饰器可以定义(装饰)在类、方法或属性上。 
