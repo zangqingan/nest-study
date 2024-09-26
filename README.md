@@ -1511,12 +1511,13 @@ NestJS面向AOP编程的五种方式，各有各的用处而且用处基本是�
 ## 3.5 自定义装饰器
 
 ### 1. 概述
-Nest是基于一种称为装饰器的语言特性构建的。一个ES2016装饰器是一个返回函数的表达式，它可以接受目标、名称和属性描述符作为参数。您可以通过在要装饰的内容的顶部加上@字符来应用它。装饰器可以定义(装饰)在类、方法或属性上。 
+Nest是基于一种称为装饰器的语言特性构建的。一个ES2016装饰器是一个返回函数的表达式，它可以接受目标、名称和属性描述符作为参数。可以通过在要装饰的内容的顶部加上@字符来应用它。装饰器可以定义(装饰)在类、方法或属性上。 
 
 ### 2. 使用
-除了 Nest 提供的装饰器之外、用户还可以根据需要自定义装饰器。
+除了 Nest 提供的装饰器之外、用户还可以根据需要自定义装饰器。有两种方法：
+
 `nest g decorator aaa --flat`
-```JavaScript
+```js
 // 在Node.js世界中，通常的做法是将属性附加到request对象上。然后，在每个路由处理程序中手动提取它们
 // 例如 const user = req.user;
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
@@ -1528,6 +1529,11 @@ export const User = createParamDecorator(
     return request.user;
   },
 );
+// 使用自定义装饰器
+@Get()
+async findOne(@User() user: UserEntity) {
+  console.log(user);
+}
 
 // 之前使用@SetMetadata定义元数据
 @Get()
