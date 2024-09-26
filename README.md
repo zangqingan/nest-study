@@ -1107,6 +1107,259 @@ export class TransformInterceptor implements NestInterceptor {
 
 ```
 
+### 4 管道 Pipe
+
+#### 1. 概述
+
+它也是 NestJS 中实现 AOP 编程的五种方式之一，它是对函数参数通用逻辑抽出的切面。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。管道有两个典型的用例:对参数做一些检验和转换。
+1. 转换: 将用户输入数据转换为所需的形式后再输出(例如，从字符串到整数)。
+2. 验证: 对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
+在这两种情况下，管道参数(arguments) 会由控制器的路由处理程序进行操作。Nest 会在调用这个方法之前插入一个管道，管道会先拦截方法的调用参数,进行转换或是验证处理，然后用转换好或是验证好的参数调用原方法。
+
+在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类(提供者)，PipeTransform<T, R> 是每个管道必须要实现的泛型接口。泛型 T 表明输入的 value 的类型，R 表明 transfrom() 方法的返回类型。
+
+管道分类:Nest自带很多开箱即用的内置管道、也可以构建自定义管道。所以管道主要有两种
+1. 内置管道由Nest提供开箱即用
+2. 自定义管道由用户自己定义
+
+在使用上管道有如下方式:
+1. 参数范围(parameter-scoped)的、直接使用。
+2. 方法范围(method-scoped)的、使用 @UsePipes 装饰器装饰
+3. 控制器范围的(controller-scoped)、使用 @UsePipes 装饰器装饰
+4. 全局范围(global-scoped)的、app 实例的 useGlobalPipes 方法注册全局
+
+#### 2. 内置管道
+Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包导出、它们都实现了 PipeTransform 接口。
+其中一个验证管道 ValidationPipe、七个转换管道即 Parse*管道、一个默认值管道DefaultValuePipe。
+
+1. ValidationPipe: 用于验证请求数据，通常用于验证请求体数据、查询参数、路由参数等。它使用了类似于 class-validator 库的装饰器来进行验证。如果验证失败，它会抛出 ValidationException 异常。
+
+2. ParseIntPipe: 用于将输入数据解析为整数。它可以将字符串形式的整数转换为 JavaScript 整数。如果无法解析为整数，它会抛出 BadRequestException 异常。
+
+3. ParseFloatPipe: 用于将输入数据解析为浮点数。
+
+4. ParseBoolPipe: 用于将输入数据解析为布尔值。它可以将字符串形式的"true"和"false"转换为对应的布尔值。如果无法解析为布尔值，它会抛出 BadRequestException 异常。
+
+5. ParseArrayPipe: 用于将输入数据解析为数组。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为数组，它会抛出 BadRequestException 异常。
+
+6. ParseUUIDPipe: 用于将输入数据解析为 UUID（Universally Unique Identifier）。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为 UUID，它会抛出 BadRequestException 异常。
+
+7. ParseEnumPipe: 枚举类型
+
+8. ParseFilePipe: 文件类型
+
+9. DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。new DefaultValuePipe(false/1)、常和转换类管道一起使用提供默认值。
+
+所有转换管道即 Parse*管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。
+
+#### 3. 使用
+管道可以是
+1. 参数范围(parameter-scoped)的、
+2. 方法范围(method-scoped)的、
+3. 控制器范围的(controller-scoped)、
+4. 全局范围(global-scoped)的。
+
+```js
+// 参数作用域：
+@Get(':id')
+async findOne(@Param('id',new DefaultValuePipe(0) ParseIntPipe) id: number) {
+  return this.catsService.findOne(id);
+}
+@Post()
+async create(
+  @Body(new ValidationPipe()) createCatDto: CreateCatDto,
+) {
+  this.catsService.create(createCatDto);
+}
+// 方法作用域：
+@Post()
+@UsePipes(new JoiValidationPipe(createCatSchema))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+// 控制器作用域：
+@Controller('cats')
+@UsePipes(new ValidationPipe())
+export class CatsController {}
+
+// 全局：依然是在入口文件中使用 useGlobalPipes 装饰器。这种全局无法给管道注入依赖
+app.useGlobalPipes(new ValidationPipe());
+
+// 可以在app模块中声明以此注入依赖
+import { Module } from '@nestjs/common';
+import { APP_PIPE } from '@nestjs/core';
+
+@Module({
+  providers: [
+    {
+      provide: APP_PIPE,
+      useClass: ValidationPipe
+    }
+  ]
+})
+export class AppModule {}
+
+```
+
+#### 4. 自定义管道
+使用 CLI 脚手架创建一个管道使用命令即可 `$ nest g pi/pipe  <name>`、例如创建一个校验管道 `$ nest g pi/pipe  common/pipes/validation`。
+
+自定义 Pipe 要实现 PipeTransform 接口，实现 transform 方法，里面可以对传入的参数值 value 做参数验证，比如格式、类型是否正确，不正确就抛出异常。也可以做转换，返回转换后的值。 transfrom() 方法有两个参数：
+1. value 当前处理的方法参数(在被路由处理程序方法接收之前)
+2. metadata 当前处理的方法参数的元数据。
+
+元数据对象具有以下属性:
+
+```js
+import { ArgumentMetadata, Injectable, PipeTransform } from '@nestjs/common';
+
+@Injectable()
+export class ValidationPipe implements PipeTransform {
+  transform(value: any, metadata: ArgumentMetadata) {
+    return value;
+  }
+}
+
+
+export interface ArgumentMetadata {
+  type: 'body' | 'query' | 'param' | 'custom';
+  // 参数是一个 body @Body(), query @Query(), param @Param(), 还是自定义参数,主要是验证类型。
+  metatype?: Type<unknown>;
+  // 参数的元类型
+  data?: string;
+  // 传递给装饰器的字符串
+}
+
+```   
+**对象结构验证**：一般会使用基于对象结构的验证来对数据进行校验、这里常使用 Joi 库、它允许使用可读的 API schema.validate() 方法以直接的方式验证参数是否符合提供的 schema，让我们构建一个基于 Joi schema 的验证管道。
+
+安装依赖: `$ npm install --save joi` 、 `npm install --save-dev @types/joi`
+
+```js
+import {
+  ArgumentMetadata,
+  Injectable,
+  BadRequestException,
+  PipeTransform,
+} from '@nestjs/common';
+import { ObjectSchema } from 'joi';
+
+@Injectable()
+export class ValidationPipePipe implements PipeTransform {
+  // 注入 Joi 的对象结构验证
+  constructor(private schema: ObjectSchema) {}
+  // 验证管道要么返回该值，要么抛出一个错误。
+  transform(value: any, metadata: ArgumentMetadata) {
+    // 如果字段名不一致抛出一个错误
+    const { error } = this.schema.validate(value);
+    if (error) {
+      throw new BadRequestException('Validation failed');
+    }
+    return value;
+  }
+}
+
+// 在控制器里注册管道
+import * as Joi from 'joi';
+const createCatSchema = Joi.object({
+  name: Joi.string().required(),
+  age: Joi.number().required(),
+  breed: Joi.string().required(),
+})
+
+export interface CreateCatDto {
+  name: string;
+  age: number;
+  breed: string;
+}
+
+
+@Post()
+@UsePipes(new ValidationPipePipe(createCatSchema))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+// 结构或类型有不一致时报错
+{
+    "message": "Validation failed",
+    "error": "Bad Request",
+    "statusCode": 400
+}
+
+
+```
+
+还有一种比较常用的验证管道类型是:**类验证器**、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类中添加一些装饰器来校验、不用额外定义schema对象。所以一般我们是使用这种验证。
+
+安装依赖: `$ npm i --save class-validator class-transformer`
+
+```js
+import {
+  PipeTransform,
+  Injectable,
+  ArgumentMetadata,
+  BadRequestException,
+} from '@nestjs/common';
+import { validate } from 'class-validator';
+import { plainToInstance } from 'class-transformer';
+
+@Injectable()
+export class ValidationPipePipe implements PipeTransform<any> {
+  async transform(value: any, { metatype }: ArgumentMetadata) {
+    if (!metatype || !this.toValidate(metatype)) {
+      return value;
+    }
+    // plainToInstance 方法将普通的 JavaScript 参数对象转换为可验证的 dto class 的实例对象。
+    const object = plainToInstance(metatype, value);
+    // 调用 class-validator 包的 validate api 对它做验证。如果验证不通过，就抛一个异常。
+    const errors = await validate(object);
+    if (errors.length > 0) {
+      throw new BadRequestException(`Validation failed:${errors}`);
+    }
+    return value;
+  }
+
+  private toValidate(metatype: Function): boolean {
+    const types: Function[] = [String, Boolean, Number, Array, Object];
+    return !types.includes(metatype);
+  }
+}
+
+// 在控制器里注册管道
+import { IsString, IsInt } from 'class-validator';
+export class CreateCatDto {
+  @IsString()
+  name: string;
+
+  @IsInt()
+  age: number;
+
+  @IsString()
+  breed: string;
+}
+
+// 方法范围
+@Post()
+@UsePipes(new ValidationPipePipe())
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+// 参数范围
+@Post()
+async create(
+  @Body(new ValidationPipe()) createCatDto: CreateCatDto,
+) {
+  this.catsService.create(createCatDto);
+}
+// 结构不一致时报错
+{
+    "message": "Validation failed",
+    "error": "Bad Request",
+    "statusCode": 400
+}
+```
+
+
 
 ## 3.5 过滤器 ExceptionFilter
 
@@ -1214,201 +1467,6 @@ export class CatsController {}
 app.useGlobalFilters(new HttpExceptionFilter());
 
 ```
-
-## 3.6 管道 Pipe
-
-### 1. 概述
-
-它也是 NestJS 中实现 AOP 编程的五种方式之一，它是对参数通用逻辑抽出的切面。在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类(提供者)，PipeTransform<T, R> 是每个管道必须要实现的泛型接口。泛型 T 表明输入的 value 的类型，R 表明 transfrom() 方法的返回类型。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。管道有两个典型的用例:对参数做一些检验和转换。
-1. 转换: 将用户输入数据转换为所需的形式后再输出(例如，从字符串到整数)。
-2. 验证: 对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
-  
-在这两种情况下，管道参数(arguments) 会由控制器的路由处理程序进行操作。
-
-### 2. 内置管道
-Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包导出。它们都实现了 PipeTransform 接口。
-
-1. ValidationPipe: 用于验证请求数据，通常用于验证请求体数据、查询参数、路由参数等。它使用了类似于 class-validator 库的装饰器来进行验证。如果验证失败，它会抛出 ValidationException 异常。
-
-2. ParseIntPipe: 用于将输入数据解析为整数。它可以将字符串形式的整数转换为 JavaScript 整数。如果无法解析为整数，它会抛出 BadRequestException 异常。
-
-3. ParseFloatPipe: 用于将输入数据解析为浮点数。
-
-4. ParseBoolPipe: 用于将输入数据解析为布尔值。它可以将字符串形式的"true"和"false"转换为对应的布尔值。如果无法解析为布尔值，它会抛出 BadRequestException 异常。
-
-5. ParseArrayPipe: 用于将输入数据解析为数组。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为数组，它会抛出 BadRequestException 异常。
-
-6. ParseUUIDPipe: 用于将输入数据解析为 UUID（Universally Unique Identifier）。它可以将字符串形式的 UUID 转换为 UUID 对象。如果无法解析为 UUID，它会抛出 BadRequestException 异常。
-
-7. ParseEnumPipe: 枚举类型
-
-8. ParseFilePipe: 文件类型
-
-9. DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。new DefaultValuePipe(false/1)、常和转换类管道一起使用提供默认值。
-
-### 3. 使用
-和中间件、过滤器等一样，管道可以是
-1. 参数范围(parameter-scoped)的、直接使用。
-2. 方法范围(method-scoped)的、使用 @UsePipes 装饰器装饰
-3. 控制器范围的(controller-scoped)、使用 @UsePipes 装饰器装饰
-4. 全局范围(global-scoped)的、app 实例的 useGlobalPipes 方法注册全局
-
-```JavaScript
-// 方法作用域：
-@Post()
-@UsePipes(new JoiValidationPipe(createCatSchema))
-async create(@Body() createCatDto: CreateCatDto) {
-  this.catsService.create(createCatDto);
-}
-// 所有转换管道即Parse*管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。
-@Get(':id')
-async findOne(@Param('id',new DefaultValuePipe(0) ParseIntPipe) id: number) {
-  return this.catsService.findOne(id);
-}
-// 全局：依然是在入口文件中使用 useGlobalPipes 装饰器。
-app.useGlobalPipes(new ValidationPipe());
-```
-
-### 4. 自定义管道
-使用 CLI 脚手架创建一个管道使用命令即可 `$ nest g pi/pipe  <name>`、`$ nest g pi/pipe  common/validation-pipe`。
-
-自定义 Pipe 要实现 PipeTransform 接口，实现 transform 方法，里面可以对传入的参数值 value 做参数验证，比如格式、类型是否正确，不正确就抛出异常。也可以做转换，返回转换后的值。 transfrom() 方法有两个参数：
-1. value 当前处理的方法参数(在被路由处理程序方法接收之前)
-2. metadata 当前处理的方法参数的元数据。
-
-元数据对象具有以下属性:
-```javaScript
-
-export interface ArgumentMetadata {
-  type: 'body' | 'query' | 'param' | 'custom';
-  // 参数是一个 body @Body(), query @Query(), param @Param(), 还是自定义参数
-  metatype?: Type<unknown>;
-  // 参数的元类型
-  data?: string;
-  // 传递给装饰器的字符串
-}
-
-```   
-一般会使用基于对象结构的验证来对数据进行校验、这里常使用 Joi 库、它允许使用可读的 API 以直接的方式创建 schema，让我们构建一个基于 Joi schema 的验证管道。
-
-安装依赖: `$ npm install --save joi`
-
-```JavaScript
-import {
-  ArgumentMetadata,
-  Injectable,
-  BadRequestException,
-  PipeTransform,
-} from '@nestjs/common';
-import { ObjectSchema } from 'joi';
-
-@Injectable()
-export class ValidationPipePipe implements PipeTransform {
-  // 注入 Joi 的对象结构验证
-  constructor(private schema: ObjectSchema) {}
-  // 验证管道要么返回该值，要么抛出一个错误。
-  transform(value: any, metadata: ArgumentMetadata) {
-    // 如果字段名不一致抛出一个错误
-    const { error } = this.schema.validate(value);
-    if (error) {
-      throw new BadRequestException('Validation failed');
-    }
-    return value;
-  }
-}
-
-// 在控制器里注册管道
-import * as Joi from 'joi';
-const createCatSchema = Joi.object({
-  name: Joi.string().required(),
-  age: Joi.number().required(),
-  breed: Joi.string().required(),
-})
-
-export interface CreateCatDto {
-  name: string;
-  age: number;
-  breed: string;
-}
-
-
-@Post()
-@UsePipes(new ValidationPipePipe(createCatSchema))
-async create(@Body() createCatDto: CreateCatDto) {
-  this.catsService.create(createCatDto);
-}
-// 结构不一致时报错
-{
-    "message": "Validation failed",
-    "error": "Bad Request",
-    "statusCode": 400
-}
-
-
-```
-
-还有一种比较常用的验证管道类型是:**类验证器**、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类中添加一些装饰器来校验。
-
-安装依赖: `$ npm i --save class-validator class-transformer`
-
-```JavaScript
-import {
-  PipeTransform,
-  Injectable,
-  ArgumentMetadata,
-  BadRequestException,
-} from '@nestjs/common';
-import { validate } from 'class-validator';
-import { plainToInstance } from 'class-transformer';
-
-@Injectable()
-export class ValidationPipePipe implements PipeTransform<any> {
-  async transform(value: any, { metatype }: ArgumentMetadata) {
-    if (!metatype || !this.toValidate(metatype)) {
-      return value;
-    }
-    // plainToInstance 方法将普通的 JavaScript 参数对象转换为可验证的 dto class 的实例对象。
-    const object = plainToInstance(metatype, value);
-    // 调用 class-validator 包的 validate api 对它做验证。如果验证不通过，就抛一个异常。
-    const errors = await validate(object);
-    if (errors.length > 0) {
-      throw new BadRequestException('Validation failed');
-    }
-    return value;
-  }
-
-  private toValidate(metatype: Function): boolean {
-    const types: Function[] = [String, Boolean, Number, Array, Object];
-    return !types.includes(metatype);
-  }
-}
-
-// 在控制器里注册管道
-import { IsString, IsInt } from 'class-validator';
-export class CreateCatDto {
-  @IsString()
-  name: string;
-
-  @IsInt()
-  age: number;
-
-  @IsString()
-  breed: string;
-}
-
-@Post()
-@UsePipes(new ValidationPipePipe())
-async create(@Body() createCatDto: CreateCatDto) {
-  this.catsService.create(createCatDto);
-}
-// 结构不一致时报错
-{
-    "message": "Validation failed",
-    "error": "Bad Request",
-    "statusCode": 400
-}
-```
-
 
 
 ## 3.9 自定义装饰器
