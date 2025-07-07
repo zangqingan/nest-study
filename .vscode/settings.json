@@ -1,0 +1,15 @@
+{
+  "eslint.useFlatConfig": true, //vscode-eslint >= v8.57.0，确保扁平化配置开启
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit", // eslint自动修复
+    "source.fixAll.stylelint": "explicit" //配置 stylelint 保存自动修复
+  },
+  "stylelint.validate": ["css", "less", "scss", "sass", "postcss", "vue"], //插件检查范围
+  // 为列表中指定的文件类型启用 ESLint 验证
+  "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact", "vue", "html", "markdown", "json", "json5", "jsonc", "yaml", "toml", "xml"],
+  "explorer.fileNesting.enabled": true, //是否启用文件折叠
+  "explorer.fileNesting.expand": false, //控制是否自动扩展文件嵌套
+  "explorer.fileNesting.patterns": {
+    "eslint.config.js": ".prettierrc.*, stylelint.*, .editorconfig, .prettierignore, .stylelintignore"
+  }
+}

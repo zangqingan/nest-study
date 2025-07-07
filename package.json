@@ -1,0 +1,44 @@
+{
+  "name": "nest-study",
+  "version": "1.0.0",
+  "description": "一个包含eslint、git提交规范的nest自学记录项目",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint:eslint": "eslint --fix  --cache --max-warnings 0  \"./**/*.{vue,js,jsx,ts,tsx}\"  --cache-location \"node_modules/.cache/eslint/\"",
+    "lint:format": "prettier  --write --cache \"./**/*.{js,ts,json,jsx,tsx,css,less,scss,vue,html,md}\"",
+    "lint": "pnpm lint:format && pnpm lint:eslint",
+    "clear:cache": "rimraf node_modules/.cache",
+    "prepare": "husky",
+    "commit": "git-cz"
+  },
+  "config": {
+    "commitizen": {
+      "path": "@commitlint/cz-commitlint"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zangqingan/nest-study.git"
+  },
+  "author": "zangqingan",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zangqingan/nest-study/issues"
+  },
+  "homepage": "https://github.com/zangqingan/nest-study#readme",
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
+    "@commitlint/cz-commitlint": "^19.8.0",
+    "@eslint/js": "^9.25.1",
+    "commitizen": "^4.3.1",
+    "eslint": "^9.25.1",
+    "eslint-plugin-prettier": "^5.2.6",
+    "globals": "^16.0.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.1",
+    "prettier": "3.5.3",
+    "rimraf": "^6.0.1"
+  }
+}

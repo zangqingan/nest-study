@@ -9,14 +9,18 @@ resfulapi curd 接口实现、
 接口校验、
 swagger 接口文档编写
 等内容。主要是学习后端的思维。
+
 2023.8.23-购买掘金-神说要有光的- 《Nest 通关秘籍小册》，主要学习实战部分知识点。
 Nest 基础：Nest 各种功能的使用，包括 IOC、AOP、全局模块、动态模块、自定义 provider、middleware、pipe、interceptor、guard 等功能，还有 Nest CLI 的使用，Nest 项目的调试。
 扩展高级：mysql、mongodb、redis、rabbitmq、nacos 等后端中间件学一遍，也会学习 pm2、docker、docker compose 等部署方案。
 目标是学习之后自己能前后端一起做一个项目上线即可。
 
+2025-7-7 集成eslint+commitlint、整理笔记。
+
 **目录说明**
-1. [nest-single](nest做server服务)
-2. [nest-microservice](nest做微服务)
+1. [public](公共静态资源文件)
+2. [nest-single](nest做server服务)
+3. [nest-microservice](nest做微服务)
 
 # 二、NestJS 概述
 
@@ -113,20 +117,20 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
 `$ nest g 文件类型 生成的组件的名称 可选项`
 
 **常见的文件类型有**
-| 名称        | 别名         | 描述     |
-| :---        |    :----:   |          ---: |
-| module      | mo          | 生成一个模块声明会自动在 AppModule 里引入   |
-| controller  | co          | 生成一个控制器声明      |
-| service     | s           | 生成一个服务声明        |
-| middleware  | mi          | 生成一个中间件声明      |
-| interface   | itf         | 生成一个接口            |
-| interceptor | itc         | 生成一个拦截器声明      |
-| guard       | gu          | 生成一个守卫声明        |
-| gateway     | ga          | 生成一个网关声明        |
-| filter      | f           | 生成一个过滤器声明      |
-| pipe        | pi          | 生成一个管道声明        |
-| class       | cl          | 生成一个新的类          |
-| resource    | res         | 快速生成一个CRUD模块    |
+| 名称        | 别名  |                                      描述 |
+| :---------- | :---: | ----------------------------------------: |
+| module      |  mo   | 生成一个模块声明会自动在 AppModule 里引入 |
+| controller  |  co   |                        生成一个控制器声明 |
+| service     |   s   |                          生成一个服务声明 |
+| middleware  |  mi   |                        生成一个中间件声明 |
+| interface   |  itf  |                              生成一个接口 |
+| interceptor |  itc  |                        生成一个拦截器声明 |
+| guard       |  gu   |                          生成一个守卫声明 |
+| gateway     |  ga   |                          生成一个网关声明 |
+| filter      |   f   |                        生成一个过滤器声明 |
+| pipe        |  pi   |                          生成一个管道声明 |
+| class       |  cl   |                            生成一个新的类 |
+| resource    |  res  |                      快速生成一个CRUD模块 |
 
 可选参数一般就一个、即不生成测试测试文件(默认是强制生成的)。其它常见参数如下:
 1. --spec 默认值即生成测试文件
@@ -587,13 +591,13 @@ export class PersonController {
 
 ### 4. 控制器中常用的装饰器速查
 
-| 装饰器名称   | 描述     |
-| :---        |         ---: |
-| Controller()      | 声明为控制器类   |
-| Get, Post, Put, Patch, Delete, All  | 常见的http请求方法      |
-| HttpCode, Headers, Redirect, Request, Response  | http请求头对象设置、响应头对象设置相关     |
-| Body, Param, Query  | 获取前端数据方式     |
-|.....   | 其它            |
+| 装饰器名称                                     |                                   描述 |
+| :--------------------------------------------- | -------------------------------------: |
+| Controller()                                   |                         声明为控制器类 |
+| Get, Post, Put, Patch, Delete, All             |                     常见的http请求方法 |
+| HttpCode, Headers, Redirect, Request, Response | http请求头对象设置、响应头对象设置相关 |
+| Body, Param, Query                             |                       获取前端数据方式 |
+| .....                                          |                                   其它 |
 
 
 
@@ -1582,19 +1586,19 @@ async findOne(@User() user: UserEntity) {
 ### 1. 依赖注入原理
 通过对提供者的学习、我们知道在Nest中构造函数基础的依赖注入(DI)作用是将提供者实例（通常是服务提供者）注入到需要使用的类中。
 
-而提供者是怎么实例化的、这个是通过控制反转(IOC)技术实现的。原理是将依赖项的实例化委托给IoC容器(在 Nest 里就是NestJS运行时系统)、而不是手动 new 实例化。
+而提供者是怎么实例化的、这个是通过控制反转(IOC)技术实现的。原理是将依赖项的实例化委托给IoC容器(在 Nest 里就是NestJS运行时系统)、而不是在代码里手动 new 实例化。
 
-在 Nest 中将提供者注入到我们的控制器类中是通过类的构造函数实现的、然后将提供者注册到Nest的IoC容器中(也就是模块中)。这个过程有三个关键步骤
+在 Nest 中将提供者注入到我们的控制器类中是通过类的构造函数实现的(也可以通过属性注入)、然后将提供者注册到Nest的IoC容器中(也就是模块中)。这个过程有三个关键步骤
 
-1. 使用 @Injectable() 装饰器声明的类说明它是可注入、可以由Nest IoC容器管理。
+1. 使用 @Injectable() 装饰器声明的类说明它是可注入、由此可以由Nest IoC容器管理。
 2. 使用构造函数注入声明对提供者令牌的依赖、constructor(private catsService: CatsService)相当于声明了一个  CatsService 令牌标识,键值对同名。或者使用属性的方式声明依赖时一样(通过 @Inject()装饰器声明)。前者是构造器注入，后者是属性注入，两种都可以。
-3. 在模块类中将 CatsService 令牌与真正的 CatsService 类关联起来(即注册)、类似于es对象的键值对名一致所以缩写了。
+3. 在模块类(算是Nest IoC 容器中注册提供程序)中将 CatsService 令牌与真正的 CatsService 类关联起来(即注册)、类似于es对象的键值对名一致所以缩写了。
    
-如此、当Nest IoC容器实例化 CatsController 时，它首先会查找任何依赖项。当它找到CatsService依赖项时，它会在CatsService令牌上进行查找，该令牌会根据上面的注册步骤返回CatsService类。然后Nest将创建一个CatsService的实例，将其缓存并返回，或者如果已经缓存了一个实例，则返回现有的实例。nest 在背后自动做了对象创建和依赖注入的工作。
+如此、当Nest IoC容器实例化 CatsController 时，它首先会查找任何依赖项。当它找到CatsService依赖项时，它会在CatsService令牌上进行查找，该令牌会根据上面的注册步骤返回CatsService类。然后Nest将创建一个CatsService的实例，将其缓存并返回，或者如果已经缓存了一个实例，则返回现有的实例。Nest 在背后自动做了对象创建和依赖注入的工作。
 
 通过注册的完整写法、我们就可以理解注册过程。在这里，我们明确地将CatsService令牌与CatsService类关联起来。本质就是IoC 机制是在 class 上标识哪些是可以被注入的，它的依赖是什么，然后从入口开始扫描这些对象和依赖，自动创建和组装对象。
 
-```JavaScript
+```js
 
 import { Controller, Get } from '@nestjs/common';
 import { CatsService } from './cats.service';
@@ -1637,8 +1641,9 @@ export class AppModule {}
 ```
 
 ### 2. 自定义提供者
-当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种定义自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类名令牌名定义提供者时需要使用 @Inject() 装饰器引入。
+当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类名令牌名定义提供者时需要使用 @Inject() 装饰器引入(即通过属性注入的方式)。
 
+**提供者种类**
 ```js
 {
   provide: '令牌名', //除了是类名、还可以使用字符串、JavaScript的symbols或TypeScript的枚举作为标识符值的符号类型。 
@@ -1650,6 +1655,7 @@ export class AppModule {}
 
 }
 ```
+
 1. 标准提供者(类提供者的简写形式)
 providers属性接受一个提供者数组、且是通过一个类名列表提供了这些提供者。本质是类名直接作为token令牌(称为类提供者)而已、如果是一个类名、那么Nest会自动实例化它。如果是一个字符串或者符号作为依赖注入的令牌token(统称为非类提供者)，这时候就需要使用@Inject()装饰器这个装饰器只接受一个参数——令牌。
 ```js
@@ -1665,6 +1671,7 @@ providers: [
   },
 ];
 ```
+
 2. 类提供者(useClass)、 也就是我们默认使用的标准形式、直接使用类名称作为令牌，这时nest会自动实例化它。令牌对应的类还可以根据环境变量动态确认。
 ```js
 import { Module } from '@nestjs/common';
@@ -1699,7 +1706,8 @@ const configServiceProvider = {
 })
 export class AppModule {}
 ```
-3. 值提供者 (useValue)、注入常量值、将外部库放入 Nest 容器或使用模拟对象替换实际实现非常有用。此时不同于基于构造函数的依赖注入、需要使用@Inject()装饰器注入自定义的提供者、这个装饰器接受一个参数 - 标识符。
+
+3. 值提供者 (useValue)、注入常量值、将外部库放入 Nest 容器或使用模拟对象替换实际实现非常有用。此时不同于基于构造函数的依赖注入、需要使用@Inject()装饰器注入自定义的提供者、这个装饰器接受一个参数 - 令牌标识符。
 ```js
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
@@ -1749,7 +1757,6 @@ export class UserController {
 ```
 
 4. 工厂提供者(useFactory)、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。
-
 ```js
 // 提供者通常提供服务，但它们不仅限于此用途。提供者可以提供任何值。
 const configFactory = {
@@ -1786,7 +1793,7 @@ export class AppModule {}
 ```
 
 5. 别名提供者(useExisting)、允许为现有的提供者创建别名、这样可以创建两种访问同一提供者的方式。
-```JavaScript
+```js
 
 @Injectable()
 class LoggerService {
@@ -1808,7 +1815,7 @@ export class AppModule {}
 
 **导出提供者** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。这样就可以在其它模块中注入导入的提供者。很多都需要时可以定义为全局模块、使用 @Global() 装饰器。不过尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
 
-```JavaScript
+```js
 // 只在当前模块作用域
 export const connectionFactory = {
   provide: 'CONNECTION',
@@ -1990,11 +1997,13 @@ export class ConfigService {
 ## 4.3 执行上下文(Execution Context)
 Nest提供了几个实用的类，帮助您轻松编写跨多个应用程序上下文（例如基于Nest HTTP服务器的、微服务和WebSockets应用程序上下文）运行的应用程序。不同类型的应用程序上下文它能拿到的参数是不同的，比如 http 服务可以拿到 request、response 对象，而 ws 服务就没有，如何让 Guard、Interceptor、Exception Filter 跨多种上下文复用是Nest需要考虑的。
 
-在Nest中提供了ArgumentHost 和 ExecutionContext 两个类解决、是从 '@nestjs/common' 包中导出。
+在Nest中提供了 ArgumentHost 和 ExecutionContext 两个类解决、它们是从 '@nestjs/common' 包中导出。
+过滤器实现的方法中用的就是 ArgumentHost、守卫和拦截器用的是ExecutionContext。
 
-### 1. ArgumentsHost 类
+### 1. ArgumentsHost(当前应用上下文)类
 ArgumentsHost类提供了一些方法，用于检索传递给处理程序的参数。它允许选择适当的上下文（例如HTTP、RPC（微服务）或WebSockets）来从中检索参数、可以使用ArgumentsHost的 getType()方法来实现。(这个类可以叫当前应用上下文)也就是用于切换 http、ws、rpc 等上下文类型的，可以根据上下文类型取到对应的 argument。
-```JavaScript
+在守卫、过滤器、拦截器中都会用到
+```js
 if (host.getType() === 'http') {
   // do something that is only important in the context of regular HTTP requests (REST)
 } else if (host.getType() === 'rpc') {
@@ -2021,14 +2030,17 @@ host.switchToWs(): WsArgumentsHost;
 
 在希望访问它的地方，Nest框架会提供 ArgumentsHost 的实例，通常命名为一个 host 参数进行引用。我们现阶段主要是对于HTTP服务器应用程序、此时host对象封装了Express的[request，response，next]数组，其中request是请求对象，response是响应对象，next是控制应用程序的请求-响应周期的函数。可以通过以下方法获取
 
-```JavaScript
+```js
+import {Request,Response} from 'express';
 const ctx = host.switchToHttp();// 切换到HTTP请求上下文
 const request = ctx.getRequest<Request>();//获取请求上下文中的 request 对象
 const response = ctx.getResponse<Response>();//获取请求上下文中的 response 对象
+// 也可以解构出来使用
+const [req, res, next] = host.getArgs();
 
 ```
 
-### 2. ExecutionContext 类
+### 2. ExecutionContext(执行上下文)类
 ExecutionContext 扩展了 ArgumentsHost(也就是继承自ArgumentsHost、是它的子类)，提供有关当前执行过程的更多详细信息。
 与 ArgumentsHost 一样，Nest 在你可能需要的地方提供了 ExecutionContext 的实例，通常作为一个 context 参数进行引用。例如 guard 的 canActivate() 方法和 interceptor 的 intercept() 方法。(也可以叫执行上下文)。
 
@@ -2042,7 +2054,6 @@ context.getClass()
 
 // 例如，在 HTTP 上下文中，如果当前处理的请求是绑定到 CatsController 上的 create() 方法的 POST 请求，getHandler() 将返回对 create() 方法的引用，而 getClass() 将返回 CatsController 类型（而不是实例）。
 
-
 const methodKey = context.getHandler().name; // "create"
 const className = context.getClass().name; // "CatsController"
 
@@ -2053,7 +2064,7 @@ Metadata 元数据存在类或者对象上，如果给类或者类的静态属�
 
 Reflect.defineMetadata 和 Reflect.getMetadata 分别用于设置和获取某个类的元数据，如果最后传入了属性名，还可以单独为某个属性设置元数据。
 
-Nest 原理通过装饰器给 class 或者对象添加 metadata，并且开启 ts 的 emitDecoratorMetadata 来自动添加类型相关的 metadata，然后运行的时候通过这些元数据来实现依赖的扫描，对象的创建等等功能。而 metadata 的 api 还在草案阶段，需要使用 reflect-metadata 这个 polyfill 包才行。所以 Nest 的装饰器都是依赖 reflect-metadata 实现的，而且还提供了一个 @SetMetadata 的装饰器让我们可以给 class、method 添加一些 metadata。
+Nest 原理通过装饰器给 class 或者对象添加 metadata，并且开启 ts 的 emitDecoratorMetadata 来自动添加类型相关的 metadata，然后运行的时候通过这些元数据来实现依赖的扫描，对象的创建等等功能。而 metadata 的 api 还在草案阶段，需要使用 reflect-metadata 这个 polyfill 包才行。所以 Nest 的装饰器都是依赖 reflect-metadata 实现的，而且还提供了一个 @SetMetadata() 的装饰器让我们可以给 class、method 添加一些 metadata。这也是自定义装饰器的一种实现方式。
 ```js
 // 原始api
 Reflect.defineMetadata(metadataKey, metadataValue, target);
@@ -2101,6 +2112,22 @@ let obj = new Example("a", 1);
 
 let paramTypes = Reflect.getMetadata("design:paramtypes", obj, "add"); 
 // [Number, Number]
+
+
+import { SetMetadata } from '@nestjs/common';
+export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+@Post()
+@Roles('admin')
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+
+// 要访问role(s)路径 (自定义元数据),要使用Reflector辅助类，它由框架提供，开箱即用，从@nestjs/core包导入。Reflector可以通过常规方式注入到类:
+@Injectable()
+export class RolesGuard {
+  constructor(private reflector: Reflector) {}
+  const roles = this.reflector.get<string[]>('roles', context.getHandler());
+}
 
 ```
 
@@ -2661,14 +2688,14 @@ seconds (optional)
 ```
 @Cron()装饰器支持所有标准的cron模式、常见如下:
 
-| 名称        |  含义        | 
-| ----------- | ----------- |
-| * * * * * *      | 每秒钟执行一次          | 
-| 45 * * * * *  | 每分钟的第45秒执行一次          | 
-| 0 10 * * * *     | 每小时的第10分钟执行一次           | 
-| 0 */30 9-17 * * *  | 在上午9点到下午5点之间，每30分钟执行一次          | 
-| 0 30 11 * * 1-5   | 周一到周五上午11点30分执行一次         | 
-| 提供一个JavaScript的Date对象 | 在指定的日期执行一次。         | 
+| 名称                         | 含义                                     |
+| ---------------------------- | ---------------------------------------- |
+| * * * * * *                  | 每秒钟执行一次                           |
+| 45 * * * * *                 | 每分钟的第45秒执行一次                   |
+| 0 10 * * * *                 | 每小时的第10分钟执行一次                 |
+| 0 */30 9-17 * * *            | 在上午9点到下午5点之间，每30分钟执行一次 |
+| 0 30 11 * * 1-5              | 周一到周五上午11点30分执行一次           |
+| 提供一个JavaScript的Date对象 | 在指定的日期执行一次。                   |
 
 3. 定义一个间隔任务、指定时间间隔内运行重复运行。使用@Interval()装饰器、将时间间隔值作为毫秒数传递给装饰器。本质是使用了JavaScript的setInterval()函数。你也可以使用cron任务来安排重复的任务。 
 ```JavaScript
