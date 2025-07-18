@@ -18,20 +18,21 @@ Nest 基础：Nest 各种功能的使用，包括 IOC、AOP、全局模块、动
 2025-7-7 集成eslint+commitlint、整理笔记。
 
 **目录说明**
-1. [public](公共静态资源文件)
-2. [nest-single](nest做server服务)
-3. [nest-microservice](nest做微服务)
+1. public、公共静态资源文件
+2. nest-single、nest做server服务
+3. nest-microservice、nest做微服务
 
 # 二、NestJS 概述
 
 ## 2.1 Nest 介绍及安装
 
 Nest (NestJS) 是一个用于构建高效、可扩展的 Node.js  服务器端应用程序的开发框架。它利用 JavaScript 的渐进增强的能力，使用并完全支持  TypeScript （仍然允许开发者使用纯 JavaScript 进行开发），并结合了 OOP （面向对象编程）、FP （函数式编程）和 FRP （函数响应式编程）。
+
 在底层，Nest 构建在强大的 HTTP 服务器框架上，例如  Express （默认），并且还可以通过配置从而使用 Fastify。它是一个功能比较全面的 Nodejs 后端框架。其实和 Express 用法类似、不过是在这些框架之上再进行了一层抽象，使用了控制反转依赖注入使用上更加方便，功能也更加强大而已、也是直接使用它向开发者暴露的API即可。本质上还是监听 HTTP 请求，然后处理并返回结果给前端。
 
-Nest它就是提供了一个开箱即用的应用程序架构，允许开发者和团队创建高度可测试、可扩展、松耦合且易于维护的应用程序。
+Nest就是提供了一个开箱即用的应用程序架构，允许开发者和团队创建高度可测试、可扩展、松耦合且易于维护的应用程序。
 
-学习 NestJS 直接使用官方脚手架 Nest CLI 即可、脚手架就是一个命令行界面工具，可以帮助您初始化、开发和维护您的Nest应用程序。
+学习 NestJS 直接使用官方脚手架 Nest CLI 即可、脚手架就是一个命令行界面工具，可以帮助您初始化、开发和维护您的Nest应用程序。注意：Node.js：版本 ≥20
 安装脚手架:
 `$ npm install -g @nestjs/cli` // 全局安装 Nest 脚手架
 `$ npm update -g @nestjs/cli `// 全局升级脚手架版本
@@ -52,16 +53,25 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
     nest info 打印项目信息、包括系统信息、node、npm、nest 包的依赖版本
 ```
 
-脚手架创建项目：
-`nest new project-name` // 创建项目
+查看可用的 nest 命令
+`$ nest --help`
+脚手架创建一个新的（标准模式）Nest 项目。会提示选择包管理器。
+```js
+// 创建项目
+$ nest new <name> [options]
+$ nest n <name> [options]
+nest new project-name 可选项
+
+```
+
 项目运行
 `npm run start:dev` 其它启动命令查看包管理文件即可。此命令将使用 HTTP 服务器启动应用程序，以侦听 src/main.ts 文件中所定义的端口。
 
-使用脚手架生成的 nest 项目时会生成一个样板应用程序结构(称为标准模式)、以鼓励开发人员将每个模块保存在其对应的专用目录中(也就是更加作用自定义模块文件名)。在我们之前学习原生node、express、koa时都是自己抽离划分的模块、而一个基本的 nest 模块也是按照 mvc 模式拆分的分成三个组成：模块 module、控制器 controller(NestJS 的路由由控制器负责)、服务 service, 同时它们都有专门的脚手架命令用来快速生成。
+使用脚手架生成的 nest 项目时会生成一个样板应用程序结构(称为标准模式)、以鼓励开发人员将每个模块保存在其对应的专用目录中(也就是自定义模块文件名)。在我们之前学习原生node、express、koa时都是自己抽离划分的模块、而一个基本的 nest 模块也是按照 mvc 模式拆分的分成三个组成：模块 module、控制器 controller(NestJS 的路由由控制器负责)、服务 service, 同时它们都有专门的脚手架命令用来快速生成。
 
 初始目录结构如下
-```
-项目名(文件名)
+```js
+--项目名(文件名)
 +-- dist[目录]                      // 编译后的目录，用于预览项目
 +-- node_modules[目录]              // 项目使用的包目录，开发使用和上线使用的都在里边
 +-- src[目录]                       // 源文件/代码，程序员主要编写的目录
@@ -69,7 +79,7 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
 |  +-- app.controller.ts           // 控制器文件，可以简单理解为路由文件(一般项目里不用或者写公共的路由。)
 |  +-- app.module.ts               // 模块文件，在NestJS世界里主要操作的就是模块
 |  +-- app.service.ts              // 服务文件，提供的服务文件，业务逻辑编写在这里
-|  +-- main.ts                 // 项目的入口文件，里边包括项目的主模块和监听端口号（全家的配置：拦截器等）
+|  +-- main.ts              // 项目的入口文件，里边包括项目的主模块和监听端口号（全家的配置：拦截器等）
 +-- test[目录]                      // 测试文件目录，对项目测试时使用的目录，比如单元测试...
 |  +-- app.e2e-spec.ts             // e2e测试，端对端测试文件，测试流程和功能使用
 |  +-- jest-e2e.json               // jest测试文件，jset是一款简介的JavaScript测试框架
@@ -86,14 +96,22 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
 ```
 
 ## 2.2 Nest CLI 常用命令
+Nest CLI 是一个命令行界面工具，可帮助您初始化、开发和维护 Nest 应用程序。
+安装 @nestjs/cli包，也就是 nestjs 脚手架后，脚手架提供了很多命令。除了之前用来创建项目的命令还有可以生成一些别的模块代码的命令，比如 controller、service、module 等这些非常常用的。很多选项也都可以在 nest-cli.json 里配置，比如 generateOptions、compilerOptions 等。记不住也问题不大查就完事儿了。
 
-安装 @nestjs/cli包，也就是 nestjs 脚手架后，脚手架提供了很多命令。除了之前用来创建项目的命令还有可以生成一些别的模块代码的命令，比如 controller、service、module 等这些非常常用的。记不住也问题不大查就完事儿了。
+常见:
+1. nest new 快速创建项目
+2. nest generate 快速生成各种代码
+3. nest build 使用 tsc 或者 webpack 构建代码
+4. nest start 启动开发服务，支持 watch 和调试
+5. nest info 打印 node、npm、nest 包的依赖版本
 
-`$ nest --help` 查看可用的nest命令
 
-`$ nest new --help `  查看 new 命令相关的帮助信息
+`$ nest --help/-h` 查看可用的nest命令
 
-`$ nest generate -h `  查看 generate 命令相关的帮助信息
+`$ nest new --help `  获取单个命令的帮助-查看 new 命令相关的帮助信息
+
+`$ nest generate -h `  获取单个命令的帮助-查看 generate 命令相关的帮助信息
 
 **所有的nest命令都遵循相同的格式**
  - nest commandOrAlias requiredArg [optionalArg] [options]
@@ -101,20 +119,24 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
  - $ nest new my-nest-project --dry-run
  - $ nest n my-nest-project -d 是上面命令的等价简写形式
 
+注意:大多数命令及部分选项都有别名。
+
 在这里
- - new 是 _commandOrAlias_。
+ - new 是 _commandOrAlias_ 即命令名。
  - new 命令有一个别名 n 、大多数命令和一些选项都有别名。
- - my-nest-project 是 _requiredArg_。如果在命令行上没有提供 _requiredArg_，nest 将提示您提供它。另外，
+ - my-nest-project 是 _requiredArg_ 即必要参数。如果在命令行上没有提供 _requiredArg_，nest 将提示您提供它。另外，
  - --dry-run 可选参数也有一个等效的简写形式 -d。
  - --skip-git 跳过 git 的初始化
  - --skip-install 跳过 npm install
+ - --package-manager 是指定包管理器的，简写 -p 包管理器命(npm、yarn、pnpm)
+ - --language 可以指定 typescript 和 javascript，一般我们都选择 ts，用默认的就好。
 
 比较常用的生成(创建)命令 generate 如下：
 声明如下：可以通过 `nest g -h `命令查看具体语法。
 //创建一个 nest 元素语法，
 `$ nest generate <schematic> <name> [options]`
 `$ nest g <schematic> <name> [options]`
-`$ nest g 文件类型 生成的组件的名称 可选项`
+`$ nest g 文件类型 生成的组件的名称(可以带路径) 可选项`
 
 **常见的文件类型有**
 | 名称        | 别名  |                                      描述 |
@@ -131,23 +153,32 @@ nest 命令可以生成项目结构和各种代码、编译代码、监听文件
 | pipe        |  pi   |                          生成一个管道声明 |
 | class       |  cl   |                            生成一个新的类 |
 | resource    |  res  |                      快速生成一个CRUD模块 |
+| decorator   |   d   |            快速生成一个生成自定义装饰器。 |
 
 可选参数一般就一个、即不生成测试测试文件(默认是强制生成的)。其它常见参数如下:
 1. --spec 默认值即生成测试文件
 2. --no-spec 不生成测试文件
-3. --flat 不生成对应目录
+3. --flat 不生成对应目录命的文件夹
 4. --no-flat 生成对应目录
 5. --skip-import 是指定不在 AppModule 里引入、如创建控制器时不自动在入口文件里面引入。
 
 构建命令:`$ nest build `、会在 dist 目录下生成编译后的代码。`$ nest build -h`可以常看帮助信息。它也有一些常见参数如下:
 1. --watch/-w 监听文件变化，自动编译打包默认只监听js、ts文件。
 2. --webpack 指定为webpack 编译、会打包。
-3. --tsc 默认是使用 tsc 编译、它不会打包。
+3. --tsc 默认是使用 tsc 编译、它不会打包。node 模块本来就不需要打包，但是打包成单模块能提升加载的性能。
 4. --config/-c 指定配置文件。
 
 nest cli 的配置文件：nest-cli.json、上述配置都可以在这个配置文件里配置。
 
-**示例** 
+项目启动命令`$ nest start`、会运行项目
+1. --watch 是最常用的选项了，也就是改动文件之后自动重新 build
+2. --debug 是启动调试的 websocket 服务，用来 debug。
+3. --exec 可以指定用什么来跑，默认是用 node 跑，你也可以切换别的 runtime。
+
+
+信息查看命令`$ nest info`、查看项目信息的，包括系统信息、 node、npm 和依赖版本。
+
+**综合示例** 
 ```js
 1:创建模块
 //创建一个 posts 帖子模块
@@ -224,7 +255,7 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 
 ## 2.4 Nest 实战目录
 
-使用 Nest CLI 创建的项目会拥有一个初始的项目结构，以鼓励开发人员将每个模块保存在其专用目录中(也就是更加作用自定义模块文件名)。所以根据个人喜好来就行，这只是一种约定。
+使用 Nest CLI 创建的项目会拥有一个初始的项目结构，以鼓励开发人员将每个模块保存在其专用目录中(也就是自定义模块文件名)。所以根据个人喜好来就行，这只是一种约定。
 
 项目名(文件名)
 ├──dist 打包的目录
@@ -233,7 +264,16 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 ├──src 源码目录
 ├───── 自定义目录
 ├───── common - 公共的东西如: 守卫、过滤器、中间件、拦截器等
+├──────── filter - 公共过滤器
+├──────── guard - 公共守卫
+├──────── interceptor - 公共拦截器
+├──────── pipe - 公共管道
+├──────── dto - 公共 dto 类
+├──────── ..... 其它
+├───── config - 全局配置文件
 ├───── modules - 各个模块存放位置
+├──────── user - 用户模块
+├──────── ..... 其它模块
 ├───── ..... 其它
 ├───── app.controller.spec.ts 针对控制器的单元测试
 ├───── app.controller.ts 一个具有单一路由的基本控制器(Controller)
@@ -281,6 +321,15 @@ Nest 的功能都是大多通过装饰器来使用的
 
 # 三、NestJS 核心基础知识
 
+module：模块，包含 controller、service 等，比如用户模块、书籍模块
+controller：控制器，用于处理路由，解析请求参数
+handler：控制器里处理路由的方法
+service：实现业务逻辑的地方，比如操作数据库等
+dto：data transfer object，数据传输对象，用于封装请求体里数据的对象
+entity：对应数据库表的实体
+ioc：Inverse of Controller，反转控制或者叫依赖注入，只要声明依赖，运行时 Nest 会自动注入依赖的实例
+aop：Aspect Oriented Programming 面向切面编程，在多个请求响应流程中可以复用的逻辑，比如日志记录等，具体包含 middleware、interceotor、guard、exception filter、pipe
+
 ## 3.1 控制器 controller
 
 ### 1. 概述
@@ -288,19 +337,22 @@ Nest 的功能都是大多通过装饰器来使用的
 
 只不过在 NestJS 里是使用类和装饰器，而控制器就是使用 @Controller 装饰器装饰的一个类。装饰器的作用是将类与所需的元数据关联起来，并使Nest能够创建路由映射(将请求与相应的控制器关联起来)、即表示这个类是可以被注入的、Nest就会把它放入到 IoC 容器中。
 
-在脚手架一节我们知道要使用CLI创建控制器，只需执行`$ nest g controller/co [name] `命令即可。
+在脚手架一节我们知道要使用CLI创建控制器，只需执行`$ nest generate/g controller/co [name] `命令即可。
 
-和express里定义了路由要在入口文件引入才能起作用一样，在定义了控制器之后Nest仍然是不知道控制器存在的，因此不会创建此类的实例。在Nest里控制器总是属于某一个模块类，所以要把它导入到 @Module() 装饰器对应的类的 controllers 选项中,这样 Nest 就可以轻松反射（reflect）出哪些控制器（controller）必须被安装挂载(new 初始化),也就可以直接使用它,控制器本身只做路由的控制跳转这样有利于业务的抽离。
+和express里定义了路由要在入口文件引入才能起作用一样，在定义了控制器之后Nest仍然是不知道控制器存在的，因此不会创建此类的实例。在Nest里控制器必须总是属于某一个模块类，所以要把它导入到 @Module() 装饰器对应的类的 controllers 选项中,这样 Nest 就可以轻松反射（reflect）出哪些控制器（controller）必须被安装挂载(也就是new 初始化),也就可以直接使用它,控制器本身只做路由的控制跳转、这样有利于业务的抽离。
 
 ### 2. 使用
 简单理解就是之前在express、koa里的路由相关的东西都使用了装饰器代替。
 这些装饰器它们的作用和 express 里的 req、res 对象类似、不过是 nest 帮忙封装成了装饰器，可以直接使用罢了。
 常见的如下：它们都是从'@nestjs/common' 模块导出的。主要也是三种: 类装饰器、方法装饰器、属性装饰器。
-`import { Controller, Get, Post, Put, Patch, Delete, HttpCode, Headers, Redirect, Request, Response, Body, Param, Query,} from '@nestjs/common';`
+```js
+import { Controller, Get, Post, Put, Patch, Delete, HttpCode, Headers, Redirect, Request, Response, Body, Param, Query,} from '@nestjs/common';
+
+```
 
 1. 类装饰器 @Controller() 装饰器，用来装饰一个控制器类。
 可以传入一个字符串值，作为路由路径前缀。
-也可以传入一个对象，常用有三个配置属性
+也可以传入一个配置对象，常用有三个配置属性：path, host, version。
 ```js
 @Controller('路由前缀')
 @Controller({
@@ -314,7 +366,7 @@ export class CatsController {}
 
 2. 方法装饰器，nest 提供了所有标准 HTTP 方法对应的请求方法装饰器，用来装饰具体的请求方法(类里定义的方法)而express、koa里直接使用路由方法。同样的这些装饰器也可以传入一个路径参数，它会拼接在 @Controller() 装饰器参数后面。例如：路径前缀 customers 与装饰器 @Get('profile') 组合会为 GET /customers/profile 请求生成路由映射。当方法和路径都匹配时就会执行装饰的方法。
 
-注意: 这个路径参数可以是字符串、或者模式匹配的路由。
+**注意:** 这个路径参数可以是字符串、或者模式匹配的路由。
 
 ```js
 // express、koa
@@ -327,12 +379,14 @@ export class CatsController {
    @Put()
    @Patch()
    @Delete()
+   @Options()
+   @Head()
    @All()
    callback(){
      //.....
    }
   //  其它常见的方法装饰器
-   @HttpCode() 用来指定返回的 http 状态码
+   @HttpCode(204) 用来指定返回的 http 状态码、响应的默认状态码通常为 200，但 POST 请求除外，其默认状态码为 201。
    @Header() 指定自定义的响应头
    @Headers() 装饰器获取请求头信息
    @Redirect(url,statusCode) 将响应重定向到特定的URL、接受两个参数url和statusCode，两者都是可选的。如果省略statusCode，其默认值为302（Found）。
@@ -340,6 +394,7 @@ export class CatsController {
    @Post()
    @HttpCode(204)
    @Header('Cache-Control', 'none')
+   @Header('Cache-Control', 'no-store')
    create() {
      return 'This action adds a new cat';
    }
@@ -357,11 +412,46 @@ export class CatsController {
 
 ```
 
-3. 属性装饰器，用来装饰方法里的形式参数。在原生node、express、koa中，一个请求都会设计一个请求对象 request 和一个响应对象 response，他们在回调函数中作为参数的顺序是固定的，但在nestjs中，参数的顺序是随意的，所以需要使用属性装饰器来装饰参数，让nestjs知道参数的顺序。
+3. 属性装饰器，用来装饰方法里的形式参数。在原生node、express、koa中，每一个请求都会有一个请求对象 request 和一个响应对象 response，他们在回调函数中作为参数的顺序是固定的，但在nestjs中，参数的顺序是随意的，所以需要使用属性装饰器来装饰参数，让nestjs知道参数的顺序。
+   
+**请求响应对象**
+Nest 提供了对底层平台（默认为 Express）请求对象的访问。
+其中@Request(), @Req() 装饰器都会获取到请求 request 对象，跟 express 里的 req 对象一样。包含查询字符串、参数、HTTP 标头和正文等属性但是一般呢都不会手动访问这些属性而是直接使用对应装饰器。
 
-其中@Request(), @Req() 装饰器都会获取到请求 request 对象，跟 express 里的 req 对象一样
-其中@Response(), @Res() 装饰器都会获取到请求 response 对象，跟 express 里的 req 对象一样
+其中@Response(), @Res() 装饰器都会获取到请求 response 对象，跟 express 里的 req 对象一样。注意：在方法处理程序中注入 @Res() 或 @Response() 时，该处理程序将进入库特定模式 ，此时需手动管理响应。必须通过调用 response 对象方法（如 res.json(...) 或 res.send(...)）返回响应，否则 HTTP 服务器会挂起。
 
+
+```js
+import { Controller, Get, Req } from '@nestjs/common';
+
+@Controller('cats')
+export class CatsController {
+  @Get()
+  findAll(@Req() request: Request): string {
+    return 'This action returns all cats';
+  }
+  @Post()
+  create(@Res() res: Response) {
+    // 必须这样返回不然服务器会挂起。
+    res.status(HttpStatus.CREATED).send();
+  }
+  @Get()
+  findAll(@Res() res: Response) {
+    // 必须这样返回不然服务器会挂起。
+     res.status(HttpStatus.OK).json([]);
+  }
+
+  // 既可以操作原生响应对象（例如根据特定条件设置 cookie 或 headers），同时仍允许框架处理其余部分。
+  @Get()
+   findAll(@Res({ passthrough: true }) res: Response) {
+     res.status(HttpStatus.OK);
+     return [];
+   }
+}
+// express 的类型定义需要安装 @types/express 包。
+```
+
+**获取请求参数请求体**
 获取 get 请求参数和动态路由参数和 express 里一样都是在请求对象里。
 req.query 和 req.params
 
@@ -377,6 +467,46 @@ req.body === @Body()直接获取请求体 body 对象
 
 基本上和之前在express、koa中一样的，不过是变成了装饰器使用罢了。
 
+```js
+// 路由参数
+// GET /cats/1 获取 ID 为 1 的猫
+@Get(':id')
+findOne(@Param() params: any): string {
+  console.log(params.id);
+  return `This action returns a #${params.id} cat`;
+}
+// 传递特定的参数标记
+@Get(':id')
+findOne(@Param('id') id: string): string {
+  return `This action returns a #${id} cat`;
+}
+
+// 查询参数
+// GET /cats?age=2&breed=Persian
+@Get()
+async findAll(@Query()query: any) {
+  return `This action returns all cats filtered by age: ${query.age} and breed: ${query.breed}`;
+}
+@Get()
+async findAll(@Query('age') age: number, @Query('breed') breed: string) {
+  return `This action returns all cats filtered by age: ${age} and breed: ${breed}`;
+}
+
+// 请求体
+export class CreateCatDto {
+  name: string;
+  age: number;
+  breed: string;
+}
+@Post()
+async create(@Body() createCatDto: CreateCatDto) {
+  return 'This action adds a new cat';
+}
+
+```
+
+
+**完整示例**
 ```js
 
 import { Controller, Get, Req, Param, Query, Body } from '@nestjs/common';
@@ -407,6 +537,11 @@ export class CatsController {
      console.log(req.headers);
        return 'This action adds a new cat';
    }
+
+  @Put(':id')
+  update(@Param('id') id: string, @Body() updateCatDto: UpdateCatDto) {
+    return `This action updates a #${id} cat`;
+  }
 
    //  使用装饰器获取请求体
    @Post('postQuery/:id?')
@@ -440,6 +575,11 @@ export class CatsController {
        return { url: 'http://nestjs.inode.club/v5/' };
      }
    }
+
+    @Delete(':id')
+    remove(@Param('id') id: string) {
+      return `This action removes a #${id} cat`;
+    }
 }
 ```
 
@@ -449,12 +589,16 @@ export class CatsController {
 1. url param 路由参数('/param/:id')、把参数写在 url 中的形式。服务端框架或者单页应用的路由都支持从 url 中取出参数
 ```js
 // 前端路由配置 path: '/person/:id'
-// http://guang.zxg/person/1111
-// 在nest中通过 @Req() req: Request ==> req.params.id ==> 1111
-// 或者直接通过 @Param() params 装饰器获取路由参数 params.id => 1111
+// http://xxx.com/person/1111
+// 在nest中通过 @Req() req: Request ==> req.params.id ==> 1111 一般不用这种方法。
+// 直接通过 @Param() params 装饰器获取路由参数 params.id => 1111
 // 也可以传入参数名直接获取对应的值
 @Controller('api/person')
 export class PersonController {
+  @Get(':id')
+  urlParam(@Param() params: string) {
+    return `received: id=${params.id}`;
+  }
   @Get(':id')
   urlParam(@Param('id') id: string) {
     return `received: id=${id}`;
@@ -462,15 +606,20 @@ export class PersonController {
 }
 
 ```
-2. query 查询字符串、把参数写在 url 中 ？后面的用 & 分隔的字符串传递数据,其中非英文的字符和一些特殊字符要经过编码，可以使用 encodeURIComponent 的 api 来编码。
+
+2. query 查询字符串、把参数写在 url 中 ?后面的用 & 分隔的字符串传递数据,其中非英文的字符和一些特殊字符要经过编码，可以使用 encodeURIComponent 的 api 来编码。
 ```js
 // query = {name:'王',age:20}
-// http://guang.zxg/person?name=王&age=20
-// 在nest中通过 @Req() req: Request ==> req.query.name ==> '王'
-// 或者直接使用 @Query() 装饰器获取 query 查询对象 query ==> {name:'王',age:20}
+// http://xxx.com/person?name=王&age=20
+// 在nest中通过 @Req() req: Request ==> req.query.name ==> '王' 一般不使用
+// 直接使用 @Query() 装饰器获取 query 查询对象 query ==> {name:'王',age:20}
 // 也可以传入参数名直接获取对应的值
 @Controller('api/person')
 export class PersonController {
+  @Get('find')
+  query(@Query() query: any) {
+    return `received: name=${query.name},age=${query.age}`;
+  }
   @Get('find')
   query(@Query('name') name: string, @Query('age') age: number) {
     return `received: name=${name},age=${age}`;
@@ -478,6 +627,7 @@ export class PersonController {
 }
 
 ```
+
 3. form-urlencoded、form 表单提交数据、指定 content-type 是 application/x-www-form-urlencoded需要对内容做 url encode。内容和query一样也是键值对之间使用&分隔、键和值使用=连接、不过是放在请求体里。不适合传输大数量的数据。普通的表单上传使用(也就是不包括文件上传)。
 ```js
 // 前端代码使用 post 方式请求，指定 content-type 为 application/x-www-form-urlencoded
@@ -506,6 +656,7 @@ export class PersonController {
 }
 
 ```
+
 4. form-data、指定 content-type 为 multipart/form-data、用 boundary 分隔符分割的内容。适合传输文件，而且可以传输多个文件。常见表单中的上传附件(图片、文件等)或二进制数据、也支持普通表单的。
 ```js
 // 前端使用 FormData 对象来封装传输的内容
@@ -557,7 +708,8 @@ export class PersonController {
 
 
 ```
-1. json、指定content-type 为 application/json、不适合传输文件。和表单数据的获取一样也是通过 @Body() 装饰器获取请求体 body 对象、只不过是传输类型不一样、Nest 内部会根据 content type 做区分，使用不同的解析方式。
+
+5. json、指定content-type 为 application/json、不适合传输文件。和表单数据的获取一样也是通过 @Body() 装饰器获取请求体 body 对象、只不过是传输类型不一样、Nest 内部会根据 content type 做区分，使用不同的解析方式。
 ```js
 // 前端代码使用 axios 发送 post 请求时默认传输 json格式的数据，所以不需要指定 content-type。
 <!DOCTYPE html>
@@ -591,13 +743,13 @@ export class PersonController {
 
 ### 4. 控制器中常用的装饰器速查
 
-| 装饰器名称                                     |                                   描述 |
-| :--------------------------------------------- | -------------------------------------: |
-| Controller()                                   |                         声明为控制器类 |
-| Get, Post, Put, Patch, Delete, All             |                     常见的http请求方法 |
-| HttpCode, Headers, Redirect, Request, Response | http请求头对象设置、响应头对象设置相关 |
-| Body, Param, Query                             |                       获取前端数据方式 |
-| .....                                          |                                   其它 |
+| 装饰器名称                                             |                                   描述 |
+| :----------------------------------------------------- | -------------------------------------: |
+| Controller()                                           |                         声明为控制器类 |
+| Get, Post, Put, Patch, Delete, Options,All             |                     常见的http请求方法 |
+| HttpCode, Header, Headers, Redirect, Request, Response | http请求头对象设置、响应头对象设置相关 |
+| Body, Param, Query                                     |                       获取前端数据方式 |
+| .....                                                  |                                   其它 |
 
 
 
@@ -678,7 +830,7 @@ export class CatsModule {}
 ## 3.3 模块 module
 
 ### 1. 概述
-模块是 nest 的精髓所在，是控制反转 IoC 容器实现所在。Module 是 NestJS 中一个大的一个内容，它是整个 module 功能模块的收口，功能和特性和 Angular 保持一致。
+模块是 nest 的精髓所在，是控制反转 IoC(Inverse of Control 反转控制) 容器实现所在，简单说就是你只需要声明依赖了啥就行，不需要手动去 new 依赖，Nest 的 IoC 容器会自动给你创建并注入依赖。Module 是 NestJS 中一个大的一个内容，它是整个 module 功能模块的收口，功能和特性和 Angular 保持一致。
 
 在 Nest 中模块就是一个 @Module() 装饰器装饰的类。 @Module() 装饰器提供了元数据(就是一个配置对象)，Nest 用它来组织应用程序的结构。一般来说各个模块最终会在根模块 AppModule汇总、然后在入口文件main.ts里引入执行。
 

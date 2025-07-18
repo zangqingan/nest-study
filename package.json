@@ -1,7 +1,7 @@
 {
   "name": "nest-study",
   "version": "1.0.0",
-  "description": "一个包含eslint、git提交规范的nest自学记录项目",
+  "description": "一个包含eslint、git提交规范的 NestJS学习记录(自学记录项目)",
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
