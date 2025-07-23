@@ -1369,23 +1369,24 @@ export class AppModule {
 ### 3 导航守卫 Guard
 
 #### 1. 概述
-导航也是 NestJS 中实现 AOP 编程的五种方式之一，导航守卫就一个职责：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。即在调用某个 Controller 之前返回 true 或 false 决定放不放行(也就是进不进入这个路由)。
+Guard 是路由守卫的意思,它也是 NestJS 中实现 AOP 编程的五种方式之一，导航守卫就一个职责(单一职责)：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。即在调用某个 Controller 之前判断权限，返回 true 或 false 决定放不放行(也就是进不进入这个路由)。
 
-而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。本质上 Nest 守卫也是一个带有 @Injectable()装饰器装饰的类，同时守卫要实现 CanActivate 接口、实现 canActivate 方法，这个方法函数应该返回一个布尔值true/false，指示当前请求是否被允许。如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。
+而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。本质上 Nest 守卫也是一个带有 @Injectable()装饰器装饰的类，同时守卫要实现 CanActivate 接口、实现 canActivate 方法，这个方法接收一个参数context，它是ExecutionContext 实例，通过它我们可以获取对 Request 请求对象的引用、一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。这个方法函数返回值是布尔值，应该返回一个布尔值true/false，指示当前请求是否被允许。如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。
 
-守卫会在所有中间件之后执行，但在任何拦截器或管道之前执行、由守卫引发的任何异常都将由异常层(全局异常过滤器和应用于当前上下文的任何异常过滤器)处理。作用类似express、koa里的鉴权中间件。
+**注意：** 守卫会在所有中间件之后执行，但在任何拦截器或管道之前执行。由守卫引发的任何异常都将由异常处理层(全局异常过滤器和应用于当前上下文的任何异常过滤器)处理。
 
-和中间件的区别是守卫可以访问 ExecutionContext 实例、其实也是一个使用 @Injectable() 注解修饰的类，并且可以注入依赖。
+和中间件的区别是守卫可以访问 ExecutionContext 实例，而中间件只能访问 Request 和 Response 对象。
+
+
+**执行上下文：** canActivate() 函数接收一个参数，即 ExecutionContext 实例。ExecutionContext 继承自 ArgumentsHost。后面深入时介绍。
 
 #### 2. 使用
 使用 CLI 脚手架创建一个守卫使用命令如下命令即可 `$ nest g gu/guard  AuthGuard --no-spec --flat`、这里我们创建一个验证守卫。
 
-在nest 中 Guard 用法也三种,分为全局路由守卫、控制器路由守卫、具体方法路由守卫
+在NestJS中 Guard 用法有三种,分为全局路由守卫、控制器路由守卫、具体方法路由守卫
 1. @UseGuards() 装饰器注册应用到方法路由守卫、控制器守卫。
-2. app 对象的 useGlobalGuards 方法注册全局守卫、使用这种方法注册的守卫不能插入依赖项, 因为它们不属于任何模块。
+2. app 对象的 useGlobalGuards 方法注册全局守卫、使用这种方法注册的守卫不在 IoC 容器里、不属于任何模块，所以不能插入依赖项,注册也时需要手动 new 实例。
 3. 注册多个时使用逗号分隔。
-
-每个守卫必须实现一个 canActivate() 函数。该方法接受一个参数，即 ExecutionContext 实例一般用context表示。ExecutionContext 继承自 ArgumentsHost。通过它我们可以获取对 Request 请求对象的引用、一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。
 
 ```js
 // $ nest g gu/guard  AuthGuard --no-spec 生成的初始守卫内容
@@ -1404,9 +1405,18 @@ export class AuthGuard implements CanActivate {
 
 // 使用：注册守卫
 // main.ts注册全局导航守卫
-app.useGlobalGuards(new TestGuard());
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { NextFunction, Request, Response } from 'express';
 
-// 如果希望给全局守卫注入其它依赖使用如下方法，因为守卫也是使用@Injectable()装饰器的类所以是可注入的，也就是作为提供者。只不过此时提供者的名字是固定的 APP_GUARD。
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.useGlobalGuards(new TestGuard());// 全局注册守卫
+  await app.listen(process.env.PORT ?? 5000);
+}
+bootstrap();
+
+// 如果希望给全局守卫注入其它依赖使用如下方法，因为守卫也是使用@Injectable()装饰器的类所以是可注入的，也就是作为提供者。只不过此时提供者的名字是固定的 APP_GUARD。这种也是全局注册守卫的一种方式。
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -1425,8 +1435,9 @@ export class AppModule {}
 import { UseGuards } from '@nestjs/common';
 import { RolesGuard } from './roles.guard';
 import { TestGuard } from './test.guard';
-@UseGuards(RolesGuard) // 将守卫附加到此控制器声明的每个处理程序。
-@UseGuards(new RolesGuard())
+
+@UseGuards(RolesGuard) // 将实例化的责任交给框架处理
+@UseGuards(new RolesGuard())// 也可以传入守卫实例
 export class CatsController {
    // 这样就只在/aa路由中生效了
    @UseGuards(TestGuard) // 守卫只应用于单个方法
@@ -1436,10 +1447,16 @@ export class CatsController {
    }
 }
 
-// 实际应用
+```
+
+#### 3. 授权守卫实践
+**实际应用**
+```js
+// Nest 提供了通过两种方式为路由处理器附加自定义元数据的能力：一种是使用 Reflector.createDecorator 静态方法创建的装饰器，另一种是内置的 @SetMetadata() 装饰器。
 // 这里我们可以通过 @SetMetadata 装饰器自定义元数据来向路由处理程序附加自定义元数据的能力。但直接在路由中使用@SetMetadata()不是一个良好的实践。相反，创建您自己的装饰器。为了访问路由的角色（自定义元数据），我们将使用Reflector辅助类，它由框架提供并从@nestjs/core包中公开。
 // roles.decorator.ts
 import { SetMetadata } from '@nestjs/common';
+// export const Roles = Reflector.createDecorator<string[]>();
 export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
 // 这样就有了自定义的 @Roles() 装饰器
 
@@ -1464,9 +1481,11 @@ export class AuthGuard implements CanActivate {
   ): boolean | Promise<boolean> | Observable<boolean> {
     // 结果类似 [ 'user' ]
     const roles = this.reflector.get<string[]>('roles', context.getHandler());
-    if (!roles) {
+    // 有角色返回
+    if (roles) {
       return true;
     }
+    // 跟当前用户的角色进行对比
     const request = context.switchToHttp().getRequest();
     console.log('body', request.body);
     const user = request.body.roles;
@@ -1474,16 +1493,21 @@ export class AuthGuard implements CanActivate {
   }
 }
 
-// 权限不足，也就是不通过时报错-自动返回以下响应。其背后的原理是，当守卫返回false时，框架会引发ForbiddenException。如果您希望返回不同的错误响应，您应该抛出自己特定的异常
+// 权限不足，也就是不通过时报错-自动返回以下响应。其背后的原理是，当守卫返回false时，框架会抛出 ForbiddenException。如果您希望返回不同的错误响应，您应该抛出自己特定的异常
 {
     "message": "Forbidden resource",
     "error": "Forbidden",
     "statusCode": 403
 }
-
+// 自定义异常
+throw new UnauthorizedException();
+throw neww new HttpException('Forbidden resource', HttpStatus.FORBIDDEN);
 
 
 ```
+
+
+
 
 ### 4 拦截器 Interceptor
 
