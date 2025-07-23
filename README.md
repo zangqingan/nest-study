@@ -213,9 +213,9 @@ nest info 命令:这个就是查看项目信息的，包括系统信息、 node�
 
 ```
 
-## 2.3 Nest 请求生命周期
+## 2.3 Nest 应用请求生命周期
 
-Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到响应的流程就如下：
+Nest 在启动后会递归解析 Module 依赖，扫描其中的 provider、controller，注入它的依赖。全部解析完后，会监听网络端口，开始处理请求。本质上最终还是监听的 http 请求，而一个请求从监听到响应的流程就如下：
 
 除了异常过滤器和拦截器（请求后）是由 路由->控制器->全局 之外，中间件、守卫、拦截器（请求前）、管道都是从 全局->控制器->路由 的顺序执行。
 
@@ -249,9 +249,127 @@ Nest 在启动后最终还是监听的 http 请求，而一个请求从监听到
 
 20. 服务器响应
 
-而在这个生命周期内 Nest官方提供了一些生命周期方法。
-首先，递归初始化模块，会依次调用模块内的 controller、provider 的 onModuleInit 方法，然后再调用 module 的 onModuleInit 方法。
-全部初始化完之后，再依次调用模块内的 controller、provider 的 onApplicationBootstrap 方法，然后调用 module 的 onApplicationBootstrap 方法然后监听网络端口。之后 Nest 应用就正常运行了。这个过程中，onModuleInit、onApplicationBootstrap 都是我们可以实现的生命周期方法。provider、controller、module 都支持启动和销毁的生命周期函数，这些生命周期函数都支持 async 的方式。
+而在这个过程中 Nest官方提供了一些生命周期方法。
+
+1. 首先，递归初始化模块，会依次调用模块内的 controller、provider 的 onModuleInit 方法，然后再调用 module 的 onModuleInit 方法。
+2. 然后，全部初始化完之后，再依次调用模块内的 controller、provider 的 onApplicationBootstrap 方法，然后调用 module 的 onApplicationBootstrap 方法然后监听网络端口。
+
+之后 Nest 应用就正常运行了。这个过程中，onModuleInit、onApplicationBootstrap 都是我们可以实现的生命周期方法。provider、controller、module 都支持启动和销毁的生命周期函数，这些生命周期函数都支持 async 的方式。
+
+应用销毁时的生命周期：
+
+1. 先调用每个模块的 controller、provider 的 onModuleDestroy 方法，然后调用 Module 的 onModuleDestroy 方法。
+2. 然后再调用每个模块的 controller、provider 的 beforeApplicationShutdown 方法，然后调用 Module 的 beforeApplicationShutdown 方法。beforeApplicationShutdown 是可以拿到 signal 系统信号的，比如 SIGTERM。这些终止信号是别的进程传过来的，让它做一些销毁的事情，比如用 k8s 管理容器的时候，可以通过这个信号来通知它。
+
+然后停止监听网络端口。
+
+3. 之后调用每个模块的 controller、provider 的 onApplicationShutdown 方法，然后调用 Module 的 onApplicationShutdown 方法。
+
+之后停止进程。
+
+
+```js
+// nestjs 提供了对应的接口
+import { NestFactory } from '@nestjs/core';
+
+export interface OnModuleInit {
+  onModuleInit(): void | Promise<void>;
+}
+export interface OnApplicationBootstrap {
+  onApplicationBootstrap(): void | Promise<void>;
+}
+export interface OnModuleDestroy {
+ onModuleDestroy(): void | Promise<void>;
+}
+export interface BeforeApplicationShutdown  {
+  beforeApplicationShutdown (signal?: string): void | Promise<void>;
+}
+export interface OnApplicationShutdown {
+  onApplicationShutdown(): void | Promise<void>;
+}
+
+// 可以在 controller、service、module 里分别实现它
+@Controller()
+export class AppController implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, BeforeApplicationShutdown, OnApplicationShutdown { 
+  onModuleInit() {
+    console.log('AppController onModuleInit');
+  }
+  onApplicationBootstrap() {
+    console.log('AppController onApplicationBootstrap');
+  }
+  onModuleDestroy() {
+    console.log('AppController onModuleDestroy');
+  }
+  beforeApplicationShutdown() {
+    console.log('AppController beforeApplicationShutdown');
+  }
+  onApplicationShutdown() {
+    console.log('AppController onApplicationShutdown');
+  }
+}
+// 在 service 里实现它
+@Injectable()
+export class AppService implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, BeforeApplicationShutdown, OnApplicationShutdown { 
+  onModuleInit() {
+    console.log('AppService onModuleInit');
+  }
+  onApplicationBootstrap() {
+    console.log('AppService onApplicationBootstrap');
+  }
+  onModuleDestroy() {
+    console.log('AppService onModuleDestroy');
+  }
+  beforeApplicationShutdown() {
+    console.log('AppService beforeApplicationShutdown');
+  }
+  onApplicationShutdown() {
+    console.log('AppService onApplicationShutdown');
+  }
+}
+// 在 module 里实现它
+@Module({
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy, BeforeApplicationShutdown, OnApplicationShutdown { 
+
+  onModuleInit() {
+    console.log('AppModule onModuleInit');
+  }
+  onApplicationBootstrap() {
+    console.log('AppModule onApplicationBootstrap');
+  }
+  onModuleDestroy() {
+    console.log('AppModule onModuleDestroy');
+  }
+  beforeApplicationShutdown(signal?: string) {
+    console.log('AppModule beforeApplicationShutdown', signal);
+  }
+  onApplicationShutdown() {
+    console.log('AppModule onApplicationShutdown');
+  }
+
+}
+// 输出顺序
+AppController onModuleInit
+AppService onModuleInit
+AppModule onModuleInit
+AppController onApplicationBootstrap
+AppService onApplicationBootstrap
+AppModule onApplicationBootstrap
+// 销毁阶段
+AppController onModuleDestroy
+AppService onModuleDestroy
+AppModule onModuleDestroy
+AppController beforeApplicationShutdown undefined
+AppService beforeApplicationShutdown undefined
+AppModule beforeApplicationShutdown undefined
+AppController onApplicationShutdown
+AppService onApplicationShutdown
+AppModule onApplicationShutdown
+
+
+```
 
 ## 2.4 Nest 实战目录
 
@@ -313,9 +431,63 @@ Nest 的功能都是大多通过装饰器来使用的
 12. @Res()、@Response()注入 response 对象，一旦注入了这个 Nest 就不会把返回值作为响应了，除非指定 passthrough 为true
 
 
+## 2.6 NestJS 项目调试
+不能总使用console来输出日志。
+传统的node项目debug：node --inspect-brk index.js、--inspect 是调试模式运行，而 --inspect-brk 还会在首行断住。nest 也是 node 项目，自然也是这样来调试的。
+nest start 有个 --debug 的选项`nest start --debug`，原理就是 node --inspect。然后在需要调试的代码加上 debugger。
+在vscode里调试：在调试面板的 create launch.json file，它会创建 .vscode/launch.json 的调试配置文件
 
+**断点类型**
+1. 记录断点：输入打印的信息，变量用 {} 包裹。代码执行到这里就会打印：适合不需要断住，但想打印日志的情况。不用在代码里加 console.log。
+2. 条件断点：输入条件，变量用 {} 包裹。代码执行到这里就会判断条件，满足条件才会断住(表达式为真)。适合需要断住，但条件判断很复杂。
+3. 异常断点，可以在没有处理的异常处自动断住
 
-
+**launch.json**
+```json
+{
+  // 使用 IntelliSense 了解相关属性。 
+  // 悬停以查看现有属性的描述。
+  // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+  // stopOnEntry 是在首行断住，和 --inspect-brk 一样的效果。
+  // attach是附加到已经启动了的nodeJs进程
+  // launch是启动一个新的nodejs进程来运行代码。
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Program",
+      "program": "${workspaceFolder}/app.js",
+      "request": "launch",
+      "stopOnEntry": true,
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    },
+    {
+      "name": "Attach",
+      "port": 9229,
+      "request": "attach",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    },
+    {
+      "name": "Launch via NPM",
+      "request": "launch",
+      "runtimeArgs": [
+        "run",
+        "start:dev",
+      ],
+      "runtimeExecutable": "npm",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node"
+    }
+  ]
+}
+```
 
 
 
@@ -757,7 +929,8 @@ export class PersonController {
 ## 3.2 提供者 provider
 
 ### 1. 概述
-提供者是Nest中的一个基本概念。各种功能和业务代码具体实现的地方都可以看作是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间件、管道等全都是 Providers，即提供各种问题具体解决方法的人。控制器应该只处理HTTP请求分发路由、而将更复杂的任务(如: 数据库的查询、数据的处理等)委托给提供者。
+提供者是Nest中的一个基本概念。各种功能和业务代码具体实现的地方都可以看作是提供者 provider，比如接下来的各种拦截器、各种过滤器、各种配置模块、各种中间件、管道等全都是 Providers，即提供各种问题具体解决方法的人。
+控制器应该只处理HTTP请求分发路由、而将更复杂的任务(如: 数据库的查询、数据的处理等)委托给提供者。
 
 在 NestJS 里就是被 @Injectable 装饰器装饰的JavaScript类就是 Providers也就是说提供者本质上就是一个JavaScript类而已，提供者的主要思想是它可以通过类的构造器方法即 constructor 方法或者基于属性实现注入依赖，这意味着对象之间可以彼此创建各种关系，并且“连接”对象实例的功能在很大程度上可以委托给  Nest 运行时系统。本质上就是使用了 @Injectable 装饰器装饰的类就可以被 Nest IoC 容器(反转控制容器)管理。
 
@@ -769,8 +942,8 @@ export class PersonController {
 在定义了一个服务之后就可以通过**依赖注入**的方法在一个控制器类的内部使用它了。
 具体实现方法有两种：
 
-1. 是通过控制器类的类构造函数 constructor(){} 注入依赖项的。
-2. 是通过控制器类的属性注入依赖项、在属性上使用 @Inject('token') 装饰器。
+1. 构造器注入: 是通过控制器类的类构造函数 constructor(){} 注入依赖项的。
+2. 属性注入: 是通过控制器类的属性注入依赖项、在属性上要使用 @Inject('token') 装饰器装饰。
 
 然后还要将服务添加模块类的 @Module() 装饰器的 providers 数组里进行注册(没有就是根模块)、注册后Nest就能够解析 CatsController 类的依赖关系进而实例化需要的服务类。
 
@@ -783,7 +956,7 @@ export class PersonController {
 
 ```js
 // cats.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 // 必须使用 @Injectable 装饰器装饰。
 @Injectable()
 export class CatsService {}
@@ -794,12 +967,16 @@ import { CatsService } from './cats.service';
 @Controller('cats')
 export class CatsController {
 
-  @Inject(CatsService) private readonly catsService:CatsService; // 基于属性注入服务
+  @Inject(CatsService) 
+  private readonly catsService:CatsService; // 基于属性注入服务
 
   constructor(private readonly catsService: CatsService) {} // 基于构造函数注入服务提供者
 
+  constructor(@Optional() @Inject('HTTP_OPTIONS') private httpClient: T) {} // 可选的提供者
+
   @Post()
   async create(@Body() createCatDto: CreateCatDto) {
+    // 使用
     this.catsService.create(createCatDto);
   }
 
@@ -818,7 +995,7 @@ import { Module } from '@nestjs/common';
   providers: [CatsService], // 添加 CatsService 注册到 providers 数组中
   // 上面的providers本质上是一种简写，等价于
   providers: [{
-    provide: CatsService, // 指定 token,这里直接使用了类名，也可以是一个字符串名。只用@Inject()注入时传入的参数。
+    provide: CatsService, // 指定 token,这里直接使用了类名，也可以是一个字符串名。用@Inject()注入时传入的参数。
     useClass: CatsService // 指定对象的类，Nest 会自动对它做实例化后用来注入。(IOC 容器干的活)
   }]
 })
@@ -830,20 +1007,21 @@ export class CatsModule {}
 ## 3.3 模块 module
 
 ### 1. 概述
-模块是 nest 的精髓所在，是控制反转 IoC(Inverse of Control 反转控制) 容器实现所在，简单说就是你只需要声明依赖了啥就行，不需要手动去 new 依赖，Nest 的 IoC 容器会自动给你创建并注入依赖。Module 是 NestJS 中一个大的一个内容，它是整个 module 功能模块的收口，功能和特性和 Angular 保持一致。
+模块是 nest 的精髓所在，是控制反转 IoC(Inverse of Control 反转控制) 容器实现所在，简单说就是你只需要声明依赖了啥就行，不需要手动去 new 依赖。Nest 的 IoC 容器会自动给你创建并注入依赖。Module 是 NestJS 中一个大的一个内容，它是整个 module 功能模块的收口，功能和特性和 Angular 保持一致。
 
-在 Nest 中模块就是一个 @Module() 装饰器装饰的类。 @Module() 装饰器提供了元数据(就是一个配置对象)，Nest 用它来组织应用程序的结构。一般来说各个模块最终会在根模块 AppModule汇总、然后在入口文件main.ts里引入执行。
+在 Nest 中模块就是一个 @Module() 装饰器装饰的类。 @Module() 装饰器提供了元数据(就是一个配置对象)，Nest 用它来组织应用程序的结构和管理元数据。一般来说各个模块最终会在根模块 AppModule汇总、然后在入口文件main.ts里引入执行。
 
 根模块: 每个应用程序至少有一个模块、是Nest用于构建应用程序图的起点、是Nest用于解析模块和提供者之间关系和依赖关系的内部数据结构。
 
-```js
-// @Module() 装饰器接受一个单一的描述模块属性的配置对象作为参数。
-// 如果你需要把这个模块暴露到全局使用可以加 一个装饰器 @Global、全局模块应该仅注册一次，通常由根模块或核心模块完成。
+@Module() 装饰器接受一个单一的描述模块属性的配置对象作为参数。如果你需要把这个模块暴露到全局使用可以加 一个装饰器 @Global()、全局模块应该仅注册一次，通常由根模块或核心模块完成。注意：全局模块还是尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
 
+Nest 实现了 IoC 容器，会从入口模块开始扫描，分析 Module 之间的引用关系，对象之间的依赖关系，自动把 provider 注入到目标对象。
+
+```js
 @Global() // 声明为全局模块
 @Module({
-  controllers:[], // 这里注册了的控制器也会被自动实例化
-  imports:[], // 可以导入其他 module 或者 provider
+  controllers:[], // 这里注册了本模块中定义的需要实例化的控制器集合,会被自动实例化
+  imports:[], // 导入模块的列表,可以导入其他 module 或者 provider. 当 import 别的模块后，那个模块 exports 的 provider 就可以在当前模块注入了。
   exports:[], // 如果你这个模块中的 provider 要在别的模块中使用你必须要在这里声明导出 provider ，当然你也可以把这个 module 导出，其他地方 import 一下这样其他模块中的 provider 也是可以使用的。
   providers:[] // 在这里注册了的提供者会被 Nest 注入器自动实例化，并且可以至少在整个模块中共享。
 })
@@ -881,12 +1059,16 @@ export class AppModule {}
 
 
 ## 3.4 NestJS 实现 AOP 编程的五种方式
+
+### 1 概述
 后端框架基本都是 MVC 的架构。MVC 是 Model View Controller 的简写。MVC 架构下，一次http请求的完整流程是：请求会先经过控制器（Controller），然后 Controller  调用Model 层的 Service服务 来完成业务逻辑(如数据库读写等)，最后返回结果给前端。
+
 也就是: 请求request -> Controller -> Service -> Repository -> 返回response给前端。
 
 在这个流程中，Nest 还提供了 AOP （Aspect Oriented Programming）的能力，也就是面向切面编程的能力。也就是在调用 Controller 之前和之后加入一个执行通用逻辑的阶段、这样的横向扩展点就叫做切面，这种透明的加入一些切面逻辑的编程方式就叫做 AOP （面向切面编程）。
 
 AOP 的好处是可以把一些通用逻辑分离到切面中，保持业务逻辑的纯粹性，这样切面逻辑可以复用，还可以动态的增删。
+
 Nest 实现 AOP 编程的方式一共有五种: 
 1. 中间件(Middleware)、
 2. 导航守卫(Guard)、
@@ -907,11 +1089,14 @@ Nest 实现 AOP 编程的方式一共有五种:
    
 完整流程是：request -> middleware  -> guard -> 请求interceptor -> pipe -> Controller(handler) -> 响应interceptor -> ExceptionFilter -> response
 
-
-### 1 中间件 Middleware
+### 2 中间件 Middleware
 
 #### 1. 概述
-中间件是 NestJS 中实现 AOP 编程的五种方式之一。和express和koa一样、Nest中也有中间件功能类似，Nest中间件默认情况下与express中间件等效。它是一个在路由处理程序之前调用的函数、也就是在请求进入controller控制器之前或者响应返回给客户端之前执行一些操作的函数。中间件函数可以访问请求和响应对象，以及应用程序的请求-响应周期中的 next() 中间件函数。通常，next中间件函数由一个名为next的变量表示。
+中间件是 NestJS 实现 AOP 编程的五种方式之一。中间件是 Express 里的概念，Nest 的底层是 Express，所以和express和koa一样、Nest中也有中间件功能类似。
+
+Nest中间件默认情况下与express中间件等效。它是一个在路由处理程序之前调用的函数、也就是在请求进入controller控制器之前或者响应返回给客户端之前执行一些操作的函数。
+
+中间件函数可以访问请求和响应对象，以及应用程序的请求-响应周期中的 next() 中间件函数。通常，next中间件函数由一个名为next的变量表示。
 
 中间件函数可以执行以下任务：
 1. 执行任何在中间件函数里定义的代码。
@@ -919,33 +1104,24 @@ Nest 实现 AOP 编程的方式一共有五种:
 3. 结束请求-响应周期。
 4. 调用堆栈中的下一个中间件函数。如果当前的中间件函数没有结束请求-响应周期, 它必须调用 next() 将控制传递给下一个中间件函数。否则, 请求将被挂起。
 
-Nest中分为了全局中间件和路由中间件。
+Nest按照使用范围分为了全局中间件和路由中间件。
 1. 全局中间件：全局中间件是指应用中的所有路由都会生效的中间件。
 2. 路由中间件：路由中间件是指只适用于特定路由的中间件。
 
 #### 2. 使用
-在Nest中可以在函数中或在具有 @Injectable() 装饰器的类中实现自定义 Nest中间件、即中间件有两种定义方法:
-1. 一种是和express中间件一样就是一个函数没有任何特殊要求-函数式中间件。当中间件不需要任何依赖时使用。
-2. 另一种是带有 @Injectable()装饰器的类中实现自定义的Nest中间件。这个类应该实现 NestMiddleware 接口-类中间件。
+在具体使用上 Nestjs有两种方法定义中间件:
+1. 一种是和express中间件一样就是一个函数没有任何特殊要求-函数式中间件。当中间件不需要任何依赖时使用。也就是全局中间件需要使用app.use()方法注册。
+2. 另一种是带有 @Injectable()装饰器的类中实现自定义的Nest中间件。这个类应该实现 NestMiddleware 接口- 类中间件。
 
 在 Nest 中使用脚手架命令创建一个中间件使用命令 `$ nest g mi/middleware  middlewareName --no-spec `、如创建一个 logger 中间件 `$ nest g mi/middleware  common/logger --no-spec`
 
 使用这个命令生成的中间件类自动实现 @nestjs/common 包中的 NestMiddleware接口。同时可以使用 express 中的类型指定req、res next钩子的类型。这种中间件可以依赖注入其它的服务。
 
+
+**定义**
 ```js
-// 类中间件-logger 中间件,不知道用的 express 还是 fastify，所以 request、response 是 any，可以手动标注。
-import { Injectable, NestMiddleware } from '@nestjs/common';
-import { Request, Response } from 'express';
-
-@Injectable()
-export class LoggerMiddleware implements NestMiddleware {
-  use(req: Request, res: Response, next: () => void)  {
-    // 这里就可以范围到请求和响应对象
-    next();// 释放句柄
-  }
-}
-
 // 函数式中间件-也叫全局中间件需要使用 app.use 使用。
+// logger.ts
 import { Request, Response, NextFunction } from 'express';
 export function logger(req: Request, res: Response, next: NextFunction) {
   console.log(`Request...`);
@@ -961,16 +1137,45 @@ app.use(function(req: Request, res: Response, next: NextFunction) {
     console.log('after');
 })
 
+// 类中间件-logger 中间件,不知道用的 express 还是 fastify，所以 request、response 是 any，可以手动标注。
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Request, Response } from 'express';
+
+@Injectable()
+export class LogMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: () => void) {
+    console.log('before2', req.url);
+
+    next();
+
+    console.log('after2');
+  }
+}
+
+// 二
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+
+@Injectable()
+export class LoggerMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    console.log('Request...');
+    next();
+  }
+}
+
 ```
 
-因为在 Nest 中使用类方法实现的中间件也是使用 @Injectable() 装饰器装饰的类(提供者)所以它完全支持依赖注入，所以可以注册到全局模块使用，也可以在指定模块中注入使用，都是通过类构造方法 constructor 实现注入依赖项。
+因为在 Nest 中使用类方法实现的中间件也是使用 @Injectable() 装饰器装饰的类(提供者)所以它完全支持依赖注入，所以可以注册到全局模块使用，也可以在指定模块中注入使用，通常通过类构造方法 constructor 实现注入依赖项。
 
 使用方法：在@Module()装饰器中是没有设置中间件的选项的。实际上我们使用的是模块类的 configure() 方法来设置它们。这是因为包含中间件的模块必须实现 NestModule 接口、实现了这个接口会自动执行模块类的 configure 方法。
 
+也就是说，我们是在模块类中使用 configure() 方法来设置中间件。
+
 MiddlewareConsumer 是一个辅助类，它提供了几种内置方法来管理中间件。
-1. apply() 方法用来应用中间件,多个时逗号分隔即可。
-2. forRoutes() 方法可以接受一个字符串、多个字符串、一个 RouteInfo 对象、一个控制器类，甚至是多个控制器类。
-3. .exclude 方法用来排除、接受单个字符串、多个字符串或 RouteInfo 对象，用于标识要排除的路由
+1. apply() 方法用来应用中间件,多个时逗号分隔即可。注意它是可以接收函数中间件的。
+2. forRoutes() 方法可以接受一个字符串、多个字符串、一个 RouteInfo 对象、一个控制器类名，甚至是多个控制器类。多数情况下只需传入逗号分隔的控制器列表。
+3. exclude() 方法用来排除、接受单个字符串、多个字符串或 RouteInfo 对象，用于标识要排除的路由
 
 ```js
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
@@ -1004,6 +1209,7 @@ export class AppModule implements NestModule {
         'cats/(.*)',
       )
       .forRoutes('*') // 指定应用的路由或者控制器
+      .forRoutes('cats'); // 或者指定路由
       .forRoutes(CatsController) // 或者指定控制器
       .forRoutes({ path: 'cats', method: RequestMethod.GET })// 或者RouteInfo 对象
 
@@ -1024,9 +1230,143 @@ await app.listen(3000);
 #### 3. 日志收集和记录中间件实践
 
 使用 Nestjs 中的两个技术点 中间件 + 拦截器 ，以及 Nodejs 中流行的 log 处理器 log4js 来实现。最后的实现出来的效果是：错误日志和请求日志都会被写入到本地日志文件和控制台中。后续还会写一个定时任务的把日志清理以及转存。
+```js
+npm install log4js
+//  配置 Log4js (src/logger/logger.config.ts)
+import { configure, getLogger } from 'log4js';
+
+export const initializeLogger = () => {
+  configure({
+    appenders: {
+      // 控制台输出
+      console: { type: 'console' },
+      // 错误日志文件
+      errorFile: {
+        type: 'file',
+        filename: 'logs/error.log',
+        maxLogSize: 10485760, // 10MB
+        backups: 3,
+        compress: true,
+      },
+      // 请求日志文件
+      requestFile: {
+        type: 'file',
+        filename: 'logs/request.log',
+        maxLogSize: 10485760, // 10MB
+        backups: 5,
+        compress: true,
+      },
+    },
+    categories: {
+      default: { appenders: ['console'], level: 'info' },
+      error: { appenders: ['console', 'errorFile'], level: 'error' },
+      request: { appenders: ['console', 'requestFile'], level: 'info' },
+    },
+  });
+};
+
+// 获取分类日志记录器
+export const errorLogger = getLogger('error');
+export const requestLogger = getLogger('request');
+
+// 创建请求日志中间件 (src/middleware/request-logger.middleware.ts)
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { Request, Response, NextFunction } from 'express';
+import { requestLogger } from '../logger/logger.config';
+
+@Injectable()
+export class RequestLoggerMiddleware implements NestMiddleware {
+  use(req: Request, res: Response, next: NextFunction) {
+    const start = Date.now();
+    const { method, originalUrl, ip } = req;
+
+    // 记录请求开始
+    requestLogger.info(`[${method}] ${originalUrl} - ${ip} - START`);
+
+    // 响应结束时记录
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      const { statusCode } = res;
+      
+      requestLogger.info(
+        `[${method}] ${originalUrl} - ${statusCode} - ${duration}ms`,
+      );
+    });
+
+    next();
+  }
+}
+// 创建错误日志拦截器 (src/interceptors/error-logger.interceptor.ts)
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+  HttpException,
+} from '@nestjs/common';
+import { Observable, throwError } from 'rxjs';
+import { catchError } from 'rxjs/operators';
+import { errorLogger } from '../logger/logger.config';
+
+@Injectable()
+export class ErrorLoggerInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(
+      catchError((err) => {
+        const ctx = context.switchToHttp();
+        const request = ctx.getRequest();
+        const response = ctx.getResponse();
+
+        // 获取错误信息
+        const status = err instanceof HttpException ? err.getStatus() : 500;
+        const message = err.message || 'Internal Server Error';
+        const stack = err.stack;
+
+        // 记录错误日志
+        errorLogger.error(
+          `[${request.method}] ${request.originalUrl} - ${status} - ${message}`,
+          stack,
+        );
+
+        // 继续抛出错误
+        return throwError(() => err);
+      }),
+    );
+  }
+}
+
+// 在根模块注册 (src/app.module.ts)
+import { Module, MiddlewareConsumer } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { RequestLoggerMiddleware } from './middleware/request-logger.middleware';
+import { ErrorLoggerInterceptor } from './interceptors/error-logger.interceptor';
+import { initializeLogger } from './logger/logger.config';
+
+@Module({
+  providers: [
+    {
+      provide: APP_INTERCEPTOR, // 全局注册拦截器
+      useClass: ErrorLoggerInterceptor,
+    },
+  ],
+})
+export class AppModule {
+  constructor() {
+    initializeLogger(); // 初始化日志系统
+  }
+
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(RequestLoggerMiddleware)
+      .forRoutes('*'); // 应用到所有路由
+  }
+}
 
 
-### 2 导航守卫 Guard
+```
+
+
+### 3 导航守卫 Guard
 
 #### 1. 概述
 导航也是 NestJS 中实现 AOP 编程的五种方式之一，导航守卫就一个职责：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。即在调用某个 Controller 之前返回 true 或 false 决定放不放行(也就是进不进入这个路由)。
@@ -1145,7 +1485,7 @@ export class AuthGuard implements CanActivate {
 
 ```
 
-### 3 拦截器 Interceptor
+### 4 拦截器 Interceptor
 
 #### 1. 概述
 
@@ -1263,7 +1603,7 @@ export class TransformInterceptor implements NestInterceptor {
 
 ```
 
-### 4 管道 Pipe
+### 5 管道 Pipe
 
 #### 1. 概述
 
@@ -1517,7 +1857,7 @@ async create(
 
 
 
-### 5 过滤器 ExceptionFilter
+### 6 过滤器 ExceptionFilter
 
 #### 1. 概述
 
@@ -1793,12 +2133,31 @@ export class AppModule {}
 ```
 
 ### 2. 自定义提供者
-当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种自定义提供者的方法。总归就是传递给 providers 选项数组的一个对象、不过要注意使用非类名令牌名定义提供者时需要使用 @Inject() 装饰器引入(即通过属性注入的方式)。
+当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种自定义提供者的方法。总归就是传递给 providers 选项数组的一个配置对象、不过要注意使用非类名作为令牌名定义提供者时需要使用 @Inject() 装饰器引入。注意它同样可以通过构造函数方式引入，就是es6里类声明属性和给构造方法传入参数两种形式。
+```js
+// 构造器注入
+@Controller()
+export class AppController { 
+  constructor(
+    @Inject('CatsService') private catsService: CatsService,
+    @Inject('custom') private custom: Custom
+    ) {}
+}
+
+// 属性注入
+@Controller()
+export class AppController { 
+  @Inject('CatsService') private catsService: CatsService;
+  @Inject('custom') private custom: Custom;
+}
+
+// 两者效果一样
+```
 
 **提供者种类**
 ```js
 {
-  provide: '令牌名', //除了是类名、还可以使用字符串、JavaScript的symbols或TypeScript的枚举作为标识符值的符号类型。 
+  provide: '令牌名', //指定 token,除了是类名、还可以使用字符串、JavaScript的symbols或TypeScript的枚举作为标识符值的符号类型。 
   // 提供者的类型
   useClass: '类提供者'
   useValue: '值提供者'
@@ -1808,8 +2167,7 @@ export class AppModule {}
 }
 ```
 
-1. 标准提供者(类提供者的简写形式)
-providers属性接受一个提供者数组、且是通过一个类名列表提供了这些提供者。本质是类名直接作为token令牌(称为类提供者)而已、如果是一个类名、那么Nest会自动实例化它。如果是一个字符串或者符号作为依赖注入的令牌token(统称为非类提供者)，这时候就需要使用@Inject()装饰器这个装饰器只接受一个参数——令牌。
+1. 标准提供者(类提供者的简写形式)、providers属性接受一个提供者数组、且是通过一个类名列表提供了这些提供者。本质是类名直接作为token令牌(称为类提供者)而已、如果是一个类名、那么Nest会自动实例化它。如果是一个字符串或者符号作为依赖注入的令牌token(统称为非类提供者)，这时候就需要使用@Inject()装饰器这个装饰器只接受一个参数——令牌。用 class 做 token 可以省去 @Inject，比较简便而已。
 ```js
 @Module({
   controllers: [CatsController],
@@ -1908,7 +2266,7 @@ export class UserController {
 
 ```
 
-4. 工厂提供者(useFactory)、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。
+4. 工厂提供者(useFactory)、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。注意：它支持通过参数 inject 数组注入别的 provider，通过参数的形式传递给useFactory函数。
 ```js
 // 提供者通常提供服务，但它们不仅限于此用途。提供者可以提供任何值。
 const configFactory = {
@@ -1946,7 +2304,6 @@ export class AppModule {}
 
 5. 别名提供者(useExisting)、允许为现有的提供者创建别名、这样可以创建两种访问同一提供者的方式。
 ```js
-
 @Injectable()
 class LoggerService {
   /* implementation details */
@@ -1964,6 +2321,8 @@ const loggerAliasProvider = {
 export class AppModule {}
 
 ```
+
+**总结:**一般情况下，provider 是通过 @Injectable 声明，然后在 @Module 的 providers 数组里注册的 class。但是也可以自定义提供者，这些自定义 provider 的方式里，最常用的是 useClass，不过我们一般会用简写，也就是直接指定 class。useClass 的方式由 IoC 容器负责实例化，当需要注入基本类型值时使用 useValue、需要动态创建对象或依赖其他服务时使用useFactory、需要向后兼容或提供别名时 useExisting。
 
 **导出提供者** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。这样就可以在其它模块中注入导入的提供者。很多都需要时可以定义为全局模块、使用 @Global() 装饰器。不过尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
 
@@ -2002,8 +2361,8 @@ export class BModule {}
 ## 4.2 模块相关
 
 ### 1. 静态模块
-模块是 Nest 实现依赖注入的关键所在、它定义了一组组件，如提供者和控制器，它们作为整个应用程序的模块部分相互配合。它们为这些组件提供了执行上下文或范围。例如，在模块中定义的提供者可以在不导出它们的情况下对模块的其他成员可见。当提供者需要在模块外部可见时，首先从其宿主模块 exports 导出，然后 imports 导入到其消费模块中。但是我们使用的基本是常规或静态模块绑定。看如下例子
-```JavaScript
+模块是 Nest 实现依赖注入的关键所在、它定义了一组组件，如提供者和控制器，它们作为整个应用程序的模块部分相互配合。它们为这些组件提供了执行上下文或范围。例如，在模块中定义的提供者可以在不导出它们的情况下对模块的其他成员可见。当提供者需要在模块外部可见时，首先从其宿主模块 exports 导出，然后另一个模块需要 imports 导入到其消费模块中才能用这些 provider。但是我们使用的基本是常规或静态模块绑定。看如下例子
+```js
 // UsersModule提供和导出一个 UsersService 。UsersModule是UsersService的宿主模块。
 import { Module } from '@nestjs/common';
 import { UsersService } from './users.service';
