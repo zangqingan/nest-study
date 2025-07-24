@@ -409,6 +409,8 @@ Nest 的功能都是大多通过装饰器来使用的
 4. @Inject() 注入依赖(属性注入、或provider名为字符串时使用)
 5. @Optional() 注入依赖时可选参数
 6. @Global() 声明为全局
+7. @Catch() 来指定处理的异常
+8. @SetMetadata() 指定 metadata
 
 **面向 AOP编程相关**
 1. @UseFilters() 注册过滤器
@@ -425,10 +427,14 @@ Nest 的功能都是大多通过装饰器来使用的
 6. @Query() 获取请求参数、取出 query 部分的参数，比如 /aaa?name=xx 中的 name
 7. @Body() 获取请求体、取出请求 body，通过 dto class 来接收
 8. @Param() 获取请求参数、取出 url 中的参数，比如 /aaa/:id 中的 id
-9. @HttpCode() 修改响应的状态码
-10. @Redirect() 重定向 
-11. @Req()、@Request()注入 request 对象
-12. @Res()、@Response()注入 response 对象，一旦注入了这个 Nest 就不会把返回值作为响应了，除非指定 passthrough 为true
+9. @Options() options请求
+10. @All() 所有请求
+11. @Head() 设置请求头
+12. @Header() 取某个请求头
+13. @HttpCode() 修改响应的状态码
+14. @Redirect() 重定向 
+15. @Req()、@Request()注入 request 对象
+16. @Res()、@Response()注入 response 对象，一旦注入了这个 Nest 就不会把返回值作为响应了，除非指定 passthrough 为true
 
 
 ## 2.6 NestJS 项目调试
@@ -2070,36 +2076,53 @@ export class AppModule {}
 ```
 
 ### 6 总结
-NestJS面向AOP编程的五种方式，各有各的用处而且用处基本是固定的。
+NestJS面向AOP编程的五种方式可以把通用逻辑抽离出来，通过切面的方式添加到某个地方，可以复用和动态增删切面逻辑。各有各的用处而且用处基本是固定的。
 
 ## 3.5 自定义装饰器
 
 ### 1. 概述
-Nest是基于一种称为装饰器的语言特性构建的。一个ES2016装饰器是一个返回函数的表达式，它可以接受目标、名称和属性描述符作为参数。可以通过在要装饰的内容的顶部加上@字符来应用它。装饰器可以定义(装饰)在类、方法或属性上。 
+NestJS 是基于一种称为**装饰器(Decorator)**的语言特性构建的。但是在JavaScript中是一个比较新的内容都没有定案成为一个标准。
+
+装饰器（Decorator）是用来增强 JavaScript 类（class）的功能、本质是一个函数写成 **@ + 函数名**，可以用来装饰类、方法、属性。
+
 
 ### 2. 使用
-除了 Nest 提供的装饰器之外、用户还可以根据需要自定义装饰器。有两种方法：
+除了 Nest 提供的各种内置装饰器之外、用户还可以根据需要自定义装饰器。
 
-`nest g decorator aaa --flat`
+有两种方法：
+1. 一种是使用CLI创建装饰器：`nest g decorator common/decorator/aaa --no-spec --flat`
+2. 自定义参数装饰器、参数装饰器的返回值就是参数的值。
+
 ```js
-// 在Node.js世界中，通常的做法是将属性附加到request对象上。然后，在每个路由处理程序中手动提取它们
-// 例如 const user = req.user;
-import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-// 自定义参数装饰器
-export const User = createParamDecorator(
-  // 这个 data 就是传入装饰器的参数，@User(data)
-  (data: unknown, ctx: ExecutionContext) => {
-    const request = ctx.switchToHttp().getRequest();
-    return request.user;
-  },
-);
-// 使用自定义装饰器
-@Get()
-async findOne(@User() user: UserEntity) {
-  console.log(user);
+// aaa.decorator.ts
+import { SetMetadata } from '@nestjs/common';
+export const Aaa = (...args: string[]) => SetMetadata('aaa', args);
+
+// 使用
+@Controller()
+export class AppController {
+  @Get()
+  @Aaa('hello', 'world')
+  getHello(@Req() request: Request): string {}
+
 }
 
-// 之前使用@SetMetadata定义元数据
+// 自定义其它装饰器
+import { SetMetadata } from '@nestjs/common';
+export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+
+// 使用
+@Controller()
+export class AppController {
+    @Get()
+    @Roles('admin')//这个自定义装饰器就是对上面的装饰器进行了封装
+    async findOne(@User() user: UserEntity) {
+      console.log(user);
+    }
+}
+
+// 上面的方法本质是对下面的封装
+// 也就是使用@SetMetadata定义元数据
 @Get()
 @SetMetadata('roles', ['admin'])
 @useGuards(AuthGuard)
@@ -2126,15 +2149,32 @@ export class AuthGuard implements CanActivate {
   }
 }
 
-// 自定义其它装饰器
-import { SetMetadata } from '@nestjs/common';
-export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+
+// 自定义参数装饰器
+import { createParamDecorator, ExecutionContext } from '@nestjs/common';
+export const User = createParamDecorator(
+  // 在Node.js世界中，通常的做法是将属性附加到request对象上。然后，在每个路由处理程序中手动提取它们
+  // 这个 data 就是传入装饰器的参数，@User(data)
+  //  ExecutionContext 可以取出 request、response 对象。
+  (data: unknown, ctx: ExecutionContext) => {
+    const request = ctx.switchToHttp().getRequest();
+    return request.user;// 参数装饰器的返回值就是参数的值。
+  },
+);
 // 使用自定义装饰器
 @Get()
-@Roles('admin')//这个自定义装饰器就是对上面的装饰器进行了封装
 async findOne(@User() user: UserEntity) {
   console.log(user);
 }
+
+// 对内置@Query()的实现
+export const MyQuery = createParamDecorator(
+    (key: string, ctx: ExecutionContext) => {
+        const request: Request = ctx.switchToHttp().getRequest();
+        return request.query[key];
+    },
+);
+
 
 ```
 
