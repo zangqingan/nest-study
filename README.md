@@ -1513,7 +1513,7 @@ throw neww new HttpException('Forbidden resource', HttpStatus.FORBIDDEN);
 
 #### 1. 概述
 
-拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，功能上它和中间件是很类似的也是在目标 Controller 方法前后加入一些逻辑。区别在于 interceptor 可以拿到调用的 controller 和 handler、作用就是可以给它们加上数据元信息然后可以拿到，而中间件获取不到。在 NestJS 中可以处理请求处理过程中的请求和响应,所以 interceptor 更适合处理与具体业务相关的逻辑、例如身份验证、日志记录、数据转换等。
+Interceptor 拦截器也是 NestJS 中实现 AOP 编程的五种方式之一，功能上它和中间件是很类似的也是在目标 Controller 方法前后加入一些逻辑。区别在于 interceptor 可以拿到调用的 controller 和 handler(也就是具体调用时的类名方法名)、作用就是可以给它们加上数据元信息然后可以拿到，而中间件获取不到。在 NestJS 中可以处理请求处理过程中的请求和响应,所以 interceptor 更适合处理与具体业务相关的逻辑、例如身份验证、日志记录、数据转换等。
 
 **作用**
 1. 在函数执行之前/之后绑定额外的逻辑
@@ -1529,18 +1529,17 @@ throw neww new HttpException('Forbidden resource', HttpStatus.FORBIDDEN);
 
 也就是说在最终路由处理程序执行之前和之后都可以实现自定义逻辑、之前就叫请求拦截器、之后就叫响应拦截器。
 1. 在intercept()方法中编写在调用handle()之前执行的代码
-2. handle()方法返回一个Observable，我们可以使用强大的RxJS操作符进一步操控响应、并将最终结果返回给调用方
+2. handle()方法返回一个Observable，我们可以使用强大的 RxJS 操作符进一步操控响应、并将最终结果返回给调用方
 
 **响应映射**
-
 我们已经知道handle()返回一个Observable。这个流、包含来自路由处理程序返回的值，因此我们可以使用RxJS的map()操作符轻松地对其进行变换。
 
 #### 2. 使用
-使用 CLI 脚手架命令可以快速生成一个拦截器: `nest g itc test --no-spec --flat`、如创建一个记录用户交互的拦截器 `$ nest g itc common/itc --no-spec`
+使用 CLI 脚手架命令可以快速生成一个拦截器: `nest g itc/interceptor test --no-spec --flat`、如创建一个记录用户交互的拦截器 `$ nest g itc common/itc --no-spec`
 
-与守卫一样，拦截器也可以是控制器作用域、方法作用域、全局作用域。拦截器的绑定：为了设置拦截器，需要使用从@nestjs/common 包中导入的@UseInterceptors()装饰器。
-1. @UseInterceptors() 装饰器绑定控制器作用域、方法作用域
-2. app 对象的 useGlobalInterceptors() 方法全局绑定。使用这种方法注册的拦截器不能插入依赖项, 因为它们不属于任何模块。
+与守卫一样，拦截器也可以是控制器作用域、方法作用域、全局作用域。
+1. @UseInterceptors() 装饰器绑定控制器作用域、方法作用域。
+2. app 对象的 useGlobalInterceptors() 方法全局绑定。使用这种方法注册的拦截器不能插入依赖项, 因为它们不属于任何模块。或者仔根模块中注入拦截器也是全局。两种全局启用方式的区别和 guard 的一样
 
 ```js
 // itc.interceptor.ts
@@ -1554,6 +1553,7 @@ export class ItcInterceptor implements NestInterceptor {
   }
 }
 
+// 具体使用
 import {UseInterceptors} from '@nestjs/common';
 // 1.控制器作用域：也就是只针对某个指定的控制器进行拦截，这样所有进入这个控制器的路由都会先进入这个拦截器中。
 @UseInterceptors(LoggingInterceptor)
@@ -1570,7 +1570,16 @@ export class CatsController {
 }
 
 // 3.全局作用域：就是针对全局的它是在main.ts中使用 useGlobalInterceptors 方法全局注册。
-app.useGlobalInterceptors(new TransformInterceptor()); 
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { NextFunction, Request, Response } from 'express';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.useGlobalInterceptors(new TransformInterceptor()); // 全局注册拦截器
+  await app.listen(process.env.PORT ?? 5000);
+}
+bootstrap();
 // 如果希望给全局守卫注入其它依赖使用如下方法，因为守卫也是使用@Injectable()装饰器的类所以是可注入的，也就是作为提供者。只不过此时提供者的名字是固定的 APP_INTERCEPTOR。
 import { Module } from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
@@ -1588,7 +1597,7 @@ export class AppModule {}
 
 ```
 
-#### 3. 序列化
+#### 3. 实践
 序列化是在对象在网络响应中返回之前发生的过程。在这个阶段，我们可以定义规则来转换和清理要返回给客户端的数据。例如，敏感数据如密码应始终从响应中排除。或者，某些属性可能需要进行额外的转换，比如只发送实体的部分属性。
 
 比如：定义一个数据返回拦截器-对请求成功(状态码为 2xx)的数据在返回给前台前进行一个统一的格式化处理。
@@ -1622,7 +1631,13 @@ export class TransformInterceptor implements NestInterceptor {
     );
   }
 }
-
+// 全局注册拦截器
+app.useGlobalInterceptors(new TransformInterceptor());
+// 或者在根模块中注册
+@Module({
+  providers: [{ provide: APP_INTERCEPTOR, useClass: TransformInterceptor }],
+})
+export class AppModule {}
 
 
 ```
@@ -1631,18 +1646,23 @@ export class TransformInterceptor implements NestInterceptor {
 
 #### 1. 概述
 
-它也是 NestJS 中实现 AOP 编程的五种方式之一，它是对函数参数通用逻辑抽出的切面。Pipe 一般用来做参数转换的。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。管道有两个典型的用例:对参数做一些检验和转换。
+Pipe 是管道的意思，它也是 NestJS 中实现 AOP 编程的五种方式之一，它是对函数参数通用逻辑抽出的切面，用来对参数做一些检验和转换。简单理解就如同水管一样。从一边流进去从另一边流出来，然后你可以在这中间也就是管道中对流动的东西进行一些处理。
+
+管道有两个典型的用例:对参数做一些检验和转换。
 1. 转换: 将用户输入数据转换为所需的形式后再输出(例如，从字符串到整数)。
 2. 验证: 对用户输入数据进行评估，如果有效，则不加修改地将其传递;否则，当数据不正确时抛出异常。
+
 在这两种情况下，管道参数(arguments) 会由控制器的路由处理程序进行操作。Nest 会在调用这个方法之前插入一个管道，管道会先拦截方法的调用参数,进行转换或是验证处理，然后用转换好或是验证好的参数调用原方法。
 
-在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类(提供者)，PipeTransform<T, R> 是每个管道必须要实现的泛型接口。泛型 T 表明输入的 value 的类型，R 表明 transfrom() 方法的返回类型。
+在 NestJS 中,管道本质也是一个带有@Injectable()装饰器的类，必须实现 PipeTransform 接口。
 
-管道分类:Nest自带很多开箱即用的内置管道、也可以构建自定义管道。所以管道主要有两种
+**管道分类:**
+
+Nest自带很多开箱即用的内置管道、也可以构建自定义管道。
 1. 内置管道由Nest提供开箱即用
 2. 自定义管道由用户自己定义
 
-在使用上管道有如下方式:
+在使用范围上管道有如下方式:
 1. 参数范围(parameter-scoped)的、直接使用。
 2. 方法范围(method-scoped)的、使用 @UsePipes 装饰器装饰
 3. 控制器范围的(controller-scoped)、使用 @UsePipes 装饰器装饰
@@ -1650,7 +1670,7 @@ export class TransformInterceptor implements NestInterceptor {
 
 #### 2. 内置管道
 Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包导出、它们都实现了 PipeTransform 接口。
-其中一个验证管道 ValidationPipe、七个转换管道即 Parse*管道、一个默认值管道DefaultValuePipe。
+其中一个验证管道 ValidationPipe、七个转换管道即 Parse* 管道、一个默认值管道DefaultValuePipe。
 
 1. ValidationPipe: 用于验证请求数据，通常用于验证请求体数据、查询参数、路由参数等。它使用了类似于 class-validator 库的装饰器来进行验证。如果验证失败，它会抛出 ValidationException 异常。
 
@@ -1670,61 +1690,15 @@ Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包�
 
 9. DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。new DefaultValuePipe(false/1)、常和转换类管道一起使用提供默认值。
 
-所有转换管道即 Parse*管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。
+所有转换管道即 Parse* 管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。也就是 @Body(new ParseIntPipe()),@Query(new ParseIntPipe())、@Param(new ParseIntPipe())等这样使用。
 
-#### 3. 使用
-管道可以是
-1. 参数范围(parameter-scoped)的、
-2. 方法范围(method-scoped)的、
-3. 控制器范围的(controller-scoped)、
-4. 全局范围(global-scoped)的。
 
-```js
-// 参数作用域：
-@Get(':id')
-async findOne(@Param('id',new DefaultValuePipe(0) ParseIntPipe) id: number) {
-  return this.catsService.findOne(id);
-}
-@Post()
-async create(
-  @Body(new ValidationPipe()) createCatDto: CreateCatDto,
-) {
-  this.catsService.create(createCatDto);
-}
-// 方法作用域：
-@Post()
-@UsePipes(new JoiValidationPipe(createCatSchema))
-async create(@Body() createCatDto: CreateCatDto) {
-  this.catsService.create(createCatDto);
-}
-// 控制器作用域：
-@Controller('cats')
-@UsePipes(new ValidationPipe())
-export class CatsController {}
+#### 3. 自定义管道
+使用 CLI 脚手架创建一个管道使用命令即可 `$ nest g pi/pipe  <name>`、例如创建一个校验管道 `$ nest g pi/pipe  common/pipes/validation --no-spec --flat`。
 
-// 全局：依然是在入口文件中使用 useGlobalPipes 装饰器。这种全局无法给管道注入依赖
-app.useGlobalPipes(new ValidationPipe());
+自定义 Pipe 要实现 PipeTransform 接口，实现 transform 方法，里面可以对传入的参数值 value 做参数验证，比如格式、类型是否正确，不正确就抛出异常。也可以做转换，返回转换后的值。 
 
-// 可以在app模块中声明以此注入依赖
-import { Module } from '@nestjs/common';
-import { APP_PIPE } from '@nestjs/core';
-
-@Module({
-  providers: [
-    {
-      provide: APP_PIPE,
-      useClass: ValidationPipe
-    }
-  ]
-})
-export class AppModule {}
-
-```
-
-#### 4. 自定义管道
-使用 CLI 脚手架创建一个管道使用命令即可 `$ nest g pi/pipe  <name>`、例如创建一个校验管道 `$ nest g pi/pipe  common/pipes/validation`。
-
-自定义 Pipe 要实现 PipeTransform 接口，实现 transform 方法，里面可以对传入的参数值 value 做参数验证，比如格式、类型是否正确，不正确就抛出异常。也可以做转换，返回转换后的值。 transfrom() 方法有两个参数：
+transfrom() 方法有两个参数：
 1. value 当前处理的方法参数(在被路由处理程序方法接收之前)
 2. metadata 当前处理的方法参数的元数据。
 
@@ -1740,7 +1714,6 @@ export class ValidationPipe implements PipeTransform {
   }
 }
 
-
 export interface ArgumentMetadata {
   type: 'body' | 'query' | 'param' | 'custom';
   // 参数是一个 body @Body(), query @Query(), param @Param(), 还是自定义参数,主要是验证类型。
@@ -1751,10 +1724,11 @@ export interface ArgumentMetadata {
 }
 
 ```   
-**对象结构验证**：一般会使用基于对象结构的验证来对数据进行校验、这里常使用 Joi 库、它允许使用可读的 API schema.validate() 方法以直接的方式验证参数是否符合提供的 schema，让我们构建一个基于 Joi schema 的验证管道。
+
+自定义管道之后通常用来做参数验证，比如参数类型转换，参数校验等等。比较常见的有一下两种方法。
+**对象结构验证:** 一般会使用基于对象结构的验证来对数据进行校验、这里常使用 Joi 库、它允许使用可读的 API schema.validate() 方法以直接的方式验证参数是否符合提供的 schema，让我们构建一个基于 Joi schema 的验证管道。
 
 安装依赖: `$ npm install --save joi` 、 `npm install --save-dev @types/joi`
-
 ```js
 import {
   ArgumentMetadata,
@@ -1809,10 +1783,9 @@ async create(@Body() createCatDto: CreateCatDto) {
 
 ```
 
-还有一种比较常用的验证管道类型是:**类验证器**、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类中添加一些装饰器来校验、不用额外定义schema对象。所以一般我们是使用这种验证。
+**类验证器:** 另一种比较常用的验证管道类型、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类中添加一些装饰器来校验、不用额外定义schema对象。所以一般我们是使用这种验证。
 
 安装依赖: `$ npm i --save class-validator class-transformer`
-
 ```js
 import {
   PipeTransform,
@@ -1832,6 +1805,7 @@ export class ValidationPipePipe implements PipeTransform<any> {
     // plainToInstance 方法将普通的 JavaScript 参数对象转换为可验证的 dto class 的实例对象。
     const object = plainToInstance(metatype, value);
     // 调用 class-validator 包的 validate api 对它做验证。如果验证不通过，就抛一个异常。
+    // errors 是一个数组，里面存放着验证失败的错误信息。      
     const errors = await validate(object);
     if (errors.length > 0) {
       throw new BadRequestException(`Validation failed:${errors}`);
@@ -1880,14 +1854,66 @@ async create(
 ```
 
 
+#### 4. 使用
+管道可以是
+1. 参数范围(parameter-scoped)的、
+2. 方法范围(method-scoped)的、
+3. 控制器范围的(controller-scoped)、
+4. 全局范围(global-scoped)的。
+
+```js
+// 参数作用域：
+@Get(':id')
+async findOne(@Param('id',new DefaultValuePipe(0) ParseIntPipe) id: number) {
+  return this.catsService.findOne(id);
+}
+@Post()
+async create(
+  @Body(new ValidationPipe()) createCatDto: CreateCatDto,
+) {
+  this.catsService.create(createCatDto);
+}
+
+// 方法作用域：
+@Post()
+@UsePipes(new JoiValidationPipe(createCatSchema))
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+
+// 控制器作用域：
+@Controller('cats')
+@UsePipes(new ValidationPipe())
+export class CatsController {}
+
+// 全局：依然是在入口文件中使用 useGlobalPipes 装饰器。这种全局无法给管道注入依赖
+app.useGlobalPipes(new ValidationPipe());
+
+// 可以在app模块中声明以此注入依赖
+import { Module } from '@nestjs/common';
+import { APP_PIPE } from '@nestjs/core';
+
+@Module({
+  providers: [
+    {
+      provide: APP_PIPE,
+      useClass: ValidationPipe
+    }
+  ]
+})
+export class AppModule {}
+
+```
 
 ### 6 过滤器 ExceptionFilter
 
 #### 1. 概述
 
-过滤器也是 NestJS 中实现 AOP 编程的五种方式之一，Nest 中过滤器一般是指: 异常处理过滤器,他们开箱即用返回一些指定的 JSON 信息。在 NestJS 中有一个内置异常处理层、当一个异常没有被应用程序代码处理时(显性声明处理)，它就会被这个异常处理层捕获，然后自动发送一个适当的用户友好响应。
+ExceptionFilter 过滤器也是 NestJS 中实现 AOP 编程的五种方式之一，Nest 中过滤器一般是指: 异常处理过滤器,他们开箱即用返回一些指定的 JSON 信息。
 
-默认情况下，这个操作是由内置的全局异常过滤器执行的，它处理类型为HttpException（以及其子类）的异常。当一个异常是未识别的（既不是HttpException，也不是继承自HttpException的类），内置的异常过滤器会生成以下默认的JSON响应:
+在 NestJS 中不管是 Pipe、Guard、Interceptor 还是最终调用的 Controller，过程中都可以抛出一些异常，Nest 提供了 ExceptionFilter 来对抛出的异常做处理，返回对应的响应。也就是NestJS有一个内置异常处理层、当一个异常没有被应用程序代码处理时(显性声明处理)，它就会被这个异常处理层捕获，然后自动发送一个适当的用户友好响应。
+
+默认情况下，这个操作是由**内置的全局异常过滤器**执行的，它处理类型为HttpException（以及其子类）的异常。当一个异常是未识别的（既不是HttpException，也不是继承自HttpException的类），内置的异常过滤器会生成以下默认的JSON响应:
 ```js
 {
   "statusCode": 500,
@@ -1895,12 +1921,28 @@ async create(
 }
 ```
 
-Nest 提供了一个内置的 HttpException 类，可以从@nestjs/common包中引入。可以在任意地方使用它手动抛出一个标准异常。
+本质上过滤器是一个使用 @Catch() 装饰器装饰的类，它必须实现实现 ExceptionFilter 接口、实现 catch(exception: T, host: ArgumentsHost) 方法。其中，T 表示异常的类型。默认情况下，T 是 HttpException。
 
-HttpException 类接收两个必填参数用来决定返回的信息、默认情况下，返回的 JSON 响应体也包含两个属性。
-new HttpException('message描述信息', http状态码statusCode);
-1. message:基于状态的 HTTP 错误的简短描述。
-2. statusCode:默认为 status 参数中提供的有效的 HTTP 状态码、最佳实践是使用从@nestjs/common导入的 HttpStatus枚举。
+@Catch(HttpException) 装饰器接收一个可选的参数，用于指定要捕获的异常类型。如果不指定就会捕获每一个未处理的异常（无论异常类型如何）。多个时逗号隔开。
+
+catch方法接收两个参数:
+1. exception 参数是当前正在处理的异常对象实例
+2. host 参数是一个请求上下文对象 ArgumentsHost
+
+**分类**
+在 Nest 里过滤器和中间件、守卫、拦截器类似，也是有全局作用域过滤器、控制器作用域、方法作用域三种。
+
+**注册方法**
+1. 使用 @UseFilters 装饰器注册方法作用域这样只应用于单个路由处理程序、也可以应用于控制器级别。与 @Catch() 装饰器类似，它可以接受一个过滤器实例，或者一个逗号分隔的过滤器实例列表。也可以传递类（而不是实例），将实例化的责任交给框架，并启用依赖注入。尽可能使用类来应用过滤器，而不是实例。这样做可以降低内存消耗，因为 Nest 可以在整个模块中轻松重用相同类的实例。 
+2. 使用 app 实例的 useGlobalFilters 方法注册绑定的就是全局级别。
+
+
+**标准异常**
+Nest 提供了一个内置的 HttpException 类，可以从@nestjs/common包中引入。可以在任意地方使用它手动抛出一个标准异常。HttpException 类接收两个必填参数用来决定返回的信息、默认情况下，返回的 JSON 响应体也包含两个属性。
+**new HttpException('message描述信息', http状态码statusCode);**
+1. message: 基于status状态的 HTTP 错误的简短描述。
+2. statusCode: 默认为 status 参数中提供的有效的 HTTP 状态码、最佳实践是使用从@nestjs/common导入的 HttpStatus枚举。
+3. options: 可选参数,可用于提供错误原因。
 
 ```js
 // HttpStatus 它是从 @nestjs/common 包导入的辅助枚举器。
@@ -1920,7 +1962,10 @@ async findAll() {
   "statusCode": 403,
   "message": "Forbidden"
 }
-
+{
+  "status": 403,
+  "error": "This is a custom message"
+}
 ```
 
 #### 2 内置HTTP异常
@@ -1942,20 +1987,19 @@ async findAll() {
 15. ServiceUnavailableException
 16. GatewayTimeoutException
 
-
 #### 3 自定义
 尽管基础（内置）异常过滤器可以自动处理许多情况，但您可能希望对异常层具有完全控制。
 这时就创建一个异常过滤器，负责捕获 HttpException 类的实例，并为其实现自定义响应逻辑。
 使用 CLI 脚手架命令快速生成一个过滤器 `$ nest g f/filter  http-exception --no-spec`、 `$ nest g f/filter  common/http-exception --no-spec`。
+```js
+import { ArgumentsHost, Catch, ExceptionFilter } from '@nestjs/common';
 
-每一个过滤器都应该实现 ExceptionFilter 接口、实现接口要求提供具有指定签名的 catch(exception: T, host: ArgumentsHost) 方法。其中，T 表示异常的类型。
+@Catch()
+export class TestFilter<T> implements ExceptionFilter {
+  catch(exception: T, host: ArgumentsHost) {}
+}
 
-@Catch(HttpException) 装饰器会将必要的元数据绑定到异常过滤器上，告诉 Nest，这个特定的过滤器正在寻找类型为 HttpException 的异常，而不是其他类型的异常。如果要捕获每个未处理的异常（无论异常类型如何）参数列表留空。
-
-定义了异常过滤器之后、就是使用。在 Nest 里过滤器和中间件、守卫、拦截器类似，也是有全局作用域过滤器、控制器作用域、方法作用域三种。有两种方法注册绑定过滤器、
-
-1. 使用 @UseFilters 装饰器注册方法作用域这样只应用于单个路由处理程序、也可以应用于控制器级别。与 @Catch() 装饰器类似，它可以接受一个过滤器实例，或者一个逗号分隔的过滤器实例列表。也可以传递类（而不是实例），将实例化的责任交给框架，并启用依赖注入。尽可能使用类来应用过滤器，而不是实例。这样做可以减少内存使用，因为 Nest 可以在整个模块中轻松重用相同类的实例。 
-2. 使用 app 实例的 useGlobalFilters 方法注册绑定的就是全局级别。
+```
 
 ```js
  /**
