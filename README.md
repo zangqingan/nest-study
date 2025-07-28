@@ -267,6 +267,13 @@ Nest 在启动后会递归解析 Module 依赖，扫描其中的 provider、cont
 
 之后停止进程。
 
+| 生命周期钩子方法             | 触发钩子方法调用的生命周期事件                                                                                                                      |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| onModuleInit()               | 当宿主模块的依赖项已解析完成时调用。                                                                                                                |
+| onApplicationBootstrap()     | 在所有模块初始化完成但尚未开始监听连接时调用。                                                                                                      |
+| onModuleDestroy()*           | 在接收到终止信号（例如 SIGTERM）后调用。                                                                                                            |
+| beforeApplicationShutdown()* | 在所有 onModuleDestroy() 处理程序完成（Promise 已解决或拒绝）后调用；一旦完成（Promise 已解决或拒绝），所有现有连接将被关闭（调用了 app.close()）。 |
+| onApplicationShutdown()*     | 在连接关闭后调用（app.close() 解析完成时）。                                                                                                        |
 
 ```js
 // nestjs 提供了对应的接口
@@ -2465,6 +2472,7 @@ import { connectionFactory } from '../connectionFactory';
 export class BModule {}
 
 ```
+
 ### 3. 异步提供者
 有时，应用程序启动需要延迟，直到一个或多个异步任务完成。例如，您可能希望在建立与数据库的连接后才开始接受请求。您可以通过异步提供者来实现这一点。其语法是在工厂提供者 useFactory 语法中使用 async/await。工厂函数返回一个 Promise，并且工厂函数可以 await 异步任务。Nest 会在实例化任何依赖（注入）此类提供者的类之前等待 Promise 解析。也就是先等待 promise 解析，再实例化依赖。
 ```js
@@ -2798,14 +2806,20 @@ export class BModule {}
 
 
 ## 4.3 执行上下文(Execution Context)
-Nest提供了几个实用的类，帮助您轻松编写跨多个应用程序上下文（例如基于Nest HTTP服务器的、微服务和WebSockets应用程序上下文）运行的应用程序。不同类型的应用程序上下文它能拿到的参数是不同的，比如 http 服务可以拿到 request、response 对象，而 ws 服务就没有，如何让 Guard、Interceptor、Exception Filter 跨多种上下文复用是Nest需要考虑的。
+Nest 支持创建多种类型的服务、例如基于Nest HTTP服务器的、微服务和WebSockets。这三种服务都会支持 Guard、Interceptor、Exception Filter 功能。不同类型的应用程序上下文它能拿到的参数是不同的，比如 http 服务可以拿到 request、response 对象，而 websocket  服务就没有，如何让 Guard、Interceptor、Exception Filter 跨多种上下文复用是Nest需要考虑的。
 
-在Nest中提供了 ArgumentHost 和 ExecutionContext 两个类解决、它们是从 '@nestjs/common' 包中导出。
-过滤器实现的方法中用的就是 ArgumentHost、守卫和拦截器用的是ExecutionContext。
+Nest提供了几个实用的类，帮助编写跨多个应用程序上下文运行的应用程序。这些工具类提供了当前执行上下文的信息，可用于构建通用的守卫 、 过滤器和拦截器 ，使其能够跨多种控制器、方法和执行上下文工作。
+
+这里介绍两个类：
+1. ArgumentHost 类，在过滤器实现的 catch 方法中第二个接收的参数 host 就是 ArgumentHost 类型。
+2. ExecutionContext 类，在守卫和拦截器用的是ExecutionContext。
+两个类是从 '@nestjs/common' 包中导出。
+
 
 ### 1. ArgumentsHost(当前应用上下文)类
-ArgumentsHost类提供了一些方法，用于检索传递给处理程序的参数。它允许选择适当的上下文（例如HTTP、RPC（微服务）或WebSockets）来从中检索参数、可以使用ArgumentsHost的 getType()方法来实现。(这个类可以叫当前应用上下文)也就是用于切换 http、ws、rpc 等上下文类型的，可以根据上下文类型取到对应的 argument。
-在守卫、过滤器、拦截器中都会用到
+ArgumentsHost类提供了一些方法，用于检索传递给处理程序的参数。它允许选择适当的上下文（例如HTTP、RPC（微服务）或WebSockets）来从中检索参数、可以使用ArgumentsHost的 host.getType()方法来实现。(这个类可以叫当前应用上下文)也就是用于切换 http、ws、rpc 等上下文类型的，可以根据上下文类型取到对应的 argument。
+
+当构建需要在多个应用上下文中运行的通用守卫 、 过滤器和拦截器时，我们需要确定当前方法运行所在的应用类型。可通过 ArgumentsHost 的 getType() 方法实现。
 ```js
 if (host.getType() === 'http') {
   // do something that is only important in the context of regular HTTP requests (REST)
@@ -2831,7 +2845,7 @@ host.switchToWs(): WsArgumentsHost;
 
 ```
 
-在希望访问它的地方，Nest框架会提供 ArgumentsHost 的实例，通常命名为一个 host 参数进行引用。我们现阶段主要是对于HTTP服务器应用程序、此时host对象封装了Express的[request，response，next]数组，其中request是请求对象，response是响应对象，next是控制应用程序的请求-响应周期的函数。可以通过以下方法获取
+在希望访问它的地方，Nest框架会提供 ArgumentsHost 的实例，通常命名为一个 host 参数进行引用。我们现阶段主要是对于HTTP服务器应用程序、此时host对象封装了Express的[request，response，next]数组，其中request是请求对象，response是响应对象，next是控制应用程序的请求-响应周期的函数。可以通过以下方法获取。
 
 ```js
 import {Request,Response} from 'express';
@@ -2844,15 +2858,30 @@ const [req, res, next] = host.getArgs();
 ```
 
 ### 2. ExecutionContext(执行上下文)类
-ExecutionContext 扩展了 ArgumentsHost(也就是继承自ArgumentsHost、是它的子类)，提供有关当前执行过程的更多详细信息。
+ExecutionContext 是 ArgumentHost 的子类，扩展了 getClass、getHandler 方法。也就是继承自ArgumentsHost、是它的子类，提供有关当前执行过程的更多详细信息。
+
+```js
+export interface ExecutionContext extends ArgumentsHost {
+  /**
+   * Returns the type of the controller class which the current handler belongs to.
+   */
+  getClass<T>(): Type<T>;
+  /**
+   * Returns a reference to the handler (method) that will be invoked next in the
+   * request pipeline.
+   */
+  getHandler(): Function;
+}
+```
+
 与 ArgumentsHost 一样，Nest 在你可能需要的地方提供了 ExecutionContext 的实例，通常作为一个 context 参数进行引用。例如 guard 的 canActivate() 方法和 interceptor 的 intercept() 方法。(也可以叫执行上下文)。
 
 能够访问当前类和处理程序方法的引用提供了很大的灵活性。最重要的是，它使我们有机会从守卫或拦截器内部访问通过 @SetMetadata() 装饰器设置的元数据。
 
-```JavaScript
-// 方法返回即将被调用的处理程序的引用。
+```js
+// 方法返回即将被调用的处理函数的引用。
 context.getHandler() 
-// 方法返回此特定处理程序所属的 Controller 类型。
+// 方法返回此特定处理函数所属的 Controller 类型。
 context.getClass() 
 
 // 例如，在 HTTP 上下文中，如果当前处理的请求是绑定到 CatsController 上的 create() 方法的 POST 请求，getHandler() 将返回对 create() 方法的引用，而 getClass() 将返回 CatsController 类型（而不是实例）。
@@ -2863,13 +2892,18 @@ const className = context.getClass().name; // "CatsController"
 ```
 
 ## 4.4  元数据和反射
-Metadata 元数据存在类或者对象上，如果给类或者类的静态属性添加元数据，那就保存在类上，如果给实例属性添加元数据，那就保存在对象上，用类似 [[metadata]] 的 key 来存的。
+元数据(Metadata)存在类或者对象上，如果给类或者类的静态属性添加元数据，那就保存在类上，如果给实例属性添加元数据，那就保存在对象上，用类似 [[metadata]] 的 key 来存的。
 
-Reflect.defineMetadata 和 Reflect.getMetadata 分别用于设置和获取某个类的元数据，如果最后传入了属性名，还可以单独为某个属性设置元数据。
+Nest 通过装饰器给 class 或者对象添加 metadata，并且开启 ts 的 emitDecoratorMetadata 来自动添加类型相关的 metadata，然后运行的时候通过这些元数据来实现依赖的扫描，对象的创建等等功能。而在JavaScript里 metadata 的 api 还在草案阶段，需要使用 reflect-metadata 这个 polyfill 包才行。
 
-Nest 原理通过装饰器给 class 或者对象添加 metadata，并且开启 ts 的 emitDecoratorMetadata 来自动添加类型相关的 metadata，然后运行的时候通过这些元数据来实现依赖的扫描，对象的创建等等功能。而 metadata 的 api 还在草案阶段，需要使用 reflect-metadata 这个 polyfill 包才行。所以 Nest 的装饰器都是依赖 reflect-metadata 实现的，而且还提供了一个 @SetMetadata() 的装饰器让我们可以给 class、method 添加一些 metadata。这也是自定义装饰器的一种实现方式。
+所以 Nest 的装饰器都是依赖 reflect-metadata 实现的，而且还提供了一个内置的 @SetMetadata() 装饰器让我们可以给 class、method 添加**自定义元数据(metadata)**。
+
+反射(Reflect) API 提供了定义和获取元数据的方法。
+1. Reflect.defineMetadata() 用于设置元数据
+2. Reflect.getMetadata() 用于获取元数据,如果最后传入了属性名，还可以单独为某个属性设置元数据。
+
 ```js
-// 原始api
+// 原始api,这些api还没有进入标准，还在草案阶段
 Reflect.defineMetadata(metadataKey, metadataValue, target);
 Reflect.defineMetadata(metadataKey, metadataValue, target, propertyKey);
 let result = Reflect.getMetadata(metadataKey, target);
@@ -2884,7 +2918,7 @@ class C {
   }
 }
 
-// Reflect.metadata 装饰器当然也可以再封装一层
+// Reflect.metadata 装饰器也可以再封装一层
 function Type(type) {
     return Reflect.metadata("design:type", type);
 }
@@ -2916,21 +2950,88 @@ let obj = new Example("a", 1);
 let paramTypes = Reflect.getMetadata("design:paramtypes", obj, "add"); 
 // [Number, Number]
 
-
+// 在nestjs中进一步封装了方法 
+// Nest 提供了通过 Reflector.createDecorator() 方法创建装饰器
+// @SetMetadata() 装饰器将自定义元数据附加到路由处理程序的能力。
+// 通过 reflector.get 取出 handler 上@SetMetadata()设置的 metadata。
+// roles.decorator
+import { Reflector } from '@nestjs/core';
+export const Roles = Reflector.createDecorator<string[]>();
+// 另一种定义装饰器的方法
 import { SetMetadata } from '@nestjs/common';
 export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
+
+// 使用
+@Post()
+@Roles(['admin']) // Roles 装饰器将元数据附加到 create() 方法上，表明只有具有 admin 角色的用户才被允许访问此路由。
+async create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
+// 使用
 @Post()
 @Roles('admin')
 async create(@Body() createCatDto: CreateCatDto) {
   this.catsService.create(createCatDto);
 }
 
-// 要访问role(s)路径 (自定义元数据),要使用Reflector辅助类，它由框架提供，开箱即用，从@nestjs/core包导入。Reflector可以通过常规方式注入到类:
+// 要访问自定义元数据,要使用Reflector辅助类，它由框架提供，开箱即用，从@nestjs/core包导入。Reflector可以通过常规方式注入到类
+// Reflector.get 方法允许我们通过传入两个参数轻松访问元数据：一个装饰器引用和一个用于检索元数据的上下文 （装饰器所装饰的目标）。
+import { Reflector } from '@nestjs/core';
 @Injectable()
 export class RolesGuard {
   constructor(private reflector: Reflector) {}
   const roles = this.reflector.get<string[]>('roles', context.getHandler());
 }
+
+@Roles(['admin'])
+@Controller('cats')
+export class CatsController {}
+
+// 上面装饰类时就需要 context.getClass() 作为第二个参数
+const roles = this.reflector.get(Roles, context.getClass());
+
+// 需要从多个上下文中提取并合并元数据，Reflector 类提供了两个实用方法来帮助实现这一点。这些方法同时提取控制器和方法元数据，并以不同方式组合它们。
+@Roles(['user']) // 和下面等价
+@SetMetadata('roles', ['user'])
+@Controller('cats')
+export class CatsController {
+  @Post()
+  @Roles(['admin'])
+  @SetMetadata('roles', ['admin'])
+  async create(@Body() createCatDto: CreateCatDto) {
+    this.catsService.create(createCatDto);
+  }
+}
+const roles = this.reflector.get(Roles, context.getHandler()); // 获取方法上的元数据
+// 输出 ['admin']
+const roles = this.reflector.get(Roles, context.getClass()); // 获取类上的元数据
+// 输出 ['user']
+
+
+// 获取第一个非空的 metadata，
+const roles = this.reflector.getAllAndOverride(Roles, [
+  context.getHandler(),
+  context.getClass(),
+]);
+// 输出  [ 'admin' ],和数组参数位置有关，返回第一个非空元数据
+
+// 要获取两者的元数据并进行合并使用 getAllAndMerge() 方法
+const roles = this.reflector.getAllAndMerge(Roles, [
+  context.getHandler(),
+  context.getClass(),
+]);
+// 输出 [ 'admin', 'user' ]
+const roles = this.reflector.getAll(Roles, [
+  context.getHandler(),
+  context.getClass(),
+]);
+//  输出 [ [ 'admin' ], [ 'user' ] ]
+
+// 4 个方法有啥区别
+get 的实现就是 Reflect.getMetadata。
+getAll 是返回一个 metadata 的数组。
+getAllAndMerge，会把它们合并为一个对象或者数组。
+getAllAndOverride 会返回第一个非空的 metadata。
 
 ```
 
