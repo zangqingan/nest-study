@@ -2241,7 +2241,11 @@ export class AppModule {}
 ```
 
 ### 2. 自定义提供者
+
 当标准提供者无法满足我们的开发需要时我们就需要自己定义、Nest提供了几种自定义提供者的方法。总归就是传递给 providers 选项数组的一个配置对象、不过要注意使用非类名作为令牌名定义提供者时需要使用 @Inject() 装饰器引入。注意它同样可以通过构造函数方式引入，就是es6里类声明属性和给构造方法传入参数两种形式。
+
+最佳实践是在单独的文件中定义令牌名，例如 constants.ts
+
 ```js
 // 构造器注入
 @Controller()
@@ -2325,7 +2329,7 @@ const configServiceProvider = {
 export class AppModule {}
 ```
 
-3. 值提供者 (useValue)、注入常量值、将外部库放入 Nest 容器或使用模拟对象替换实际实现非常有用。此时不同于基于构造函数的依赖注入、需要使用@Inject()装饰器注入自定义的提供者、这个装饰器接受一个参数 - 令牌标识符。
+3. 值提供者 (useValue)、适用于注入常量值、将外部库放入 Nest 容器或使用模拟对象替换实际实现非常有用。此时不同于基于构造函数的依赖注入、需要使用@Inject()装饰器注入自定义的提供者、这个装饰器接受一个参数 - 令牌标识符。
 ```js
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
@@ -2374,7 +2378,7 @@ export class UserController {
 
 ```
 
-4. 工厂提供者(useFactory)、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。注意：它支持通过参数 inject 数组注入别的 provider，通过参数的形式传递给useFactory函数。
+4. 工厂提供者(useFactory)、它是一个工厂函数这意味着可以动态创建提供者、实际的提供者将由从工厂函数返回的值提供。在useFactory语法中使用async/await。工厂函数返回一个Promise，而且工厂函数可以等待异步任务结果返回之后再注入。Nest会在实例化任何依赖（注入）这样的提供者的类之前等待Promise的解析。它还可以支持通过参数注入别的 provider。根据选项不同创建不同的数据库连接对象是比较常用的。这种叫异步提供者。注意：它支持通过参数 inject 数组注入别的 provider，Nest 会按照相同顺序将 inject 列表中的实例作为参数传递给 useFactory 函数。
 ```js
 // 提供者通常提供服务，但它们不仅限于此用途。提供者可以提供任何值。
 const configFactory = {
@@ -2433,7 +2437,6 @@ export class AppModule {}
 **总结:**一般情况下，provider 是通过 @Injectable 声明，然后在 @Module 的 providers 数组里注册的 class。但是也可以自定义提供者，这些自定义 provider 的方式里，最常用的是 useClass，不过我们一般会用简写，也就是直接指定 class。useClass 的方式由 IoC 容器负责实例化，当需要注入基本类型值时使用 useValue、需要动态创建对象或依赖其他服务时使用useFactory、需要向后兼容或提供别名时 useExisting。
 
 **导出提供者** 与任何提供者一样，自定义提供者的作用域限定在其声明的模块中。要使它对其他模块可见，必须将其导出。要导出自定义提供者，可以使用它的令牌或完整的提供者对象。这样就可以在其它模块中注入导入的提供者。很多都需要时可以定义为全局模块、使用 @Global() 装饰器。不过尽量少用，不然注入的很多 provider 都不知道来源，会降低代码的可维护性。
-
 ```js
 // 只在当前模块作用域
 export const connectionFactory = {
@@ -2448,8 +2451,8 @@ export const connectionFactory = {
 @Module({
   providers: [connectionFactory],
   // 导出其它模块可以引入
-  exports: ['CONNECTION'], // 令牌
-  exports: [connectionFactory],// 完整对象
+  exports: ['CONNECTION'], // 导出令牌名
+  exports: [connectionFactory],// 导出完整对象
 })
 export class AppModule {}
 
@@ -2461,15 +2464,92 @@ import { connectionFactory } from '../connectionFactory';
 })
 export class BModule {}
 
+```
+### 3. 异步提供者
+有时，应用程序启动需要延迟，直到一个或多个异步任务完成。例如，您可能希望在建立与数据库的连接后才开始接受请求。您可以通过异步提供者来实现这一点。其语法是在工厂提供者 useFactory 语法中使用 async/await。工厂函数返回一个 Promise，并且工厂函数可以 await 异步任务。Nest 会在实例化任何依赖（注入）此类提供者的类之前等待 Promise 解析。也就是先等待 promise 解析，再实例化依赖。
+```js
+{
+  provide: 'ASYNC_CONNECTION',
+  useFactory: async () => {
+    const connection = await createConnection(options);
+    return connection;
+  },
+}
+// 注入方法是一样的
+@Inject('ASYNC_CONNECTION')。
+```
 
+
+
+### 4. 循环依赖
+循环依赖指的是两个类相互依赖的情况。在模块中就是 a 模块imports b 模块，b 模块 imports a 模块。两个 Module 相互引用。虽然应尽可能避免循环依赖，但有时无法完全避免。
+针对这种情况，Nest 提供了两种解决循环依赖的方法。
+1. 使用**前向引用** forwardRef() 工具函数引用尚未定义的类作为第一种技术，它的原理就是 nest 会先创建 Module、Provider，之后再把引用转发到对方，也就是 forward ref。
+2. 使用 ModuleRef 类从 DI 容器中获取提供者实例作为第二种技术。
+provider 之间的循环依赖就是 Service 里可以注入别的 Service，自身也可以用来注入。
+
+```js
+// DddService
+import { Injectable } from '@nestjs/common';
+import { CccService } from './ccc.service';
+
+@Injectable()
+export class DddService {
+  // 注入CccService
+    constructor(private cccService: CccService) {}
+
+    ddd() {
+        return this.cccService.ccc()  + 'ddd';
+    }
+}
+// CccService
+import { Injectable } from '@nestjs/common';
+import { DddService } from './ddd.service';
+
+@Injectable()
+export class CccService {
+  // 注入DddService
+    constructor(private dddService: DddService) {}
+
+    ccc() {
+        return 'ccc';
+    }
+
+    eee() {
+        return this.dddService.ddd() + 'eee';
+    }
+}
+
+// 通过 forwardRef 解决 这时候就不能用默认的类名注入方式了，通过 @Inject 手动指定注入的 token，这里是 forwardRef 的方式注入。
+// DddService
+import { Injectable, Inject } from '@nestjs/common';
+import { CccService } from './ccc.service';
+
+@Injectable()
+export class DddService {
+  // 注入CccService
+    constructor(@Inject(forwardRef(() => CccService)) private cccService: CccService) {}
+}
+// CccService
+import { Injectable } from '@nestjs/common';
+import { DddService } from './ddd.service';
+
+@Injectable()
+export class CccService {
+  // 注入DddService
+    constructor(@Inject(forwardRef(() => DddService)) private dddService: DddService) {}
+}
 
 ```
 
 
+
 ## 4.2 模块相关
 
-### 1. 静态模块
-模块是 Nest 实现依赖注入的关键所在、它定义了一组组件，如提供者和控制器，它们作为整个应用程序的模块部分相互配合。它们为这些组件提供了执行上下文或范围。例如，在模块中定义的提供者可以在不导出它们的情况下对模块的其他成员可见。当提供者需要在模块外部可见时，首先从其宿主模块 exports 导出，然后另一个模块需要 imports 导入到其消费模块中才能用这些 provider。但是我们使用的基本是常规或静态模块绑定。看如下例子
+### 1. 静态模块 Static Module
+模块是 Nest 实现依赖注入的关键所在、它定义了一组组件，如提供者和控制器，它们作为整个应用程序的模块部分相互配合。它们为这些组件提供了执行上下文或范围。
+
+例如，在模块中定义的提供者可以在不导出它们的情况下对模块的其他成员可见。当提供者需要在模块外部可见时，首先从其宿主模块 exports 导出，然后另一个模块需要 imports 导入到其消费模块中才能用这些 provider。但是我们使用的基本是常规或静态模块绑定。看如下例子
 ```js
 // UsersModule提供和导出一个 UsersService 。UsersModule是UsersService的宿主模块。
 import { Module } from '@nestjs/common';
@@ -2480,7 +2560,7 @@ import { UsersService } from './users.service';
 })
 export class UsersModule {}
 
-// AuthModule 它导入了 UsersModule，从而使 UsersModule 导出的提供者UsersService 在 AuthModule 内部可用
+// AuthModule 它导入了 UsersModule，从而使 UsersModule 导出的提供者UsersService 在 AuthModule 内部可用(这里的内部包括托管在 AuthModule 中的 AuthService )
 import { Module } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersModule } from '../users/users.module';
@@ -2506,11 +2586,11 @@ export class AuthService {
 
 ```
 
-### 2. 动态模块
+### 2. 动态模块 Dynamic Module
 通过静态模块绑定，消费模块没有机会影响宿主模块的提供者配置。只能用不能修改。
 而如果有一个通用的模块，需要在不同的用例中以不同的方式运行(类似于“插件”)、其中一个通用工具需要在被消费者使用之前进行一些配置。这时就使用动态模块功能、动态模块会提供一个API方法以便消费模块在导入时自定义该模块的属性和行为，而不是使用我们到目前为止所见到的静态绑定。其实就是能够将参数传递到要导入的模块中，以便我们可以更改其行为。示例
 
-```JavaScript
+```js
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -2528,43 +2608,49 @@ export class AppModule {}
 
 从这个例子可以看出
 1. register() 是一个静态方法、因为是在 ConfigModule 类上调用它，而不是在类的实例上调用。
-2. register() 方法由自己定义，因此我们可以接受任何我们喜欢的输入参数。
-3. register() 方法必须返回类似于模块的东西，因为其返回值出现在熟悉的 imports 列表中。
+2. register() 方法由自己定义，因此可以接受任何我们喜欢的输入参数。一般是一个options对象。
+3. register() 方法必须返回类似于 module 模块的东西，因为其返回值出现在熟悉的 imports 列表中。
 
 实际上这个方法可以有任意的名称，但按照惯例，我们应该将它称为 forRoot()、forFeature()  或 register()。
    - register() 创建模块时，您希望为调用模块配置特定的动态模块，仅供调用模块使用。例如，对于 Nest 的 @nestjs/axios 模块：HttpModule.register({ baseUrl: 'someUrl' } )。如果在另一个模块中使用 HttpModule.register({ baseUrl: 'somewhere else' })，它将具有不同的配置。您可以为尽可能多的模块执行此操作。用一次模块传一次配置。
-   - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。只注册一次，用多次，而且一般在 AppModule 里 import 引入。
-   - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。用了 forRoot 之后，用 forFeature 传入局部配置，一般在具体模块里 imports
+   - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。只注册一次，用多次，而且一般在 AppModule 里 import 引入。配置一次模块用多次。
+   - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。用了 forRoot 之后，用 forFeature 传入局部配置，一般在具体模块里 imports。比如用 forRoot 指定了数据库链接信息，再用 forFeature 指定某个模块访问哪个数据库和表。
 
-实际上，register() 方法返回的就是一个 DynamicModule。动态模块只是在运行时创建的模块，具有与静态模块完全相同的属性，以及一个额外的名为 module 的属性。对于动态模块，模块选项对象的所有属性都是可选的，除了 module。所以 ConfigModule 声明必须是如下结构。可以看出调用 ConfigModule.register(...) 返回一个具有属性的 DynamicModule 对象，这些属性本质上与我们迄今为止通过 @Module() 装饰器声明的模块一致提供的元数据也相同。
+实际上，register() 方法返回的就是一个 DynamicModule动态模块。动态模块只是在运行时创建的模块，具有与静态模块完全相同的属性，以及一个额外的名为 module 的属性。对于动态模块，模块选项对象的所有属性都是可选的，除了 module。
+
+所以 ConfigModule 声明必须是如下结构。可以看出调用 ConfigModule.register(...) 返回一个具有属性的 DynamicModule 对象，这些属性本质上与我们迄今为止通过 @Module() 装饰器声明的模块一致提供的元数据也相同。
+换一句话说动态模块 API 只是返回一个模块，但我们不是通过 @Module 装饰器固定属性，而是以编程方式指定它们。
 
 本质是调用类的静态方法、然后这个静态方法必须返回具有完全相同接口的对象，外加一个称为module的附加属性。 module属性用作模块的名称，并且应与模块的类名相同、因为它的返回值出现在熟悉的导入imports 列表中。
 
-```JavaScript
+```js
 
 import { DynamicModule, Module } from '@nestjs/common';
 import { ConfigService } from './config.service';
 
 @Module({})
 export class ConfigModule {
+  // 静态方法-方法名约定如此
   static register(): DynamicModule {
     return {
       module: ConfigModule,
       providers: [ConfigService],
       exports: [ConfigService],
     };
-  }
+  },
+  static forRoot(): DynamicModule {}
+  static forFeature(): DynamicModule {}
 }
 
 ```
 
 ### 3. 模块配置
 显而易见的解决方案是在静态的 register() 方法中向 ConfigModule 传递一个选项对象
-本质上这个配置对象是给 模块 里的服务用的、所以关键是在运行时，我们首先需要将options对象绑定到 Nest IoC 容器，然后让 Nest 将其注入到我们的 ConfigService 中。提供者不仅可以是服务，还可以是任何值，因此我们完全可以使用依赖注入来处理一个简单的options对象。将传入的 options对象作为值提供者useValue，然后通过 @Inject('token') 来注入这个对象进而获取到传入的数据对象options。
+本质上这个配置对象是给 模块 里的服务用的、所以关键是在运行时，我们首先需要将options对象绑定到 Nest IoC 容器，然后让 Nest 将其注入到我们的 ConfigService 中。我们提供者不仅可以是服务，还可以是任何值，因此我们完全可以使用依赖注入来处理一个简单的options对象。将传入的 options对象作为值提供者useValue，然后通过 @Inject('token') 来注入这个对象进而获取到传入的数据对象options。
 
 而动态模块返回的本质上与我们迄今为止通过 @Module() 装饰器提供的元数据相同。
 
-```JavaScript
+```js
 
 import { DynamicModule, Module } from '@nestjs/common';
 import { ConfigService } from './config.service';
@@ -2587,7 +2673,6 @@ export class ConfigModule {
   }
 }
 // 使用
-
 import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -2599,6 +2684,8 @@ export class ConfigService {
   private readonly envConfig: EnvConfig;
 
    // 使用非类令牌定义提供者时，需要使用 @Inject() 装饰器
+  //  最佳实践是将其定义为单独文件中的常量（或 Symbol）并导入该文件。
+  // export const CONFIG_OPTIONS = 'CONFIG_OPTIONS';
   constructor(@Inject('CONFIG_OPTIONS') private options: Record<string, any>) {
     const filePath = `${process.env.NODE_ENV || 'development'}.env`;
     const envFile = path.resolve(__dirname, '../../', options.folder, filePath);
@@ -2612,6 +2699,103 @@ export class ConfigService {
 
 
 ```
+
+### 4. 可配置模块构建器
+Nest 还提供了另一种方式来创建动态模块，这是因为手动创建高度可配置的动态模块并暴露异步方法（如 registerAsync、forRootAsync 等）相当复杂，尤其对新手而言，所以 Nest 提供了 ConfigurableModuleBuilder 类来简化这一过程，只需几行代码就能构建模块"蓝图"。
+
+```js
+// config-module-options.interface
+export interface ConfigModuleOptions {
+  folder: string;
+}
+// 新建一个专用文件（与现有的 config.module.ts 文件放在一起）并命名为 config.module-definition.ts
+// config.module-definition.ts
+import { ConfigurableModuleBuilder } from '@nestjs/common';
+import { ConfigModuleOptions } from './interfaces/config-module-options.interface';
+
+// 这个新class默认就带了 register、registerAsync 方法。MODULE_OPTIONS_TOKEN 是 options 对象的 token。
+export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN } =
+  new ConfigurableModuleBuilder<ConfigModuleOptions>().build();
+
+// 还可以通过调用  setClassMethodName 方法设置不同的方法名称。
+export const { ConfigurableModuleClass, MODULE_OPTIONS_TOKEN } =
+  new ConfigurableModuleBuilder<ConfigModuleOptions>().setClassMethodName('forRoot').build();
+
+// 然后 Module 继承它
+import { Module } from '@nestjs/common';
+import { ConfigService } from './config.service';
+import { ConfigurableModuleClass } from './config.module-definition';
+
+@Module({
+  providers: [ConfigService],
+  exports: [ConfigService],
+})
+export class ConfigModule extends ConfigurableModuleClass {}
+
+// 其它模块使用 ConfigModule
+@Module({
+  imports: [
+    ConfigModule.register({ folder: './config' }),
+    // or alternatively:异步配置模块
+    // ConfigModule.registerAsync({
+    //   useFactory: () => {
+    //     return {
+    //       folder: './config',
+    //     }
+    //   },
+    //   inject: [...any extra dependencies...]
+    // }),
+  ],
+})
+@Module({
+  imports: [
+    ConfigModule.forRoot({ folder: './config' }), // <-- note the use of "forRoot" instead of "register"
+    // or alternatively:
+    // ConfigModule.forRootAsync({
+    //   useFactory: () => {
+    //     return {
+    //       folder: './config',
+    //     }
+    //   },
+    //   inject: [...any extra dependencies...]
+    // }),
+  ],
+})
+export class AppModule {}
+
+```
+
+### 5. 循环依赖
+模块类之间也会存在循环依赖，解决方法和提供者之间循环依赖解决方法一致。
+```js
+// 循环依赖
+import { Module } from '@nestjs/common';
+@Module({
+  imports: [BModule],
+})
+export class AModule {}
+
+import { Module, forwardRef } from '@nestjs/common';
+@Module({
+  imports: [AModule], // 使用前向引用
+})
+export class BModule {}
+
+// 解决方法-在模块关联的两侧使用相同的 forwardRef() 工具函数。
+import { Module, forwardRef } from '@nestjs/common';
+@Module({
+  imports: [forwardRef(() => BModule)],
+})
+export class AModule {}
+
+import { Module, forwardRef } from '@nestjs/common';
+@Module({
+  imports: [forwardRef(() => AModule)],
+})
+export class BModule {}
+
+```
+
 
 ## 4.3 执行上下文(Execution Context)
 Nest提供了几个实用的类，帮助您轻松编写跨多个应用程序上下文（例如基于Nest HTTP服务器的、微服务和WebSockets应用程序上下文）运行的应用程序。不同类型的应用程序上下文它能拿到的参数是不同的，比如 http 服务可以拿到 request、response 对象，而 ws 服务就没有，如何让 Guard、Interceptor、Exception Filter 跨多种上下文复用是Nest需要考虑的。
