@@ -1143,10 +1143,10 @@ export function logger(req: Request, res: Response, next: NextFunction) {
 // 在 main.ts 里通过 app.use 使用
 import { logger } from './logger';
 import { Request, Response, NextFunction } from 'express';
-app.use(logger);
+app.use(logger);// app.use 等同于在 AppModule 的 configure 方法里的 forRoutes('*')
 app.use(function(req: Request, res: Response, next: NextFunction) {
     console.log('before', req.url);
-    next();
+    next();// 调用下一个 middleware 
     console.log('after');
 })
 
@@ -1156,9 +1156,15 @@ import { Request, Response } from 'express';
 
 @Injectable()
 export class LogMiddleware implements NestMiddleware {
+  // 注入其它服务
+  @Inject(AppService)
+  private readonly appService: AppService;
+  constructor(private readonly appService: AppService) {}
+
   use(req: Request, res: Response, next: () => void) {
     console.log('before2', req.url);
-
+    // 使用其它服务
+    console.log('-------' + this.appService.getHello());
     next();
 
     console.log('after2');
@@ -1225,6 +1231,9 @@ export class AppModule implements NestModule {
       .forRoutes('cats'); // 或者指定路由
       .forRoutes(CatsController) // 或者指定控制器
       .forRoutes({ path: 'cats', method: RequestMethod.GET })// 或者RouteInfo 对象
+   // 都是通过consumer.apply()方法来注册中间件，
+   consumer.apply(AaaMiddleware).forRoutes(CatsController);
+   consumer.apply(AaaMiddleware).forRoutes({ path: 'world2', method: RequestMethod.GET });
 
   }
 }
@@ -1655,6 +1664,102 @@ export class AppModule {}
 
 ```
 
+#### 4. RxJS 
+RxJS 是一个组织异步逻辑的库，它有很多 operator(操作符其实也就是函数)，可以极大的简化异步逻辑的编写。
+它是由数据源产生数据，经过一系列 operator 的处理，最后传给接收者。这个数据源叫做 observable。在nestjs里常用的就几个。
+
+1. tap: 不修改响应数据，执行一些额外逻辑，比如记录日志、更新缓存等
+2. map：对响应数据做修改，一般都是改成 {code, data, message} 的格式
+3. catchError：在 exception filter 之前处理抛出的异常，可以记录或者抛出别的异常
+4. timeout：处理响应超时的情况，抛出一个 TimeoutError，配合 catchErrror 可以返回超时的响应
+
+比如：
+```js
+import { of, filter, map } from 'rxjs';
+
+of(1, 2, 3)
+.pipe(map((x) => x * x))
+.pipe(filter((x) => x % 2 !== 0))
+.subscribe((v) => console.log(`value: ${v}`));
+
+// 使用 map operator 来对 controller 返回的数据做一些修改
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor } from '@nestjs/common';
+import { map, Observable } from 'rxjs';
+
+@Injectable()
+export class MapTestInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(map(data => {
+      return {
+        code: 200,
+        message: 'success',
+        data
+      }
+    }))
+  }
+}
+// 使用 tap operator 来添加一些日志、缓存等逻辑
+import { AppService } from './app.service';
+import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
+import { Observable, tap } from 'rxjs';
+
+@Injectable()
+export class TapTestInterceptor implements NestInterceptor {
+  constructor(private appService: AppService) {}
+
+  private readonly logger = new Logger(TapTestInterceptor.name);
+
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(tap((data) => {
+      
+      // 这里是更新缓存的操作，这里模拟下
+      this.appService.getHello();
+
+      this.logger.log(`log something`, data);
+    }))
+  }
+}
+// catchError、controller 里很可能会抛出错误，这些错误会被 exception filter 处理，返回不同的响应，但在那之前，我们可以在 interceptor 里先处理下。
+import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
+import { catchError, Observable, throwError } from 'rxjs';
+
+@Injectable()
+export class CatchErrorTestInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(CatchErrorTestInterceptor.name)
+
+  intercept (context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(catchError(err => {
+      this.logger.error(err.message, err.stack)
+      return throwError(() => err)
+    }))
+  }
+}
+// timeout、接口如果长时间没返回，要给用户一个接口超时的响应，这时候就可以用 timeout operator。
+import { CallHandler, ExecutionContext, Injectable, NestInterceptor, RequestTimeoutException } from '@nestjs/common';
+import { catchError, Observable, throwError, timeout, TimeoutError } from 'rxjs';
+
+@Injectable()
+export class TimeoutInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    return next.handle().pipe(
+      timeout(3000), // timeout 操作符会在 3s 没收到消息的时候抛一个 TimeoutError
+      catchError(err => {
+        if(err instanceof TimeoutError) {
+          console.log(err);
+          return throwError(() => new RequestTimeoutException());
+        }
+        return throwError(() => err);
+      })
+    )
+  }
+}
+
+
+
+
+
+```
+
 ### 5 管道 Pipe
 
 #### 1. 概述
@@ -1703,7 +1808,44 @@ Nest 自带 9 个开箱即用的管道类、它们都是从 @nestjs/common 包�
 
 9. DefaultValuePipe: 用于为缺少的参数提供默认值。如果某个参数未传递，它会使用提供的默认值替代。new DefaultValuePipe(false/1)、常和转换类管道一起使用提供默认值。
 
-所有转换管道即 Parse* 管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和请求体值的上下文中工作。也就是 @Body(new ParseIntPipe()),@Query(new ParseIntPipe())、@Param(new ParseIntPipe())等这样使用。
+所有转换管道即 Parse* 管道可以直接在方法参数上绑定、这些管道都在验证路由参数、查询字符串参数和中工作。也就是 @Query(new ParseIntPipe())、@Param(new ParseIntPipe())等这样使用。主要是针对get请求。而对呀post请求中的请求体值的上下文 @Body(new ParseIntPipe()),要使用 ValidationPipe 验证管道。
+
+```js
+import { Controller, Get, ParseIntPipe, Query } from '@nestjs/common';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) { }
+
+  @Get()
+  getHello(@Query('age', ParseIntPipe) age: string): string {
+    return this.appService.getHello(age);
+  }
+
+  getHello(
+    @Query('age', ParseFloatPipe)
+    age: string,
+  ): string {
+    return this.appService.getHello(age);
+  }
+
+import { IsNumber, IsString } from 'class-validator';
+export class CreateDto {
+  @IsString()
+  name: string;
+  @IsNumber()
+  age: number;
+}
+
+
+  @Post()
+  create(@Body(new ValidationPipe()) body: CreateDto) {
+    return this.appService.create(body);
+  }
+}
+
+```
 
 
 #### 3. 自定义管道
@@ -1796,7 +1938,7 @@ async create(@Body() createCatDto: CreateCatDto) {
 
 ```
 
-**类验证器:** 另一种比较常用的验证管道类型、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类中添加一些装饰器来校验、不用额外定义schema对象。所以一般我们是使用这种验证。
+**类验证器:** 另一种比较常用的验证管道类型、Nest 与 class-validator 配合得很好。这个优秀的库允许您使用基于装饰器的验证。安装完成后，我们就可以向 Dto 类中添加一些装饰器来校验、不用额外定义schema对象。所以一般我们是使用这种验证。流程是：参数对象通过 class-transformer 转换为 dto 类的对象，之后再用 class-validator 包来对这个对象做验证。
 
 安装依赖: `$ npm i --save class-validator class-transformer`
 ```js
@@ -1831,7 +1973,26 @@ export class ValidationPipePipe implements PipeTransform<any> {
     return !types.includes(metatype);
   }
 }
-
+// 常用验证装饰器
+import { Contains, IsDate, IsEmail, IsFQDN, IsInt, Length, Max, Min } from 'class-validator';
+export class Ppp {
+    @Length(10, 20) // 长度
+    title: string;
+  
+    @Contains('hello') // 包含
+    text: string;
+  
+    @IsInt() // 整数
+    @Min(0) // 最小值
+    @Max(10) // 最大值
+    rating: number;
+  
+    @IsEmail() // 是否是邮箱
+    email: string;
+  
+    @IsFQDN() // 是否是域名
+    site: string;
+}
 // 在控制器里注册管道
 import { IsString, IsInt } from 'class-validator';
 export class CreateCatDto {
@@ -1857,6 +2018,19 @@ async create(
   @Body(new ValidationPipe()) createCatDto: CreateCatDto,
 ) {
   this.catsService.create(createCatDto);
+}
+// 全局范围1-在入口文件配置-不需要注入依赖
+app.useGlobalPipes(new ValidationPipe());
+// 全局范围2-在根模块中配置-需要注入依赖
+import { Module } from '@nestjs/common';
+@Module({
+  providers: [{
+    provide: APP_PIPE,
+    useClass: ValidationPipe,
+  }]
+})
+export class AppModule implements NestModule {
+
 }
 // 结构不一致时报错
 {
@@ -3034,6 +3208,54 @@ getAllAndMerge，会把它们合并为一个对象或者数组。
 getAllAndOverride 会返回第一个非空的 metadata。
 
 ```
+
+## 4.5 接口多版本
+应用开发完一版上线之后，还会不断的迭代。后续可能需要修改已有的接口，但是为了兼容，之前版本的接口还要保留。也就是路由相同但是版本不一样。Nest 内置了这个功能。在控制器中传入一个配置对象声明版本信息，然后单独用 @Version 把 version 2 的接口标识一下。最后在 main.ts 里调用 enableVersioning 开启接口版本功能。
+```js
+import { VersioningType } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  app.enableVersioning({
+    type: VersioningType.HEADER,
+    header: 'version' // 指定通过 version 这个 header 来携带版本号
+    // 除了用自定义 header 携带版本号，还有别的方式：
+    type: VersioningType.MEDIA_TYPE, // MEDIA_TYPE 是在 accept 的 header 里携带版本号
+    key: 'vv='
+    Accept: 'application/json;vv=1'
+    // 也可以用 URI 的方式
+    type: VersioningType.URI
+    // http:localhost:3000/v1/users
+    // http:localhost:3000/v2/users
+  })
+  await app.listen(3000);
+}
+bootstrap();
+
+@Controller({
+  version: '1'
+})
+export class AppController {
+  @Get()
+  getHello(): string {
+    return 'Hello World!';
+  }
+
+  @Get()
+  @Version('2')
+  getHello2(): string {
+    return 'Hello World! version 2';
+  }
+}
+
+// 也可以把新版本的单独放到另一个controller里面
+
+```
+
+
 
 
 # 五、其它技术知识
