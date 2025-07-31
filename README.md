@@ -4065,22 +4065,109 @@ app.use(compression());
 
 
 ## 5.9 文件上传
-要处理文件上传，Nest提供了一个基于express-multer中间件包的内置模块。Multer处理以 multipart/form-data 格式发布的数据，该格式主要用于通过HTTP POST请求上传文件。所有nest处理文件上传也不难。
+Nest 的文件上传是基于 Express 的中间件 multer 实现的,为此 Nest提供了一个基于express-multer中间件包的内置模块。express 的 multer 包是用来处理 multipart/form-data 格式的文件上传请求的。通过 single 方法处理单个字段的单个文件，array 方法处理单个字段的多个文件，fields 方法处理多个字段的文件，any 处理任意数量字段的文件，分别用 req.file 和 req.files 来取解析出的文件。其余非文件字段不会处理，还是通过 req.body 来取。
 
-安装Multer的类型定义包: `$ npm i -D @types/multer`
 
-安装了此包后，我们现在可以使用Express.Multer.File类型
+先学习下 multer 包的使用。
+安装:`$ npm install express multer cors`
+```js
+const express = require('express')
+const multer  = require('multer')
+const cors = require('cors'); // 处理跨域
 
-`import { Express } from 'express'`
+const app = express()
+app.use(cors());
+
+const upload = multer({ dest: 'uploads/' }) // 用 multer 处理文件上传，指定保存目录为 uploads/。
+
+// 单文件上传
+app.post('/aaa', upload.single('aaa'), function (req, res, next) {
+  console.log('req.file', req.file); // 可以拿到文件字段
+  console.log('req.body', req.body); // 其余非文件字段
+})
+// 多文件上传-通过 array 方法来取上传的文件，并且指定最大数量的限制。
+app.post('/bbb', upload.array('bbb',2), function (req, res, next) { 
+  console.log('req.files', req.files);// 接收到了多个文件[{},{}]
+  console.log('req.body', req.body); 
+})
+// 多文件上传-不同字段名
+// 通过 fields 方法指定每个字段的名字和最大数量，然后接收到请求后通过 req.files['xxx'] 来取对应的文件信息。其他非文件字段，同样是通过 req.body 来取。
+app.post('/ccc', upload.fields([
+    { name: 'avator', maxCount: 3 },
+    { name: 'bg', maxCount: 2 }
+]), function (req, res, next) {
+    console.log('req.files', req.files);
+    console.log('req.body', req.body);
+})
+// 多文件上传-不知道有哪些字段是 file ，这时候不是 key、value 的形式了，需要自己遍历数组来查找。
+app.post('/ddd', upload.any(), function(req, res, next) {
+    console.log('req.files', req.files);
+    console.log('req.body', req.body);
+});
+
+app.listen(3000, () => console.log('Example app listening on port 3000!'));
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://unpkg.com/axios@0.24.0/dist/axios.min.js"></script>
+</head>
+<body>
+    <input id="fileInput" type="file"/>
+     <input id="fileInput" type="file" multiple/> // 批量上传
+    <script>
+        const fileInput = document.querySelector('#fileInput');
+        const fileInput2 = document.querySelector('#fileInput');
+
+        async function formData() {
+            const data = new FormData();
+            data.set('name','zhangsan');
+            data.set('age', 20);
+            data.set('aaa', fileInput.files[0]);
+
+            const res = await axios.post('http://localhost:3000/aaa', data);
+            console.log(res);
+        } 
+        async function formData2() {
+            const data = new FormData();
+            data.set('name','zhangsan');
+            data.set('age', 20);
+            {/* 取出每个 file */}
+            [...fileInput.files].forEach(item => {
+                data.append('bbb', item)
+            })
+
+            const res = await axios.post('http://localhost:3333/bbb', data);
+            console.log(res);
+        }
+
+
+        fileInput.onchange = formData;
+        fileInput2.onchange = formData2;
+    </script>
+</body>
+</html>
+
+```
+在 Nest 中Multer处理以 multipart/form-data 格式发布的数据，该格式主要用于通过HTTP POST请求上传文件。所以nest处理文件上传也不难，实际是对multer的封装。
+
+为了获得更好的类型安全性，安装Multer的类型定义包: `$ npm i -D @types/multer`安装了此包后，我们现在可以使用Express.Multer.File类型 `import { Express } from 'express'`
 
 ### 1. 单个文件上传
 
-要上传单个文件，只需将FileInterceptor()拦截器绑定到路由处理程序，并使用@UploadedFile()装饰器从请求中提取file。
+要上传单个文件，只需将FileInterceptor()拦截器绑定到路由处理程序，并使用@UploadedFile()装饰器从request 请求中提取file。
+
+**注意** FileInterceptor() 装饰器从 @nestjs/platform-express 包导出。@UploadedFile() 装饰器从 @nestjs/common 导出。
 
 FileInterceptor 接收两个参数
-1. fieldName、HTML标签的name属性值
-2. options配置对象
-```JavaScript
+1. fieldName、字符串类型 HTML标签的name属性值
+2. options 可选配置对象，该对象与 multer 构造函数使用的对象相同。也就是可以指定上传的文件存储位置、文件名、文件大小限制等。
+
+```js
 // 文件上传
 import { UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -4088,7 +4175,9 @@ import { Express } from 'express';
 // 控制器
   // 文件上传
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', {
+    dest: 'uploads'
+})) // 指定上传的文件存储位置
   uploadFie(@UploadedFile() file: Express.Multer.File) {
     console.log(file);
     
@@ -4102,83 +4191,37 @@ import { Express } from 'express';
   buffer: Buffer数据,
   size:253578
 }
+ {
+  fieldname: 'aaa',
+  originalname: '00d1d8a848b34c8ca29fb3e7c89f1cd0.jpg',
+  encoding: '7bit',
+  mimetype: 'image/jpeg',
+  destination: 'uploads',
+  filename: '8f60dc92d7b767e873fe403f3757c8e1',
+  path: 'uploads\\8f60dc92d7b767e873fe403f3757c8e1',
+  size: 1450931
+}
+
+
 // 可以根据文件元数据，比如文件大小或文件 MIME 类型等对上传内容进行文件格式、大小判断。
 
 ```
 
-### 2. 文件校验
-可以给 @UploadedFile 装饰器传入管道、为此Nest 提供了一个内置的 Pipe 来处理常见的使用情况，并促进/标准化添加新的用例。这个 Pipe 叫做 ParseFilePipe。也可以使用ParseFilePipeBuilder 类来组合和构建你的验证器、可以避免手动实例化每个验证器，而是直接传递它们的选项。
+### 2. 多个文件上传
+把 FileInterceptor 换成 FilesInterceptor，把 UploadedFile 换成 UploadedFiles，都是多加一个 s。
 
-Nest提供了两个内置的FileValidator与ParseFilePipe管道结合使用实现文件上传的校验。
-1. MaxFileSizeValidator 检查给定文件的大小是否小于提供的值（以字节为单位）
-2. FileTypeValidator 检查给定文件的MIME类型是否与给定的值匹配。
-
-当然用户也可以自己定义文件校验类、只需要继承 FileValidator 抽象类接口就行
-```JavaScript
-import { UploadedFile, MaxFileSizeValidator,FileTypeValidator, FileValidator, ParseFilePipe, ParseFilePipeBuilder,} from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
-import { Express } from 'express';
-// 控制器
-  // 文件上传
-  @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
-  // @UsePipes(FileSizeValidationPipe)// 自定义文件校验管道
-  uploadFie(@UploadedFile(
-    // 使用内置的ParseFilePipe管道
-    new ParseFilePipe({
-      // 在任何验证器失败的情况下要抛出的 HTTP 状态码。默认为 400（BAD REQUEST）。
-      errorHttpStatusCode:405,
-      // 一个工厂函数，接收错误消息并返回一个错误。
-      exceptionFactory
-      // 必传：指定一个文件验证器数组，这些验证器将由 ParseFilePipe 执行
-      validators: [
-        // ... Set of file validator instances here
-        new MaxFileSizeValidator({ maxSize: 1000 }),
-        new FileTypeValidator({ fileType: 'image/jpeg' }),
-      ]
-    })
-
-    // 使用特殊的 ParseFilePipeBuilder 类来组合和构建你的验证器。
-    // 它内置了下面链式调用的方法
-    new ParseFilePipeBuilder()
-    .addFileTypeValidator({
-      fileType: 'jpeg',
-    })
-    .addMaxSizeValidator({
-      maxSize: 1000
-    })
-    .build({
-      errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY
-    }),
-  ) file: Express.Multer.File) {
-    console.log(file);
-    
-  }
-
-// 自定义文件校验器
-export CustomFileValidator extends FileValidator {
-  // 实现抽象方法即可
-  isValid(file?: any): boolean | Promise<boolean>{
-    return 'dddd'
-  }
-
-  buildErrorMessage(file: any): string;{
-    throw new Error('dddd')
-  }
-}
-
-```
-
-### 3. 多个文件上传
 1. 要上传一个文件数组（通过一个单一的字段名标识），可以使用 FilesInterceptor() 装饰器（注意装饰器名称中的Files是复数形式）。这个装饰器接受三个参数：
    - fieldName: 文件名。
    - maxCount: 可选数字，用于定义要接受的最大文件数量。
    - options: 可选的 MulterOptions 对象
-```JavaScript
+```js
 import {  UploadedFiles } from '@nestjs/common';
 import {  FilesInterceptor } from '@nestjs/platform-express';
+
 @Post('upload')
-@UseInterceptors(FilesInterceptor('files'))
+@UseInterceptors(FilesInterceptor('files', {
+    dest: 'uploads'
+})) // 指定上传的文件存储位置
 uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
   console.log(files);
 }
@@ -4207,19 +4250,33 @@ uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
 ```
     
 2. 要上传多个文件（每个文件具有不同的字段名称键），请使用 FileFieldsInterceptor() 装饰器。此装饰器接受两个参数：
-   - uploadedFields 一个包含多个对象的数组，每个对象都指定了一个必需的 name 属性，该属性的值为一个字符串，指定了一个字段名称
+   - uploadedFields 一个包含多个对象的数组，每个对象都指定了一个必需的 name 属性，该属性的值为一个字符串，指定了一个字段名称，以及一个可选的 maxCount 属性，该属性的值是一个数字，指定了该字段可以上传的文件数。
    - options: 可选的 MulterOptions 对象
 ```JavaScript
 import {  UploadedFiles } from '@nestjs/common';
 import {  FileFieldsInterceptor } from '@nestjs/platform-express';
 @Post('upload')
 @UseInterceptors(FileFieldsInterceptor([
-  { name: 'avatar', maxCount: 1 },
-  { name: 'background', maxCount: 1 },
+  { name: 'avatar', maxCount: 3 },
+  { name: 'background', maxCount: 2 },
 ]))
-uploadFile(@UploadedFiles() files: { avatar?: Express.Multer.File[], background?: Express.Multer.File[] }) {
-  console.log(files);
+uploadFile(@UploadedFiles() files: { avatar?: Express.Multer.File[], background?: Express.Multer.File[] }, @Body() body) {
+    console.log('body', body);
+    console.log('files', files);
 }
+async function formData3() {
+    const data = new FormData();
+    data.set('name','张三');
+    data.set('age', 30);
+    data.append('avatar', fileInput.files[0]);
+    data.append('avatar', fileInput.files[1]);
+    data.append('background', fileInput.files[2]);
+    data.append('background', fileInput.files[3]);
+
+    const res = await axios.post('http://localhost:3000/upload', data);
+    console.log(res);
+}
+
 // files是一个对象、结构如下
 {
   avatar:[
@@ -4247,15 +4304,20 @@ uploadFile(@UploadedFiles() files: { avatar?: Express.Multer.File[], background?
 
 ```
 
-3. 任意文件名、要上传具有任意字段名称键的所有字段，请使用 AnyFilesInterceptor() 装饰器。此装饰器可以接受一个可选的 options 对象。
+3. 任意文件名也就是不知道有哪些字段是 file、要上传具有任意字段名称键的所有字段，请使用 AnyFilesInterceptor() 装饰器。此装饰器可以接受一个可选的 options 对象。
 ```JavaScript
 import {  UploadedFiles } from '@nestjs/common';
 import {  AnyFilesInterceptor } from '@nestjs/platform-express';
+
 @Post('upload')
-@UseInterceptors(AnyFilesInterceptor())
-uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
-  console.log(files);
+@UseInterceptors(AnyFilesInterceptor({
+    dest: 'uploads'
+}))
+uploadFile(@UploadedFiles() files: Array<Express.Multer.File>, @Body() body) {
+    console.log('body', body);
+    console.log('files', files);
 }
+
 // files 是一个数组结构如下
 [
   {
@@ -4279,9 +4341,9 @@ uploadFile(@UploadedFiles() files: Array<Express.Multer.File>) {
 
 ```
 
-### 4. 没有文件
-只接受 multipart/form-data 数据类型但不允许上传任何文件，请使用 NoFilesInterceptor装饰器。它会将数据设置为请求体的属性。如果请求中发送了任何文件，将会抛出 BadRequestException。
-```JavaScript
+### 3. 没有文件
+只接受 multipart/form-data 数据类型但不允许上传任何文件，使用 NoFilesInterceptor装饰器。它会将数据设置为请求体的属性。如果请求中发送了任何文件，将会抛出 BadRequestException。
+```js
 import {  Body } from '@nestjs/common';
 import {  NoFilesInterceptor } from '@nestjs/platform-express';
 @Post('upload')
@@ -4292,35 +4354,120 @@ handleMultiPartData(@Body() body) {
 
 ```
 
-### 5. 上传地址
-和multer这个包一样也可以指定上传路径、或者设置统一默认选项在导入 MulterModule 时调用静态的 register() 方法，传入支持的选项。
-```JavaScript
-MulterModule.register({
-  dest: './upload',
-});
+### 4. 文件校验
+如果还需要对上传的文件做一些限制，比如文件大小、文件 MIME 类型等，很明显，这部分可以放在 pipe 里做并将其绑定到用 UploadedFile 装饰器注解的参数上。即给 @UploadedFile(myPipe) 装饰器传入管道。
 
-@Post('upload')
-  @UseInterceptors(
-    // 针对单独接口
-    FileInterceptor('file', {
-      dest: './upload',
-    }),
-  )
-  uploadFie(
-    @UploadedFile()
-    file: Express.Multer.File,
-  ) {
-    const { buffer, ...rest } = file;
-    console.log(rest);
-    return rest;
+但像文件大小、类型的校验这种逻辑太过常见。为此Nest 提供了一个内置的 Pipe 管道来处理这些常见的情况，并促进/标准化新管道的添加。我们直接使用就行。
+
+这个 Pipe 叫做 ParseFilePipe。同时，Nest提供了两个内置的 FileValidator 与ParseFilePipe管道结合使用实现文件上传的校验。
+1. MaxFileSizeValidator 检查给定文件的大小是否小于提供的值（以字节为单位）
+2. FileTypeValidator 检查给定文件的MIME类型是否与给定的值匹配。
+
+```js
+// 自定义校验管道
+// nest g pipe common/pipe/file-size-validation-pipe --no-spec --flat
+import { PipeTransform, Injectable, ArgumentMetadata, HttpException, HttpStatus } from '@nestjs/common';
+
+@Injectable()
+export class FileSizeValidationPipePipe implements PipeTransform {
+  transform(value: Express.Multer.File, metadata: ArgumentMetadata) {
+    // 这里的value 就是 @UploadedFile 取出来的东西
+    if(value.size > 10 * 1024) {
+      throw new HttpException('文件大于 10k', HttpStatus.BAD_REQUEST);
+    }
+    return value;
   }
+}
+
+// 添加到路由中
+@Post('upload')
+@UseInterceptors(FileInterceptor('file'))
+uploadFileAndValidate(@UploadedFile(
+  new FileSizeValidationPipe(),
+  FileSizeValidationPipe,// 也可以将实例化交给NestJS的IoC容器
+  // other pipes can be added here
+) file: Express.Multer.File, ) {
+  return file;
+}
+
+// 使用内置管道
+import { UploadedFile, MaxFileSizeValidator,FileTypeValidator, FileValidator, ParseFilePipe, ParseFilePipeBuilder,} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Express } from 'express';
+// 控制器
+  // 文件上传
+  @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
+  // @UsePipes(FileSizeValidationPipe)// 自定义文件校验管道
+  uploadFie(@UploadedFile(
+    // 使用内置的ParseFilePipe管道
+    new ParseFilePipe({
+      // 在任何验证器失败的情况下要抛出的 HTTP 状态码。默认为 400（BAD REQUEST）。
+      errorHttpStatusCode:405,
+      // 一个工厂函数，接收错误消息并返回一个错误。自定义错误信息
+      exceptionFactory: (error: string) => {new HttpException(error, HttpStatus.BAD_REQUEST)},
+      // 必传：指定一个文件验证器数组，这些验证器将由 ParseFilePipe 执行
+      validators: [
+        // ... Set of file validator instances here
+        new MaxFileSizeValidator({ maxSize: 1000 }),// 校验文件大小
+        new FileTypeValidator({ fileType: 'image/jpeg' }),// 校验文件类型
+      ]
+    })
+  ) file: Express.Multer.File) {
+    console.log(file);
+    
+  }
+ // 使用特殊的 ParseFilePipeBuilder 类来组合和构建你的验证器。可以避免手动实例化每个验证器，直接传递它们的选项即可
+  uploadFie(@UploadedFile(
+    // 它内置了下面链式调用的方法
+    new ParseFilePipeBuilder()
+    .addFileTypeValidator({
+      fileType: 'jpeg',
+    })
+    .addMaxSizeValidator({
+      maxSize: 1000
+    })
+    .build({
+      errorHttpStatusCode: HttpStatus.UNPROCESSABLE_ENTITY,
+      fileIsRequired: false // 默认情况下文件是必传的,false表示文件是可选的
+    }),
+  ) file: Express.Multer.File) {
+    console.log(file);
+    
+  }
+
+// 除了使用内置的validator文件校验器外，也可以自定义文件校验器。只要继承 FileValidator 就可以
+// 自定义文件校验器
+import { FileValidator } from "@nestjs/common";
+export CustomFileValidator extends FileValidator {
+  // 实现抽象方法即可
+  isValid(file?: any): boolean | Promise<boolean>{
+    return 'dddd'
+  }
+
+  buildErrorMessage(file: any): string;{
+    throw new Error('dddd')
+  }
+
+  isValid(file: Express.Multer.File): boolean | Promise<boolean> {
+     if(file.size > 10000) {
+         return false;
+     }
+     return true;
+  }
+  buildErrorMessage(file: Express.Multer.File): string {
+    return `文件 ${file.originalname} 大小超出 10k`;
+  }
+}
 
 ```
 
-### 6. 流式传输文件内容
-在Nest中同样可以对要传输的文件(图像、文档和任何其他文件类型。)进行流式传输减少服务端带宽的压力、是通过 可流式传输的文件类 StreamableFile来实现的。
+### 5. 流式传输文件内容
+在Nest中同样可以对要传输的文件(图像、文档和任何其他文件类型。)进行流式传输减少服务端带宽的压力、是通过 可流式传输的文件类 StreamableFile 来实现的。
+
 它是一个保存要返回的流的类。要创建一个新的StreamableFile，您可以将Buffer或Stream传递给StreamableFile构造函数。
-```JavaScript
+
+```js
 import { Controller, Get, StreamableFile } from '@nestjs/common';
 import { createReadStream } from 'fs';
 import { join } from 'path';
@@ -4337,11 +4484,161 @@ export class FileController {
 
 ```
 
-### 7. 大文件切片上传
+### 6. 大文件切片上传
+当文件很大的时候，需要对文件进行切片上传。比如1G的文件，可以分成10片，每片100M的小文件，然后这些文件并行上传。然后等 10 个小文件都传完之后，再发一个请求把这 10 个小文件合并成原来的大文件。这就是大文件分片上传的方案。
 
-### 8. OSS 上传
-OSS （Object Storage Service）对象存储服务来上传下载文件、以阿里云 OSS 为例。
+所以关键在于如何拆分和合并文件文件。
+
+**拆分：**浏览器里 Blob 有 slice 方法，可以截取某个范围的数据，而 File 就是一种 Blob。我们可以在 input 里选择了 file 之后，通过 slice 对 File 分片并发上传。
+
+**合并：**当所有分片传输完成时，发送一个合并请求，服务端通过 fs.createWriteStream 指定 start 位置，也就是从什么位置开始写入。来把这些分片文件写入到同一个文件里，完成合并之后删除分片文件。
+
+```js
+// 大文件切片上传
+  @Post('sliceUpload')
+  @UseInterceptors(
+    FilesInterceptor('files', 20, {
+      dest: 'uploads',
+    }),
+  )
+  uploadFilesBig(
+    @UploadedFiles() files: Array<Express.Multer.File>,
+    @Body() body,
+  ) {
+    console.log('body', body);
+    console.log('files', files);
+    // 处理
+    // 获取文件名
+    const fileName = body.name.match(/(.+)\-\d+$/)[1];
+    // 同一个文件的分片文件单独存放
+    const chunkDir = 'uploads/chunks_' + fileName;
+
+    if (!fs.existsSync(chunkDir)) {
+      fs.mkdirSync(chunkDir);
+    }
+    fs.cpSync(files[0].path, chunkDir + '/' + body.name);
+    fs.rmSync(files[0].path);
+  }
+
+  // 大文件切片合并
+  @Get('merge')
+  merge(@Query('name') name: string) {
+    const chunkDir = 'uploads/chunks_' + name;
+
+    const files = fs.readdirSync(chunkDir);
+
+    let count = 0;
+    let startPos = 0;
+    files.map((file) => {
+      const filePath = chunkDir + '/' + file;
+      const stream = fs.createReadStream(filePath);
+      stream
+        .pipe(
+          fs.createWriteStream('uploads/' + name, {
+            start: startPos,
+          }),
+        )
+        .on('finish', () => {
+          count++;
+          // 合并完成之后把 chunks 目录删掉
+          if (count === files.length) {
+            fs.rm(
+              chunkDir,
+              {
+                recursive: true,
+              },
+              () => { },
+            );
+          }
+        });
+
+      startPos += fs.statSync(filePath).size;
+    });
+  }
+
+// 前端
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>文件上传</title>
+    <script src="https://unpkg.com/axios@0.24.0/dist/axios.min.js"></script>
+  </head>
+  <body>
+
+    <div>----------</div>
+    <p>分片上传</p>
+    <input id="fileInput3" type="file" />
+    <script>
+      const fileInput3 = document.querySelector('#fileInput3');
+
+      const chunkSize = 500 * 1024; // 分片大小 500kB
+      fileInput3.onchange = async function () {
+        const file = fileInput3.files[0];
+
+        console.log(file);
+
+        const chunks = [];
+        let startPos = 0;
+        while (startPos < file.size) {
+          chunks.push(file.slice(startPos, startPos + chunkSize));
+          startPos += chunkSize;
+        }
+        // 文件名加一个随机的字符串。
+        const randomStr = Math.random().toString().substring(2, 8);
+        // 所有任务存到一个数组中
+        const tasks = [];
+        chunks.map((chunk, index) => {
+          const data = new FormData();
+
+          data.set('name', randomStr + '_' + file.name + '-' + index);
+          data.append('files', chunk);
+          tasks.push(axios.post('http://localhost:3000/sliceUpload', data));
+        });
+        // 等待所有任务完成-调用合并接口
+        await Promise.all(tasks);
+        axios.get(
+          'http://localhost:3000/merge?name=' + randomStr + '_' + file.name,
+        );
+      };
+    </script>
+  </body>
+</html>
+
+```
+
+### 7. OSS 文件上传
+文件上传是常见需求，一般我们不会把文件直接上传到应用服务器，因为单台服务器存储空间是有限的，不好扩展。而是会用单独的 OSS （Object Storage Service）对象存储服务来上传下载文件。
+本地的文件存储是目录-文件的组织方式、而云存储是一个桶里放一些文件。
+
+最好的方法是：服务端用 RAM 子用户的 accessKey 来生成临时签名，然后返回给客户端，客户端用这个来直传文件到 OSS。
+
+以阿里云 OSS 为例。
 安装需要依赖：`npm install ali-oss`
+```js
+const OSS = require('ali-oss')
+
+const client = new OSS({
+    region: 'oss-cn-beijing',
+    bucket: 'guang-333',
+    accessKeyId: '',
+    accessKeySecret: '',
+});
+
+async function put () {
+  try {
+    const result = await client.put('cat.png', './mao.png');
+    console.log(result);
+  } catch (e) {
+    console.log(e);
+  }
+}
+
+put();
+
+```
 
 
 ## 5.10 网络请求
