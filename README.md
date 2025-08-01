@@ -3888,44 +3888,253 @@ export class AppModule {}
 ```
 
 ## 5.6 日志
-之前我们是自己收集信息然后写入本地文件中。
-Nest内置了一个基于文本的日志记录器，在应用程序引导和其他情况下（例如显示捕获的异常，即系统日志）中使用。此功能通过@nestjs/common包中的Logger类提供。对于更高级的日志功能，您可以使用任何Node.js日志包（如Winston）来实现完全自定义的生产级日志记录系统。
+之前我们是使用 console.log 打印的日志，这样有不少弊端：没有日志的不同级别的区分，不能通过开关控制是否打印等。
 
-### 1. 内置日志对象
+Nest 内置了一个基于文本的日志记录器，在应用程序引导和其他情况下（例如显示捕获的异常，即系统日志）中使用。
+
+此功能通过@nestjs/common包中的Logger类提供。对于更高级的日志功能，您可以使用任何Node.js日志包（如Winston）来实现完全自定义的生产级日志记录系统。
+
+### 1. 内置日志对象 Logger
 Nest中内置了一个 Logger 对象，该对象可用于记录应用程序日志。
+1. 完全禁用日志记录
+2. 指定日志的详细级别（例如，显示错误、警告、调试信息等）
+3. 配置日志消息的格式化方式（原始格式、JSON 格式、彩色格式等）
+4. 覆盖默认日志记录器的时间戳格式（例如使用 ISO8601 标准作为日期格式）
+5. 完全覆盖默认日志记录器
+6. 通过扩展来自定义默认日志记录器
+7. 利用依赖注入来简化应用程序的构建和测试
+
+日志级别： 'log'、'fatal'、'error'、'warn'、'debug'、'verbose'
+
+具体使用如下：
+
 ```js
-import { Logger } from '@nestjs/common';
-// 注册属性
+// 模块中使用
+import { ConsoleLogger, Controller, Get, Logger } from '@nestjs/common';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
   private logger = new Logger();
 
-// 路由handler中使用
-    this.logger.debug('aaa', AppService.name);
-    this.logger.error('bbb', AppService.name);
-    this.logger.log('ccc', AppService.name);
-    this.logger.verbose('ddd', AppService.name);
-    this.logger.warn('eee', AppService.name);
-// 这里的 verbose、debug、log、warn、error 就是日志级别，第一个参数是日志的内容。第二个 AppService.name 是 context，也就是当前所在的上下文，这个日志是受 Nest 控制的，可以在创建应用的时候指定是否开启、也可以自己决定输出什么级别的日志。
-NestFactory.create(AppModule,{
-  logger:false,
-  logger:['error','warn']
-})
+  constructor(private readonly appService: AppService) {}
+
+  @Get()
+  getHello(): string {
+    this.logger.debug('aaa', AppController.name);
+    this.logger.error('bbb', AppController.name);
+    this.logger.log('ccc', AppController.name);
+    this.logger.verbose('ddd', AppController.name);
+    this.logger.warn('eee', AppController.name);
+    
+    return this.appService.getHello();
+  }
+}
+// 访问时控制台会输出日志
+[Nest] 4572  - 2025/07/31 10:40:13   DEBUG [AppController] aaa
+[Nest] 4572  - 2025/07/31 10:40:13   ERROR [AppController] bbb
+[Nest] 4572  - 2025/07/31 10:40:13     LOG [AppController] ccc // 这种就是我们启动nestjs时默认的日志
+[Nest] 4572  - 2025/07/31 10:40:13 VERBOSE [AppController] ddd
+[Nest] 4572  - 2025/07/31 10:40:13    WARN [AppController] eee
+
+// 这里的 verbose、debug、log、warn、error 就是日志级别，第一个参数是日志的内容。第二个 AppService.name 是 context，也就是当前所在的上下文会显示在方括号内。
+// 这个日志是受 Nest 控制的，可以在创建应用的时候指定是否开启、也可以自己决定输出什么级别的日志。或者定制行为。
+const app = await NestFactory.create(AppModule, {
+  logger: false,// 禁用日志记录
+  logger: ['error', 'warn'],// 启用特定日志级别，请将 logger 属性设置为一个字符串数组，指定要显示的日志级别
+  logger: new ConsoleLogger({
+    colors: false,// 禁用彩色输出
+    prefix: 'MyApp', // 每条日志消息配置前缀、Default is "Nest"
+    json: true, // 以 JSON 格式打印日志消息
+  }),
+});
+await app.listen(process.env.PORT ?? 3000);
+
+// 自定义日志打印的方式，定义一个实现 LoggerService 接口的类
+import { LoggerService, LogLevel } from '@nestjs/common';
+
+export class MyLogger implements LoggerService {
+  // 重新实现所有方法
+    log(message: string, context: string) {
+        console.log(`---log---[${context}]---`, message)
+    }
+
+    error(message: string, context: string) {
+        console.log(`---error---[${context}]---`, message)
+    }
+
+    warn(message: string, context: string) {
+        console.log(`---warn---[${context}]---`, message)
+    }
+    // 其它方法同理
+}
+// 然后在创建应用时指定这个 logger
+const app = await NestFactory.create(AppModule, {
+  logger:  new MyLogger(),
+});
+
+// 也可以继承 ConsoleLogger，重写一些方法。因为 ConsoleLogger 实现了 LoggerService 接口
+import { ConsoleLogger } from '@nestjs/common';
+
+export class MyLogger2 extends ConsoleLogger{
+    log(message: string, context: string) {
+        console.log(`[${context}]`,message)
+    }
+}
+
+
+
 
 ```
 
 ### 2. 使用 winston 
-它是 Node 最流行的日志框架、安装 `npm i winston`、在Nest种集成 winston 本质就是自定义logger 。
-然后需要安装 dayjs 格式化日期 `npm install dayjs`
-安装 chalk 来打印颜色 `npm install --save chalk@4`
 
+#### 1. 概述
+服务端的日志经常要用来排查问题，需要搜索、分析日志内容，所以需要写入文件或者数据库里。所以生产环境应用通常有特定的日志记录需求，包括高级过滤、格式化和集中式日志记录。
+
+所以生产环境应用通常会利用专门的日志记录模块如 Winston，它是 Node 最流行的日志框架、安装 `npm i winston`、
 它有7种日志级别：
-1. error - 0
-2. warn - 1
-3. info - 2
-4. http - 3
-5. verbose - 4
-6. debug - 5
-7. silly - 6
+1. "error" - 0
+2. "warn" - 1
+3. "info" - 2
+4. "http" - 3
+5. "verbose" - 4
+6. "debug" - 5
+7. "silly" - 6
 
+Winston中的 transports：日志的传输方式有内置的社区模块，也可以自定义。
+1. Console：将日志打印到控制台-内置
+2. File：将日志写入文件-内置
+3. Http：将日志发送到 HTTP 服务器-内置
+4. Stream：将日志写入流-内置
+5. DailyRotateFile：将日志按时间切割写入文件，需要安装 `npm i winston-daily-rotate-file`
+6. Syslog：将日志发送到系统日志服务
+
+基本上，内置的和社区的 transport 就足够用了，不管是想把日志发送到别的服务，还是把日志存到数据库等，都可以用不同 Transport 实现。
+
+日志可以通过 format 指定格式：也可以单独指定不同的 transport 
+simple： winston.format.simple()
+json： winston.format.json()
+prettyPrint（比 json 的格式多了一些空格）: winston.format.prettyPrint()
+用 combine 组合 timestamp 和 json: winston.format.combine(winston.format.timestamp(), winston.format.json(),winston.format.label({label: '标签'}))
+colorize： winston.format.colorize() 带颜色
+
+#### 2 node里使用
+// 如果需要按时间进行日志切割，可以配置如下：
+安装`npm install --save winston-daily-rotate-file`
+
+```js
+import winston from 'winston';
+import 'winston-daily-rotate-file';
+
+//  创建了 logger 实例，指定 level、format、tranports。
+const logger = winston.createLogger({
+    level: 'debug',// 打印的日志级别
+    format: winston.format.simple(), // 日志格式
+    transports: [// 日志的传输方式
+        new winston.transports.Console(),
+        new winston.transports.File({ 
+            dirname: 'log', // 日志保存目录
+            filename: 'test.log', // 日志文件名
+            maxsize: 10485760, // 日志文件最大大小
+            maxFiles: 5, // 日志文件最大个数
+            json: false, // 是否以 json 格式保存日志
+            timestamp: true, // 是否保存时间戳
+            level: 'debug',  // 日志级别
+        }),
+        new winston.transports.DailyRotateFile({
+            level: 'info',
+            dirname: 'log2',
+            filename: 'test-%DATE%.log',
+            datePattern: 'YYYY-MM-DD-HH-mm',// 指定文件名里的日志格式包含分钟，所以不同的分钟打印的日志会写入不同文件里
+            maxSize: '1k'
+         }),
+        //  使用 http 的 transport 来传输日志，就是它会吧下面的日志发送给 http 服务器对应的 url
+         new winston.transports.Http({
+            host: 'localhost',
+            port: '3000',
+            path: '/log'
+        })
+    ],
+    // transports指定不同格式的日志的输出方式
+    transports: [
+        new winston.transports.Console({
+            format: winston.format.combine(
+                winston.format.colorize(),
+                winston.format.simple()
+            ),
+        }),
+        new winston.transports.File({ 
+            dirname: 'log3',
+            filename: 'test.log',
+            format: winston.format.json()
+        }),
+    ],
+    // 处理未捕获的错误的日志
+     exceptionHandlers: [
+        new winston.transports.File({
+            filename: 'error.log'
+        })
+    ],
+    // Promise 的未捕获异常
+    rejectionHandlers: [
+        new winston.transports.File({
+            filename: 'rejection.log'
+        })
+    ]
+});
+
+logger.info('法沙发沙发');
+logger.error('灌水灌水');
+logger.debug(66666666);
+
+// 还可以创建多个 logger 实例，每个 logger 实例有不同的 format、transport、level 等配置：
+import winston from 'winston';
+
+// 只控制台输出
+winston.loggers.add('console', {
+    format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+    ),
+    transports: [
+        new winston.transports.Console()
+    ]
+});
+// 只写入文件
+winston.loggers.add('file', {
+    format:winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+    ),
+    transports: [
+        new winston.transports.File({
+            dirname: 'log4',
+            filename: 'test.log',
+            format: winston.format.json()
+        })
+    ]
+});
+
+
+const logger1 = winston.loggers.get('console');
+
+logger1.info('aaaaa');
+logger1.error('bbbbb');
+
+const logger2 = winston.loggers.get('file');
+
+logger2.info('xxxx');
+logger2.info('yyyy');
+
+
+
+```
+
+#### 3. NestJs 集成 winston
+在Nest种集成 winston 本质就是自定义 logger 、然后需要安装 dayjs 格式化日期 `npm install dayjs`、安装 chalk 来打印颜色 `npm install --save chalk@4`
+
+**作为一个服务提供**
 ```js
 
 import { ConsoleLogger, LoggerService, LogLevel } from '@nestjs/common';
@@ -3934,12 +4143,9 @@ import * as dayjs from 'dayjs';
 import { createLogger, format, Logger, transports } from 'winston';
 
 export class MyLogger implements LoggerService {
-
     private logger: Logger;
-
     constructor() {
         super();
-    
         this.logger = createLogger({
             level: 'debug',
             transports: [
@@ -3968,7 +4174,7 @@ export class MyLogger implements LoggerService {
 
     log(message: string, context: string) {
         const time = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
-
+        // 之前的console.log 变成Winston的logger。
         this.logger.log('info', message, { context, time });
     }
 
@@ -3985,9 +4191,340 @@ export class MyLogger implements LoggerService {
     }
 }
 
+```
 
+也可以自定义成一个动态模块，在 forRoot 方法里传入 options，模块内创建 winston 的 logger 实例。并且这个模块声明为全局模块。这样，在应用的各处都可以注入我们自定义的基于 winston 的 logger 了。
+```js
+// src/logger/logger.module.ts
+import { DynamicModule, Global, Module } from '@nestjs/common';
+import { LoggerOptions } from 'winston';
+import { MyLogger } from '../myLogger';
+
+// 定义一个提供者名字
+export const WINSTON_LOGGER_TOKEN = 'WINSTON_LOGGER';
+
+@Global()
+@Module({})
+export class WinstonModule {
+  public static forRoot(options: LoggerOptions): DynamicModule {
+    return {
+      module: WinstonModule,
+      // 把 MyLogger 作为值提供者提供出去
+      providers: [
+        {
+          provide: WINSTON_LOGGER_TOKEN,
+          useValue: new MyLogger(options),
+        },
+      ],
+      exports: [WINSTON_LOGGER_TOKEN],
+    };
+  }
+}
+
+// myLogger.ts  
+import { LoggerService } from '@nestjs/common';
+import { createLogger, format, Logger, transports } from 'winston';
+import * as dayjs from 'dayjs';
+
+export class MyLogger implements LoggerService {
+  private logger: Logger;
+
+  // 接收传入的参数
+  constructor(options) {
+    this.logger = createLogger(options);
+  }
+
+  log(message: string, context: string) {
+    const time = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
+
+    this.logger.log('info', message, { context, time });
+  }
+
+  error(message: string, context: string) {
+    const time = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
+
+    this.logger.log('error', message, { context, time });
+  }
+
+  warn(message: string, context: string) {
+    const time = dayjs(Date.now()).format('YYYY-MM-DD HH:mm:ss');
+
+    this.logger.log('warn', message, { context, time });
+  }
+}
+
+// 入口文件引入
+app.useLogger(app.get(WINSTON_LOGGER_TOKEN));
+// 根模块初始化
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { WinstonModule } from './winston/winston.module';
+import { transports, format } from 'winston';
+import * as chalk from 'chalk';
+@Module({
+  imports: [
+    WinstonModule.forRoot({
+      level: 'debug',
+      transports: [
+        new transports.Console({
+          format: format.combine(
+            format.colorize(),
+            format.printf(({ context, level, message, time }) => {
+              const appStr = chalk.green(`[NEST]`);
+              const contextStr = chalk.yellow(`[${context}]`);
+
+              return `${appStr} ${time} ${level} ${contextStr} ${message} `;
+            }),
+          ),
+        }),
+        new transports.File({
+          format: format.combine(format.timestamp(), format.json()),
+          filename: '111.log',
+          dirname: 'log',
+        }),
+      ],
+    }),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule { }
+
+// 其它地方需要时 注入即可
+@Inject(WINSTON_LOGGER_TOKEN)
+private logger;
 
 ```
+
+事实上社区有对这个封装了nest-winston 直接使用即可、所以在实际项目里我们可以直接如下使用。这时只要在需要的地方注入即可。
+安装：`npm install winston nest-winston winston-daily-rotate-file chalk@4`
+
+```js
+import { Module } from '@nestjs/common';
+import { WinstonModule } from 'nest-winston';// 它也是个全局模块
+import * as winston from 'winston';
+import * as DailyRotateFile from 'winston-daily-rotate-file';
+import * as chalk from 'chalk';
+
+@Module({
+  imports: [
+    WinstonModule.forRoot({ // 接收和 winston 的 createLogger() 方法一样的参数
+      // 日志格式
+      format: winston.format.combine(
+        winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        winston.format.errors({ stack: true }),
+        winston.format.splat(),
+        winston.format.json()
+      ),
+      // 日志传输配置
+      transports: [
+        // 控制台输出（开发环境）
+        new winston.transports.Console({
+          format: winston.format.combine(
+            winston.format.colorize(),
+            winston.format.printf(
+              ({ timestamp, level, message, context, trace }) => {
+                const defaultAppStr = chalk.green(`[App]`);
+                const contextStr = context
+                  ? chalk.yellow(`[${context}]`)
+                  : defaultAppStr;
+                return `${timestamp} ${contextStr} ${level}: ${message}${trace ? `\n${trace}` : ''
+                  }`;
+              },
+            ),
+          ),
+        }),
+        // 按天轮转日志文件
+        new DailyRotateFile({
+          dirname: 'logs',
+          filename: 'application-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '30d',
+        }),
+        // 错误日志单独存储
+        new DailyRotateFile({
+          level: 'error',
+          dirname: 'logs/error',
+          filename: 'error-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '90d',
+        }),
+      ],
+      // 未捕获异常处理
+      exceptionHandlers: [
+        new DailyRotateFile({
+          dirname: 'logs/exceptions',
+          filename: 'exception-%DATE%.log',
+          datePattern: 'YYYY-MM-DD',
+          zippedArchive: true,
+          maxSize: '20m',
+          maxFiles: '30d',
+        }),
+      ],
+    }),
+  ],
+})
+export class AppModule  {}
+// 也可以获取配置
+import { Module } from '@nestjs/common';
+import { WinstonModule } from 'nest-winston';
+import * as winston from 'winston';
+import * as DailyRotateFile from 'winston-daily-rotate-file';
+import * as chalk from 'chalk';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot(), // 配置模块（用于读取环境变量）
+    
+    // Winston 日志模块配置
+    WinstonModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        // 日志级别控制（从环境变量读取）
+        level: config.get('LOG_LEVEL') || 'info',
+        
+        // 日志格式配置
+        format: winston.format.combine(
+          winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+          winston.format.errors({ stack: true }), // 记录完整错误堆栈
+          winston.format.splat(),
+          winston.format.json() // 结构化JSON格式
+        ),
+        
+        // 传输器配置
+        transports: [
+          // 控制台输出（开发环境）
+          new winston.transports.Console({
+            format: winston.format.combine(
+              winston.format.colorize({ all: true }),
+            winston.format.printf(
+              ({ timestamp, level, message, context, trace }) => {
+                const defaultAppStr = chalk.green(`[App]`);
+                const contextStr = context
+                  ? chalk.yellow(`[${context}]`)
+                  : defaultAppStr;
+                return `${timestamp} ${contextStr} ${level}: ${message}${trace ? `\n${trace}` : ''
+                  }`;
+              },
+            ),
+            ),
+          }),
+          
+          // 按日轮转文件（生产环境）
+          new DailyRotateFile({
+            dirname: config.get('LOG_DIR') || 'logs',
+            filename: 'app-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            maxSize: '20m',
+            maxFiles: '30d',
+            level: 'info'
+          }),
+          
+          // 错误日志单独存储
+          new DailyRotateFile({
+            dirname: config.get('LOG_DIR') || 'logs/errors',
+            filename: 'error-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            maxSize: '20m',
+            maxFiles: '90d',
+            level: 'error'
+          })
+        ],
+        
+        // 异常处理器
+        exceptionHandlers: [
+          new DailyRotateFile({
+            dirname: config.get('LOG_DIR') || 'logs/exceptions',
+            filename: 'exception-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            maxSize: '20m',
+            maxFiles: '90d'
+          })
+        ],
+        
+        // 处理未捕获的Promise拒绝
+        handleRejections: true
+      })
+    })
+  ],
+})
+export class AppModule {}
+// 也可以写一个中间类这样 AppModule就不用写入这么多内容。
+
+// 在服务中注入 Logger
+import { Injectable, Inject } from '@nestjs/common';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger } from 'winston';
+
+@Injectable()
+export class UserService {
+  constructor(
+    @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger
+  ) {}
+
+  async createUser(userData: any) {
+    // 带上下文的日志
+    this.logger.info('Creating new user', {
+      context: 'UserService',
+      email: userData.email
+    });
+    
+    try {
+      // 业务逻辑...
+      return { success: true };
+    } catch (error) {
+      // 错误日志（自动记录堆栈）
+      this.logger.error('Failed to create user', {
+        context: 'UserService',
+        error: error.message,
+        stack: error.stack,
+        userData
+      });
+      throw error;
+    }
+  }
+}
+// 在控制器中使用
+import { Controller, Post, Body } from '@nestjs/common';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger } from 'winston';
+import { UserService } from './user.service';
+
+@Controller('users')
+export class UserController {
+  constructor(
+    @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger,
+    private readonly userService: UserService
+  ) {}
+
+  @Post()
+  async createUser(@Body() userData: any) {
+    this.logger.debug('Received create user request', {
+      context: 'UserController',
+      ip: '127.0.0.1' // 实际应用中应从请求中获取
+    });
+    
+    const result = await this.userService.createUser(userData);
+    
+    this.logger.info('User created successfully', {
+      context: 'UserController',
+      userId: result.id
+    });
+    
+    return result;
+  }
+}
+```
+
+
+
 
 
 ## 5.7 事件
