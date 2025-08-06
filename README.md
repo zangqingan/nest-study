@@ -6153,10 +6153,17 @@ Nest应用程序的客户端可以使用ClientProxy类与Nest微服务交换消�
 
 # 八、Docker
 
-## 8.1 快速上手
-Docker 是一个开源的应用容器引擎，基于 Go 语言和 C 语言开发。这里我们是通过Windows的桌面版本使用、docker desktop 可以可视化的管理它们，很方便。快速上手。Docker 提供了 Docker Hub 镜像仓库，可以把本地镜像 push 到仓库或者从仓库 pull 镜像到本地。
-images 是本地的所有镜像，containers 是镜像跑起来的容器。 volume 挂载将本地挂载的目录映射到容器中。
+## 8.1 docker desktop 快速上手 
+Docker 是一个开源的应用容器引擎，基于 Go 语言和 C 语言开发。它把系统的所有文件(需要的环境等)封装成一个镜像，镜像跑起来作为一个独立的容器，它可以在一台机器上跑多个容器，每个容器都有独立的操作系统环境，比如文件系统、网络端口等，在容器内跑各种服务(相当于一台独立的服务器)。通过这种方式可以快速部署多个相同的实例。
+
+这里我们是通过Windows的桌面版本使用、docker desktop 可以可视化的管理它们，很方便、快速上手。Docker 提供了 Docker Hub 镜像仓库，可以把本地镜像 push 到仓库或者从仓库 pull 镜像到本地。
+
+images 是本地的所有镜像，containers 是镜像跑起来的容器。 volume 挂载将本地挂载的目录映射到容器中,这时在本地添加文件会同步到容器对应挂载的目录下。
 ```js
+// 安装完成之后可以通过如下命令查看帮助
+docker --help
+// 搜索镜像
+docker search nginx
 // 拉取镜像
 docker pull nginx:latest
 // 运行镜像
@@ -6166,7 +6173,7 @@ docker run --name nginx-test2 -p 80:80 -v /tmp/aaa:/usr/share/nginx/html -e KEY1
 -e 是指定环境变量
 -d 是后台运行
 
-// 执行run命令后会返回一个hash值它是容器的id。
+// 执行run命令后会返回一个hash值它是容器的id - container id。
 // 通过用 docker ps 来获取容器列表的，默认是运行中的。
 docker ps
 docker ps -a 显示全部的
@@ -6174,6 +6181,8 @@ docker ps -a 显示全部的
 // image 镜像列表也可以通过 docker images 命令获取
 docker images
 
+// 获取容器的日志
+docker logs
 // 其它常见命令
 docker start：启动一个已经停止的容器
 docker rm：删除一个容器
@@ -6182,25 +6191,33 @@ docker stop：停止一个容器
 
 ```
 
-## 8.2 dockerfile 
-在 dockerfile 里声明要做哪些事情，docker build 的时候就会根据这个 dockerfile 来自动化构建出一个镜像来。
+## 8.2 Dockerfile 
+在 Dockerfile 里声明要做哪些事情，docker build 的时候就会根据这个 Dockerfile 来自动化构建出一个镜像来。这样我们也就相当于自己制作了一个镜像. docker 镜像是通过 dockerfile 构建出来的
 
 ```js
+// Dockerfile
 # 创建一个基于node的镜像
-FROM node:latest
+FROM node:current-alpine3.22
 
 # 使用 18 版本的 node 镜像，它底层使用 alpine 3.14 的基础镜像。
 FROM node:18-alpine3.14 
-
+// 创建了一个目录，用于存放应用代码
+RUN mkdir -p /app
 WORKDIR /app
 
+
+# 将DockerFile同级目录下的文件复制到/app
 COPY . .
+# 下载源
+RUN npm config set registry registry.npmmirror.com
 
-RUN npm config set registry https://registry.npmmirror.com/
-
+# 下载http-server服务
 RUN npm install -g http-server
-# 指定容器需要暴露的端口
+
+# 指定容器需要暴露的端口对外开放8080端口
 EXPOSE 8080
+// 指定挂载目录
+VOLUME /app
 # 指定容器跑起来时执行的命令
 CMD ["http-server", "-p", "8080"]
 
@@ -6212,14 +6229,233 @@ CMD ["http-server", "-p", "8080"]
 // RUN：在容器内执行命令
 // CMD：容器启动的时候执行的命令
 
-// 根据 dockerfile 来生成镜像
+// 根据 Dockerfile 来生成镜像
+docker build -t name:tag -f filename .
 docker build -t custom-image:self-image .
 -t 是指定名字和标签、custom-image 是镜像名，self-image 是镜像的标签
+-f 指定 dockerfile 文件名
+. 就是构建上下文的目录
 
-// docker 容器内跑的是 linux 系统，各种镜像的 dockerfile 都会继承 linux 镜像作为基础镜像。
+// docker 容器内跑的是 linux 系统，各种镜像的 Dockerfile 都会继承 linux 镜像作为基础镜像。
 // 但其实这个 linux 镜像可以换成更小的版本，也就是 alpine。
-// docker 是分层存储的，dockerfile 里的每一行指令是一层，会做缓存。
+// docker 是分层存储的，Dockerfile 里的每一行指令是一层，会做缓存。
 // 每次 docker build 的时候，只会从变化的层开始重新构建，没变的层会直接复用。
+
+
+$ docker build -t custom-images:zqa .
+[+] Building 1168.9s (8/8) FINISHED                                                                              docker:desktop-linux
+ => [internal] load build definition from Dockerfile                                                                             0.0s
+ => => transferring dockerfile: 234B                                                                                             0.0s
+ => [internal] load metadata for docker.io/library/node:current-alpine3.22                                                      15.9s
+ => [internal] load .dockerignore                                                                                                0.1s
+ => => transferring context: 2B                                                                                                  0.0s
+ => [1/4] FROM docker.io/library/node:current-alpine3.22@sha256:e8e882c692a08878d55ec8ff6c5a4a71b3edca25eda0af4406e2a160d8a9  1105.5s
+ => => resolve docker.io/library/node:current-alpine3.22@sha256:e8e882c692a08878d55ec8ff6c5a4a71b3edca25eda0af4406e2a160d8a93cf  0.1s
+ => => sha256:cc6701eaa104ca77ccb2d4e01233b1696b423c34777feaa7d9a6460c10460621 53.40MB / 53.40MB                              1093.8s
+ => => sha256:e8e882c692a08878d55ec8ff6c5a4a71b3edca25eda0af4406e2a160d8a93cf2 3.87kB / 3.87kB                                   0.0s
+ => => sha256:e0a6a0687f8863d5a8a82113e0b7a14552e2bf353bafc554f63d18671c4021c4 1.72kB / 1.72kB                                   0.0s
+ => => sha256:0b691ce23fac31bba5bab5149d63f5be85bfefab43217f1bd3e8006fc6829d27 6.42kB / 6.42kB                                   0.0s
+ => => sha256:9824c27679d3b27c5e1cb00a73adb6f4f8d556994111c12db3c5d61a0c843df8 3.80MB / 3.80MB                                  32.4s
+ => => sha256:cb0e97c551ce6179f75a955014015e42a07834bdc5559b8f6af0c330f68a7fd2 1.26MB / 1.26MB                                 359.8s
+ => => extracting sha256:9824c27679d3b27c5e1cb00a73adb6f4f8d556994111c12db3c5d61a0c843df8                                        0.7s
+ => => sha256:e77b1be4ed4c0cb5c7c7d343f87051c3a98fa2a46764fb0889b4863c1f6fb97c 446B / 446B                                     391.6s
+ => => extracting sha256:cc6701eaa104ca77ccb2d4e01233b1696b423c34777feaa7d9a6460c10460621                                        9.7s
+ => => extracting sha256:cb0e97c551ce6179f75a955014015e42a07834bdc5559b8f6af0c330f68a7fd2                                        0.2s
+ => => extracting sha256:e77b1be4ed4c0cb5c7c7d343f87051c3a98fa2a46764fb0889b4863c1f6fb97c                                        0.0s
+ => [2/4] WORKDIR /app                                                                                                           1.2s
+ => [3/4] RUN npm config set registry https://registry.npmmirror.com/                                                            3.5s
+ => [4/4] RUN npm install -g http-server                                                                                        41.0s
+ => exporting to image                                                                                                           1.3s
+ => => exporting layers                                                                                                          1.1s
+ => => writing image sha256:78ce7f1aba16fd7418c731435196186ab635ca96fd133af1085fe354c01fb104                                     0.0s
+ => => naming to docker.io/library/custom-images:zqa                                                                             0.0s
+
+View build details: docker-desktop://dashboard/build/desktop-linux/desktop-linux/vftzubm8vdj38v9jj593tjfv5
+
+What's next:
+    View a summary of image vulnerabilities and recommendations → docker scout quickview
+
+
+```
+
+## 8.3 NestJs里创建Dockerfile
+在命令行里运行 docker build 命令时本质上是在 docker 守护进程docker daemon中运行，而不是在当前 shell 中运行。命令行工具会和 docker daemon 交互来实现各种功能。
+
+在构建镜像时 docker 支持你通过 .dockerignore 声明哪些不需要发送给 docker daemon。docker build 时，会先解析 .dockerignore，把该忽略的文件忽略掉，然后把剩余文件打包发送给 docker daemon 作为上下文来构建产生镜像。
+```js
+// .dockerignore
+*.md
+!README.md
+node_modules/
+[a-c].txt
+.git/
+.DS_Store
+.vscode/
+.dockerignore
+.eslintignore
+.eslintrc
+.prettierrc
+.prettierignore
+
+```
+
+新建NestJs项目
+```js
+// 新建一个项目
+nest new dockerfile-test -p npm
+// 创建忽略文件 .dockerignore
+*.md
+node_modules/
+.git/
+.DS_Store
+.vscode/
+.dockerignore
+
+// 编写 Dockerfile
+FROM node:current-alpine3.22
+
+WORKDIR /app
+
+# 把 package.json 复制到容器里，设置淘宝的 npm registry，执行 npm install。
+COPY package.json .
+
+RUN npm config set registry https://registry.npmmirror.com/
+
+RUN npm install
+
+# 之后把其余的文件复制过去，执行 npm run build。
+COPY . .
+RUN npm run build
+
+# 指定暴露的端口为 3000，容器跑起来以后执行 node ./dist/main.js 命令
+EXPOSE 3000
+
+CMD [ "node", "./dist/main.js" ]
+
+// 构建
+docker build -t custom-nest:first .
+
+
+```
+
+**多阶段构建（multi-stage build）方法**
+一般情况下，我们都会用多阶段构建 + alpine 基础镜像。
+```js
+# 给当前镜像指定一个名字 build stage 
+# alpine3.22 是一个linux  linux 发行版镜像体积很小.
+FROM node:current-alpine3.22 as build-stage
+
+WORKDIR /app
+
+COPY package.json .
+
+RUN npm config set registry https://registry.npmmirror.com/
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+# production stage
+FROM node:current-alpine3.22 as production-stage
+
+# 通过 COPY --from-build-stage 从那个镜像内复制 /app/dist 的文件到当前镜像的 /app 下。还要把 package.json 也复制过来，然后切到 /app 目录
+
+COPY --from=build-stage /app/dist /app
+COPY --from=build-stage /app/package.json /app/package.json
+
+WORKDIR /app
+
+RUN npm config set registry https://registry.npmmirror.com/
+
+# 执行 npm install --production 只安装 dependencies 依赖
+RUN npm install --production
+
+EXPOSE 3000
+
+CMD ["node", "/app/main.js"]
+
+// 构建
+docker build -t custom-nest:second .
+
+```
+
+## 8.4 Dockerfile 使用技巧
+Docker 是一种容器技术，它可以在操作系统上创建多个相互隔离的容器。容器内独立安装软件、运行服务。
+容器和宿主机是有关联的，比如可以把宿主机的端口映射到容器内的端口、宿主机某个目录挂载到容器内的目录。
+比如映射了 3000 端口，那容器内 3000 端口的服务，就可以在宿主机的 3000 端口访问了。
+比如挂载了 /aaa 到容器的 /bbb/ccc，那容器内读写 /bbb/ccc 目录的时候，改的就是宿主机的 /aaa 目录，反过来，改宿主机 /aaa 目录，容器内的 /bbb/ccc 也会改变。这就实现了容器和宿主机的文件共享。
+这分别叫做端口映射、数据卷（volume）挂载。
+命令操作如下：
+```js
+// 容器是通过镜像直接启动
+docker run -p 3000:3000 -v /aaa:/bbb/ccc --name xxx-container xxx-image
+通过 xxx-image 镜像跑起来一个叫做 xxx-container 的容器。
+-p 指定端口映射，映射宿主机的 3000 到容器的 3000 端口。
+-v 指定数据卷挂载，挂载宿主机的 /aaa 到容器的 /bbb/ccc 目录。
+
+// 容器也可以通过 Dockerfile 经过 build 产生的
+```
+
+一般在项目里维护 Dockerfile ，然后执行 docker build 构建出镜像、push 到镜像仓库，部署的时候 pull 下来用 docker run 跑起来。
+基本 CI/CD 也是这样的流程：
+CI 的时候 git clone 项目，根据 dockerfile 构建出镜像，打上 tag，push 到仓库。
+CD 的时候把打 tag 的镜像下下来，docker run 跑起来。
+这个 Dockerfile 是在项目里维护的，虽然 CI/CD 流程不用自己搞，但是 Dockefile 还是要开发者自己写的。
+
+**技巧一**: 使用 alpine 镜像，而不是默认的 linux 镜像,docker 容器内跑的是 linux 系统，各种镜像的 dockerfile 都会继承 linux 镜像作为基础镜像。
+
+**技巧二**: 使用多阶段构建,docker 是分层存储的，dockerfile 里的每一行指令是一层，会做缓存。每次 docker build 的时候，只会从变化的层开始重新构建，没变的层会直接复用。
+
+**技巧三**: 使用 ARG 增加构建灵活性，ARG 可以在 docker build 时通过 --build-arg xxx=yyy 传入，在 dockerfile 中生效，可以使构建过程更灵活。如果是想定义运行时可以访问的变量，可以通过 ENV 定义环境变量，值使用 ARG 传入。
+
+**技巧四**: CMD 和 ENTRYPOINT 都可以指定容器跑起来之后运行的命令，CMD 可以被覆盖，而 ENTRYPOINT 不可以，两者结合使用可以实现参数默认值的功能。
+
+**技巧五**: ADD 和 COPY 都可以复制文件到容器内，但是 ADD 处理 tar.gz 的时候，还会做一下解压。
+
+注意还有一个问题,前面我们的启动命令都是node,实际上在生产环境中，我们一般使用pm2来启动项目。
+pm2 是 process manager，进程管理，它是第二个大版本，和前一个版本差异很大，所以叫 pm2.pm2 的主要功能就是进程管理、日志管理、负载均衡、性能监控这些。分别对应 pm2 logs、pm2 start/restart/stop/delete、pm2 start -i、pm2 monit 等命令。在实际生产中会把 docker 和 pm2 结合起来，在进程崩溃的时候让 pm2 来自动重启。
+
+```js
+// 本地安装学习
+npm install pm2 -g
+// 和node启动比较
+node app.js
+pm2 start app.js // 它会把这个 node 进程跑起来，然后管理起来
+pm2 logs // 显示日志
+
+
+// Dockerfile
+# build stage
+FROM node:18 as build-stage
+
+WORKDIR /app
+
+COPY package.json .
+
+RUN npm config set registry https://registry.npmmirror.com/
+
+RUN npm install
+
+COPY . .
+
+RUN npm run build
+
+# production stage
+FROM node:18 as production-stage
+
+COPY --from=build-stage /app/dist /app
+COPY --from=build-stage /app/package.json /app/package.json
+
+WORKDIR /app
+
+RUN npm install --production
+RUN npm install pm2
+
+EXPOSE 3000
+
+CMD ["pm2-runtime", "/app/main.js"]
 
 ```
 
