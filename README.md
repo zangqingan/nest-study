@@ -3335,18 +3335,25 @@ const title = this.configService.get('APP_TITE');
 ## 5.2 数据库相关
 Nest 是数据库无关的，允许您轻松集成任何 SQL 或 NoSQL 数据库。依然是MySQL、mongodb、redis三个数据库为主。不同在于为了与 SQL 和 NoSQL 数据库集成，Nest 提供了 @nestjs/typeorm 包。它使用的是 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上来操作数据库、它和我们使用的 mongoose 包类似的。
 
-### 1. MySQL
-在 nodejs里可以 用 mysql2 和 typeorm 两种方式来操作 MysSQL 数据库。前者还是要写SQL语句、不推荐使用，后者是ORM技术( Object Relational Mapping)，对象关系映射。也就是说把关系型数据库的表映射成面向对象的一个类 class，表的字段映射成对象的属性映射，表与表的关联映射成属性的关联、最终会自动生成SQL语句。所以这里我们选择 typeORM 这个库来操作关系型数据库mysql、好处就是对表的增删改查就变成了对对象的操作。
+### 5.2.1 MySQL集成
+在 nodejs 里可以用 mysql2 和 typeorm 两种方式来操作 MysSQL 数据库。前者还是要写SQL语句、不推荐使用，后者是ORM技术( Object Relational Mapping)，对象关系映射。也就是说把关系型数据库的表映射成面向对象的一个类 class，表的字段映射成对象的属性映射，表与表的关联映射成属性的关联、最终会自动生成SQL语句。所以这里我们选择 typeORM 这个库来操作关系型数据库mysql、好处就是对表的增删改查就变成了对对象的操作。
 
-安装：`$ npm install --save @nestjs/typeorm typeorm mysql2`
+实现原理根据在 class 的属性上加的装饰器来生成建表 sql。所以学习这个也是学习这个包提供的装饰器而已。
 
-安装必须的包之后就可以在 Nest 中进行配置进而通过代码实现对数据库的增删改查了。
+#### 1. typeorm 学习
+对应 typeorm 的更多操作在单独的一个[仓库](https://github.com/zangqingan/typeorm-study)里学习,不过要注意的是表关系在实际开发中是逻辑声明的,也就是开发者约定关联关系而不是真的声明. 查的时候照样连表查询即可。
 
-#### 使用步骤
-将 typeorm 集成进 Nest中是比较简单的,步骤如下:
+#### 2. NestJS 集成 typeorm
+TypeORM 的流程是：DataSource 里存放着数据库连接的配置用于创建数据库连接、实体类存放着数据库表的定义，DataSource 初始化之后就可以拿到 EntityManager 或者 Repository 通过这两个对象实现数据库的增删改查操作。
 
-1. 完成安装后将 TypeOrmModule 导入到根 AppModule 中、在 nest 项目中注册使用动态模块的方式注册 typeORM。注册完成后 TypeORM 的 DataSource 和 EntityManager 对象将可在整个项目中进行注入（无需导入任何模块）。
-```JavaScript
+安装依赖：`$ npm install --save @nestjs/typeorm typeorm mysql2`
+@nestjs/typeorm 就是把 typeorm api 封装了一层的包，安装必须的包之后就可以在 Nest 中进行配置进而通过代码实现对数据库的增删改查了。
+
+##### 集成步骤
+将 typeorm 集成进 NestJS 中是比较简单的,步骤如下:
+
+1. 依赖完成安装后将 TypeOrmModule 导入到根 AppModule 中、在 nest 项目中注册使用动态模块的方式注册 typeORM。注册完成后 TypeORM 的 DataSource 和 EntityManager 对象将可在整个项目中进行注入（无需导入任何模块）。
+```js
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -3354,10 +3361,9 @@ import { AppService } from './app.service';
 // 连接MySQL数据库
 import { TypeOrmModule } from '@nestjs/typeorm';
 
-// 通过@Module 装饰器将元数据附加到模块类中 Nest 可以轻松反射（reflect）出哪些控制器（controller）必须被安装
 @Module({
   imports: [
-    // 使用 TypeORM 配置数据库
+    // 使用 TypeORM 配置数据库-接收的配置对象和数据源 DataSource 构造函数一样。
     TypeOrmModule.forRoot({
       type: 'mysql',
       host: 'localhost',
@@ -3367,8 +3373,9 @@ import { TypeOrmModule } from '@nestjs/typeorm';
       database: 'nest-vue-bms',
       retryDelay: 4000,// 连接重试之间的延迟（毫秒） (默认值: 3000)
       // entities: [User], // 一个一个手动将实体添加到数据源选项的 entities 数组注册
-      autoLoadEntities: true, // 自动注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
+      autoLoadEntities: true, // 自动 注册实体，设置为 true 的时候,NestJS 会自动加载数据库实体文件xx.entity.ts文件来创建数据表(如果没有的话)
       synchronize: false, // 是否自动同步实体文件(即是否建表),生产环境建议关闭否则可能会丢失生产数据 - 不同步
+      // 
     }),
   ],
   controllers: [AppController],
@@ -3377,16 +3384,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 ```
 
-orm 有两种方式实现对具体的数据库表的操作:
- - 一种是使用 EntityManager 实体管理器
- - 另一种是使用 Repository 存储库模式
-
-两者都可以实现对数据库表的 curd 操作，但是 Repository 操作仅限于具体实体也就是指定的单个表名。所以一般我们使用后者。
-
-2. 创建实体 Entity,Entity 就是由 @Entity 装饰器装饰的一个类，TypeORM 会为此类模型创建数据库表。
-其中 @Entity 装饰器 传入的参数就是实际创建的数据库表名。还有字段名的定义、约束、校验等都是在这里定义的。一般都是单独放在 entities 目录下,同时文件名一般为 xxx.entity.ts/xxx.entity.js。
-
-```JavaScript
+2. 创建 Entity 实体,Entity 就是由 @Entity 装饰器装饰的一个类，TypeORM 会为此类模型创建数据库表。其中 @Entity 装饰器 传入的参数就是实际创建的数据库表名。还有字段名的定义、约束、校验等都是在这里定义的。一般都是单独放在 entities 目录下,同时文件名一般为 xxx.entity.ts/xxx.entity.js。
+```js
 import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
 @Entity('posts')
 export class PostsEntity {
@@ -3417,8 +3416,9 @@ export class PostsEntity {
 
 ```
 
-3. 在 module 中注入要使用那些存储库,使用 TypeOrmModule.forFeature() 方法来定义在当前范围内注册哪些仓库。有了这个设置，我们可以使用 @InjectRepository() 装饰器将 UsersRepository 注入到 UsersService 中
-```JavaScript
+3. typeORM 有两种方式实现对具体的数据库表的操作:一种是使用 EntityManager 实体管理器、另一种是使用 Repository 存储库模式。前者通过 @InjectEntityManager() 注入即可实现操作，后者则需要先在 module 中使用 TypeOrmModule.forFeature() 方法注入要使用那些存储库、再使用 @InjectRepository() 注入。
+
+```js
 // posts.module.ts
 import { Module } from '@nestjs/common';
 import { PostsController } from './posts.controller';
@@ -3436,8 +3436,8 @@ export class PostsModule {}
 
 ```
 
-4. 在 service 文件中使用仓库,模块文件中导入实体类之后就可以在服务类中注册使用了,使用 @InjectRepository(实体类名)的形式注册,之后通过这个变量就可以实现对对应数据库表的 curd。
-```JavaScript
+4. 在 service 文件中使用仓库,模块文件中导入实体类之后就可以在服务类中注册使用了,使用 @InjectEntityManager()或者 @InjectRepository(实体类名)的形式注册,之后通过这个变量就可以实现对对应数据库表的 curd。
+```js
 import { HttpException, Injectable } from '@nestjs/common';
 import { InjectRepository,InjectEntityManager  } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -3553,14 +3553,37 @@ export class PostsService {
 
 ```
 
-#### 字段校验
+##### 总结
+在 Nest 里集成只是对 TyprOrm 的 api 封装了一层。使用方式是在根模块 TypeOrmModule.forRoot 传入数据源配置。然后就可以在各处注入 DataSource、EntityManager 来做增删改查了。
+
+如果想用 Repository 来简化操作，还可以在用到的模块引入 TypeOrmModule.forFeature 的动态模块，传入 Entity，会返回对应的 Repository。这样就可以在模块内注入该 Repository 来用了。
+
+它的原理是 TypeOrmModule.forRoot 对应的动态模块是全局的，导出了 dataSource、entityManager，所以才可以到处注入。
+而 TypeOrmModule.forFeature 则会根据吧传入 Entity 对应的 Repository 导出，这样就可以在模块内注入了。
+
+这就是 Nest 里集成 TypeOrm 的方式和实现原理。
+
+
+#### 3. 字段校验
 不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。而实体是类形式的、那么在 nest 中也可以使用之前学习过的 class-validator class-transformer 两个包来实现即可。非常的方便简单.
 
-#### CRUD操作
-对应 typeorm 的更多操作在单独的一个[仓库](https://github.com/zangqingan/typeorm-study)里学习,不过要注意的是表关系在实际开发中是逻辑声明的,也就是开发者约定关联关系而不是真的声明. 查的时候照样连表查询即可.
+
+#### 4. TypeORM 迁移
+在开启了 synchronize 时，只要创建或者修改了 Entity，那就会自动创建表和修改表结构。在生产环境下，用 synchronize 是很危险，很容易丢数据。所以在生产环境，不会用 synchronize 自动同步建表，而是用的 migration 的方式来建表。
+开发环境我们会用 synchronize 来同步 Entity 和数据库表，它会自动执行 create table、alter table，不用手动修改表结构，很方便。
+
+但是它并不安全，因为很容易丢失数据。所以生产环境下我们会把它关掉，用 migration 来管理。
+
+migration 就是把 create table、alter table 等封装成一个个的 migration，可以一步步执行、也可以一步步撤销回去。
+
+有 4 个常用命令：
+  migration:create：生成空白 migration 文件
+  migration:generate：连接数据库，根据 Entity 和数据库表的差异，生成 migration 文件
+  migration:run：执行 migration，会根据数据库 migrations 表的记录来确定执行哪个
+  migration:revert：撤销上次 migration，删掉数据库 migrations 里的上次执行记录
 
 
-### 2. MongoDB
+### 5.2.2 MongoDB
 Nest 支持两种与 MongoDB 数据库集成的方法。
 1. 依然使用内置的 TypeORM 模块，该模块具有适用于 MongoDB 的连接器，
 2. 使用 Mongoose，这是最流行的 MongoDB 对象建模工具。
@@ -3694,7 +3717,7 @@ export class CatsModule {}
 
 
 
-### 3. Redis
+### 5.2.3 Redis
 redis 的设计是 key、value 的键值对的形式,常用来做缓存。就是可以查出数据来之后放到 redis 中缓存，下次如果 redis 有数据就直接用，没有的话就查数据库然后更新 redis 缓存。
 
 在 Nest 里最流行的就是 redis 和 ioredis 这两个包。
