@@ -2798,6 +2798,8 @@ export class AppModule {}
    - forRoot() 创建模块时，您希望配置一个动态模块一次，并在多个地方重用该配置（虽然可能是在抽象的情况下）。这就是为什么您有一个 GraphQLModule.forRoot()、一个 TypeOrmModule.forRoot() 等。只注册一次，用多次，而且一般在 AppModule 里 import 引入。配置一次模块用多次。
    - forFeature()创建模块时，您希望使用动态模块的 forRoot 配置，但需要修改一些特定于调用模块需求的配置（例如，该模块应该访问哪个存储库，或者记录器应该使用哪个上下文）。用了 forRoot 之后，用 forFeature 传入局部配置，一般在具体模块里 imports。比如用 forRoot 指定了数据库链接信息，再用 forFeature 指定某个模块访问哪个数据库和表。
 
+动态模块的 forRoot 用于在 AppModule 里注册，一般指定为全局模块，forFeature 用于局部配置，在不同模块里 imports，而 register 用于一次性的配置。
+
 实际上，register() 方法返回的就是一个 DynamicModule动态模块。动态模块只是在运行时创建的模块，具有与静态模块完全相同的属性，以及一个额外的名为 module 的属性。对于动态模块，模块选项对象的所有属性都是可选的，除了 module。
 
 所以 ConfigModule 声明必须是如下结构。可以看出调用 ConfigModule.register(...) 返回一个具有属性的 DynamicModule 对象，这些属性本质上与我们迄今为止通过 @Module() 装饰器声明的模块一致提供的元数据也相同。
@@ -3265,35 +3267,117 @@ export class AppController {
 ### 1. 概述
 应用程序通常在不同的环境中运行。根据环境的不同，应使用不同的配置设置。在 Node.js 中都是通过 process.env 全局变量来获取外部定义的环境变量。
 
-在 Node.js 应用程序中，通常使用 .env 文件来表示每个环境的键值对(原生里我们是写在js文件中)，其中每个键代表特定的值。然后，只需替换正确的 .env 文件即可在不同的环境中运行应用程序。我们使用了dotenv 这个包来读取指定目录下的 .env配置文件。
+在 Node.js 应用程序中，通常使用 .env 格式的配置文件来表示每个环境的键值对(原生里我们是写在js文件中)，其中每个键代表特定的值。然后，只需替换正确的 .env 文件即可在不同的环境中运行应用程序。它有一个专门的 npm 包 dotenv 来读取指定目录下的 .env 配置文件。可以通过 NODE_ENVIRMENT 环境变量来切换生产、开发的配置文件。
 
-在NestJS中它内置了一个模块 ConfigModule 来实现，这个公开了一个 ConfigService，该服务加载适当的 .env 文件。这个模块需要安装 Nest 提供的 @nestjs/config 包、这个包在内部还是使用了 dotenv。
+此外也可以读取 yaml 格式的配置文件，需要安装 js-yaml 包。两者区别 yaml 的格式更适合有层次关系的配置，而 .env 更适合简单的配置。
 
-安装: `$ npm i --save @nestjs/config`
+```js
+// 安装依赖
+$ npm install dotenv
+// .env 配置文件
+name=zhangsan
+age=29
+// index.js
+require('dotenv').config({
+    path: './.env',
+})
+// 访问
+console.log('name', process.env.name);
+console.log('age', process.env.age)
 
-### 2. 使用
-安装完成后，就可以导入 ConfigModule。通常情况下，我们会将其导入到根 AppModule 中，并使用 .forRoot() 静态方法来控制其行为。
+// 如果想要读取 yaml 格式的配置文件也可以。
+// 安装 js-yaml 包
+$ npm install js-yaml
+// hello.yaml
+application:
+  host: 'localhost'
+  port: 8080
 
-它从默认位置（项目根目录）加载和解析一个 .env 文件，将 .env 文件中的键值对与分配给 process.env 的环境变量进行合并，并将结果存储在一个私有结构中，您可以通过 ConfigService 访问该结构。
+db:
+   mysql:
+    url: 'localhost'
+    port: 3306
+    database: 'aaa'
+    password: 'guang'
+// index.js
+const yaml = require('js-yaml');
+const fs = require('fs');
 
-forRoot() 方法会注册 ConfigService 提供者，该提供者提供了一个 get() 方法，用于读取这些已解析/合并的配置变量。它可以接收一个配置对象指定配置文件的位置。
+const config = fs.readFileSync('./hello.yaml');
 
-自定义配置文件: 导出一个工厂函数，该函数返回一个配置对象。这个配置对象可以是任意嵌套的纯 JavaScript 对象。
+console.log(yaml.load(config));// 返回对象格式数据
+{
+  application: { host: 'localhost', port: 8080 },
+  db: { mysql: { url: 'localhost', port: 3306, database: 'aaa', password: 'guang' } }
+}
 
-```JavaScript
+```
 
+node 里的配置一般就用上述的两种方式，在nestjs里封装成一个动态模块即可使用。而对于这种常见的服务Nest 提供了现成的封装：@nestjs/config  包。它是在NestJS中内置了一个模块 ConfigModule 来实现，这个模块公开了一个 ConfigService，该服务加载适当的 .env 文件。这个包在内部还是使用了 dotenv。
+
+这个包同样是动态模块的方式，所以也有 forRoot 和 forFeature 两个方法。它从默认位置（项目根目录）加载和解析一个 .env 文件，将 .env 文件中的键值对与分配给 process.env 的环境变量进行合并，并将结果存储在一个私有结构中，我们可以通过 ConfigService 访问该结构。
+
+### 2. 使用步骤
+
+1. 依赖安装: `$ npm i --save @nestjs/config`
+  
+2. 根模块注册：安装完成后，就可以导入 ConfigModule。通常情况下，我们会将其导入到根 AppModule 中，并使用ConfigModule.forRoot() 方法注册。或者通过 ConfigModule.forFeautrue 来注册局部配置。
+```js
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+@Module({
+  imports: [ConfigModule.forRoot(),ConfigModule.forFeature(() => {
+      return {
+        ddd: 222
+      }
+    })],
+})
+export class AppModule {}
+
+```
+3. 读取配置文件内容：ConfigModule.forRoot() 方法会注册 ConfigService 提供者。该提供者提供了一个 get() 方法，它接收两个参数：变量名、默认值。第一个参数是变量名，通过传递变量名来读取这些已解析/合并的配置变量。第二个是可选的参数，用于定义默认值，当键不存在时将返回该值。
+```js
+import { Controller, Get, Inject } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+  // 引入配置服务
+  @Inject(ConfigService)
+  private configService: ConfigService;
+
+  @Get()
+  getHello() {
+    return {
+      // 获取配置文件内容
+      aaa: this.configService.get('aaa'),
+      bbb: this.configService.get('bbb')
+    }
+  }
+}
+
+```
+
+### 3. 自定义配置
+可以给ConfigModule.forRoot()方法传入一个配置对象。
+```js
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
+  // 不传入配置对象
   imports: [ConfigModule.forRoot()],
   imports: [
     ConfigModule.forRoot({
-      // 传入配置文件自定义环境文件路径
+      // 默认情况下，该包会在应用根目录下查找 .env 文件。传入自定义环境文件路径
       envFilePath: '.development.env',
-      // 禁用环境变量加载即不加载 .env 文件
+      // 也可以指定多个路径,前面的配置会覆盖后面的配置。即第一个配置文件的为准。
+      envFilePath: ['.env.development.local', '.env.development'],
+      // 禁用环境变量加载即不加载 .env 文件，而是从运行时环境访问环境变量
       ignoreEnvFile: true,
-      // 在其他模块中使用 ConfigModule 时声明为全局模块
+      // 在其他模块中使用 ConfigModule 时声明为全局模块，或者像标准 Nest 模块一样导入它。
       isGlobal: true,
       // 缓存环境变量、访问 process.env 可能会比较慢
       // 为true可以提高 get方法 在处理时的性能
@@ -3306,8 +3390,18 @@ import { ConfigModule } from '@nestjs/config';
 })
 export class AppModule {}
 
-// 自定义配置文件
+```
+
+如果不希望使用.env 配置文件，也可以自定义其他格式的配置文件只不过需要自己解析。
+
+1. js/ts文件，它要导出一个工厂函数，该函数返回一个配置对象。这个配置对象可以是任意嵌套的纯 JavaScript 对象。之后将其传递给 ConfigModule.forRoot() 方法的 options 对象中的 load 属性来加载该文件。
+
+2. YAML 文件,一样的需要安装 js-yaml 包。`$ npm i js-yaml `, `$ npm i -D @types/js-yaml`。安装该包后，使用 yaml.load() 方法加载我们刚才创建的 YAML 文件。
+
+```js
+// config.ts 自定义配置文件
 export default () => ({
+  // 返回一个配置对象
   port: parseInt(process.env.PORT, 10) || 3000,
   database: {
     host: process.env.DATABASE_HOST,
@@ -3315,20 +3409,111 @@ export default () => ({
   }
 });
 
-// 在某个特性模块中使用要先导入、除非声明为全局模块。
-// feature.module.ts 
+// 使用yaml格式文件
+// dev.yaml
+# 开发环境配置
+app:
+  prefix: ''
+  host: 'localhost'
+  port: 3000
+  name: 'dev'
+
+# 数据库配置
+db:
+  mysql:
+    host: 'localhost'
+    port: 3306
+    username: 'root'
+    password: 'wanggeng123456'
+    database: 'nest-vue-ruoyi'
+    charset: 'utf8mb4'
+    logger: 'file'
+    logging: true
+    multipleStatements: true
+    dropSchema: false
+    supportBigNumbers: true
+    bigNumberStrings: true
+
+# redis 配置
+redis:
+  host: '127.0.0.1'
+  port: 6379
+  db: 0
+  keyPrefix: 'nest:'
+
+# jwt 配置
+jwt:
+  SECRET: 'test'
+  SECRET1: 'test11'
+  EXPIRES_IN: '1h'
+  refreshExpiresIn: '2h'
+
+# axios 配置
+axios:
+  HTTP_TIMEOUT: 5000
+  HTTP_MAX_REDIRECTS: 5
+  IP_TO_ADDRESS: 'https://whois.pconline.com.cn/ipJson.jsp'
+
+# 权限-路由白名单配置
+permission:
+  router:
+    whitelist:
+      [
+        { path: '/test', method: 'GET' },
+        { path: '/captchaImage', method: 'GET' },
+        { path: '/register', method: 'POST' },
+        { path: '/login', method: 'POST' },
+        { path: '/logout', method: 'POST' },
+        { path: '/permission/{id}', method: 'GET' },
+        { path: '/upload', method: 'POST' },
+      ]
+// index.ts 
+import * as yaml from 'js-yaml';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { ConfigEnum } from 'src/common/enum';
+
+// 根据当前环境变量读取不同配置文件并导出
+export default () => {
+  const result = yaml.load(readFileSync(join(__dirname, `./${ConfigEnum[process.env.NODE_ENV]}.yml`), 'utf8')) as Record<string, any>;
+  console.log('配置文件信息', result);
+  return result;
+};
+
+// AppModule
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import configuration from './config/config.ts';
+import yamlConfig from './config/index.ts';
 @Module({
-  imports: [ConfigModule],
-  // ...
+  imports: [
+    ConfigModule.forRoot({
+      // 自定义配置文件是一个数组，允许加载多个配置文件
+      // 它会和 .env 文件和外部定义的变量合并
+      load: [configuration, yamlConfig],
+    });
+  ],
 })
+export class AppModule {}
+// 在 Controller 里取出来
+import { Controller, Get } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { AppService } from './app.service';
 
-// 一样的通过类构造函数注入依赖
-constructor(private configService: ConfigService) {}
-// 注入之后使用 configService.get() 方法通过传递变量名来获取简单的环境变量。
-// 还接受一个可选的第二个参数，用于定义默认值。当键不存在时，将返回该默认值
-this.configService.get() 
-const title = this.configService.get('APP_TITE');
+@Controller()
+export class AppController {
+  // 构造函数注入方式
+  constructor(private readonly appService: AppService, private readonly configService: ConfigService) {}
+  // 属性注入方式
+  @Inject(ConfigService)
+  private readonly configService: ConfigService;
 
+  @Get()
+  getHello(): string {
+    cosnt port = this.configService.get('port');
+    return this.appService.getHello();
+  }
+}
 
 ```
 
