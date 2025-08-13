@@ -3768,44 +3768,71 @@ migration 就是把 create table、alter table 等封装成一个个的 migratio
   migration:revert：撤销上次 migration，删掉数据库 migrations 里的上次执行记录
 
 
-### 5.2.2 MongoDB
-Nest 支持两种与 MongoDB 数据库集成的方法。
+### 5.2.2 MongoDB集成
+
+#### 1 概述
+Nest 提供了两种与 MongoDB 数据库集成的方法。
 1. 依然使用内置的 TypeORM 模块，该模块具有适用于 MongoDB 的连接器，
-2. 使用 Mongoose，这是最流行的 MongoDB 对象建模工具。
+2. 使用最流行的 MongoDB 对象建模工具 Mongoose，这也是node操作mongodb数据库的常用工具。
 
-很明显我们使用第二中方法、这也是我们之前学习的。
+很明显我们使用第二种方法、这也是我们之前学习的。
 
-安装所需的依赖项: `$ npm i @nestjs/mongoose mongoose`
+#### 2 NestJS集成 mongoose
+和集成TypeORM的步骤类似的，区别在于依赖不同，创建链接、表、curd语句不同。它也是有一个动态模块 MongooseModule，
 
-#### 使用步骤
+1. 安装所需的依赖项: `$ npm i @nestjs/mongoose mongoose`
 
-1. 安装过程完成后，将MongooseModule导入到根AppModule中。forRoot()方法接受与Mongoose包中的mongoose.connect()相同的配置对象、所以很方便。
-```JavaScript
+2. 安装过程完成后，将MongooseModule导入到根AppModule中，使用MongooseModule.forRoot()方法接受与Mongoose包中的mongoose.connect()相同的配置对象、所以很方便。
+```js
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
+import { Connection } from 'mongoose';
 @Module({
   imports: [MongooseModule.forRoot('mongodb://localhost/nest')],
+  // 连接多个数据库必须为连接命名。
+  imports: [
+    MongooseModule.forRoot('mongodb://localhost/test', {
+      connectionName: 'cats-db',
+    }),
+    MongooseModule.forRoot('mongodb://localhost/users', {
+      connectionName: 'users-db',
+    }),
+  ],
+  // 工厂函数
+  imports: [
+    MongooseModule.forRootAsync({
+     imports: [ConfigModule],
+     useFactory: async (configService: ConfigService) => ({
+       uri: configService.get<string>('MONGODB_URI'),
+       onConnectionCreate: (connection: Connection) => {
+         // Register event listeners here
+        connection.on('connected', () => console.log('connected'));
+        connection.on('open', () => console.log('open'));
+        connection.on('disconnected', () => console.log('disconnected'));
+        connection.on('reconnected', () => console.log('reconnected'));
+        connection.on('disconnecting', () => console.log('disconnecting'));
+         return connection;
+       },
+     }),
+     inject: [ConfigService],
+   });
+  ]
 })
 export class AppModule {}
 
 ```
-2. 模型注入、使用Mongoose，所有内容都源自于Schema。每个schema都映射到一个MongoDB集合，并定义了该集合中文档的结构。schemas用于定义Models。Models负责从底层MongoDB数据库创建和读取文档。这是我们知道的。
-
-@Schema() 装饰器将一个类标记为模式定义。它将我们的 Cat 类映射到一个同名的 MongoDB 集合，但在末尾添加了一个附加的“s”，因此最终的 MongoDB 集合名称将是 cats。
-
-@Prop() 装饰器在文档中定义属性、还接受一个选项对象参数如指示属性是否是必需的，指定默认值，或将其标记为不可变、与另一个模型的关联
-
-{ required: true, type: mongoose.Schema.Types.ObjectId, ref: 'Owner' }
-
-```JavaScript
-
+1. 模型注入(类似MySQL的实体)、使用Mongoose，所有内容都源自于Schema。每个schema都映射到一个MongoDB集合，并定义了该集合中文档的结构。schemas用于定义Models。Models负责从底层MongoDB数据库创建和读取文档。
+```js
+// cat.schema.ts
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
 export type CatDocument = HydratedDocument<Cat>;
-
+// @Schema() 装饰器将一个类标记为模式定义。它将我们的 Cat 类映射到一个同名的 MongoDB 集合，但在末尾添加了一个附加的“s”，因此最终的 MongoDB 集合名称将是 cats。
 @Schema()
 export class Cat {
+  // @Prop() 装饰器在文档中定义属性、还接受一个选项对象参数如指示属性是否是必需的，指定默认值，或将其标记为不可变、与另一个模型的关联
+  
   @Prop()
   name: string;
 
@@ -3820,8 +3847,8 @@ export const CatSchema = SchemaFactory.createForClass(Cat);
 
 ```
 
-3. 在模块中注入、MongooseModule 也是使用 forFeature() 方法来配置模块，其中包括定义应在当前范围内注册哪些模型。
-```JavaScript
+4. 在模块中注入、MongooseModule 也是使用 forFeature() 方法来配置模块，其中包括定义应在当前范围内注册哪些模型。
+```js
 
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
@@ -3832,6 +3859,10 @@ import { Cat, CatSchema } from './schemas/cat.schema';
 @Module({
   // 注入、函数对象的name属性返回函数名、可以是一个字符串
   imports: [MongooseModule.forFeature([{ name: Cat.name, schema: CatSchema }])],
+  // 多数据链接时指定链接名即可
+   imports: [
+    MongooseModule.forFeature([{ name: Cat.name, schema: CatSchema }], 'cats-db'),
+  ],
   controllers: [CatsController],
   providers: [CatsService],
 })
@@ -3839,8 +3870,8 @@ export class CatsModule {}
 
 ```
 
-4. 在服务内使用 @InjectModel() 装饰器将 Cat 模型注入到 CatsService 中、这时就回到了mongoose包里的用法了使用model操作集合。
-```JavaScript
+5. 在服务内使用 @InjectModel() 装饰器将 Cat 模型注入到 CatsService 中、这时就回到了mongoose包里的用法了使用model操作集合。
+```js
 
 import { Model } from 'mongoose';
 import { Injectable } from '@nestjs/common';
@@ -3850,7 +3881,10 @@ import { CreateCatDto } from './dto/create-cat.dto';
 
 @Injectable()
 export class CatsService {
+  // 
   constructor(@InjectModel(Cat.name) private catModel: Model<Cat>) {}
+
+  @InjectModel(Cat.name) private readonly catModel: Model<Cat>
 
   async create(createCatDto: CreateCatDto): Promise<Cat> {
     // 创建方法一、
@@ -3865,49 +3899,57 @@ export class CatsService {
   }
 }
 
-连接#
 
 ```
 
-#### 多个数据库连接
-一个项目需要连接多个数据库数据库时、只需要指定连接名即可。注意同名会被覆盖
-```JavaScript
+### 5.2.3 Redis集成
 
-import { Module } from '@nestjs/common';
-import { MongooseModule } from '@nestjs/mongoose';
-
-@Module({
-  imports: [
-    MongooseModule.forRoot('mongodb://localhost/test', {
-      connectionName: 'cats',
-    }),
-    MongooseModule.forRoot('mongodb://localhost/users', {
-      connectionName: 'users',
-    }),
-  ],
-})
-export class AppModule {}
-
-// 注册时告诉 MongooseModule.forFeature() 函数应该使用哪个连接。
-@Module({
-  imports: [
-    MongooseModule.forFeature([{ name: Cat.name, schema: CatSchema }], 'cats'),
-  ],
-})
-export class CatsModule {}
-
-
-
-```
-
-
-
-### 5.2.3 Redis
+#### 1 概述
 redis 的设计是 key、value 的键值对的形式,常用来做缓存。就是可以查出数据来之后放到 redis 中缓存，下次如果 redis 有数据就直接用，没有的话就查数据库然后更新 redis 缓存。
 
-在 Nest 里最流行的就是 redis 和 ioredis 这两个包。
-安装`npm install redis`、`npm install ioredis`
+在 Node 里操作 redis 数据库，需要用 redis 的 node 的客户端。最流行的就是 redis 和 ioredis 这两个包。其中 redis 是官方提供的 npm 包。ioredis 是一个基于 Promise 的 Redis 客户端，支持所有 Redis 命令。所有的 redis 命令都有对应的方法和我们在命令行客户端里操作一样。
 
+安装依赖`npm install redis`、`npm install ioredis`
+
+```js
+// redis
+import { createClient } from 'redis';
+
+const client = createClient({
+    socket: {
+        host: 'localhost',
+        port: 6379
+    }
+});
+
+client.on('error', err => console.log('Redis Client Error', err));
+
+await client.connect();
+
+const value = await client.keys('*');
+await client.hSet('settest', '111', 'value111');
+const value1 = await client.hGet('settest', '111');
+
+
+console.log(value);
+
+await client.disconnect();
+
+// ioredis
+import Redis from "ioredis";
+
+const redis = new Redis();
+
+const res = await redis.keys('*');
+
+console.log(res);
+
+```
+
+
+
+#### 2 NestJS 集成 Redis
+Nest官方虽然提供了 cache-manager 但是一般不用、因为不支持各种 Redis 的命令，绝大多数情况下是不够用的，需要自己再封装。所以在NestJS里我们也是使用这两个包，不过是封装成 provider 而已。
 ```js
 // 在 AppModule 添加一个自定义的 provider
 import { Module } from '@nestjs/common';
@@ -3920,6 +3962,7 @@ import { createClient } from 'redis';
   controllers: [AppController],
   providers: [
     AppService,
+    // 自定义提供者
     {
       provide: 'REDIS_CLIENT',
       async useFactory() {
@@ -3945,7 +3988,9 @@ import { RedisClientType } from 'redis';
 
 @Injectable()
 export class AppService {
-
+  // 注入方式1
+  constructor(@Inject('REDIS_CLIENT') private redisClient: RedisClientType) {}
+  // 注入方式2
   @Inject('REDIS_CLIENT')
   private redisClient: RedisClientType;
 
@@ -3961,10 +4006,11 @@ export class AppService {
   }
 }
 
+// 也可以单独封装成一个全局模块 RedisModule 
 
 
 ```
-官方虽然提供了 cache-manager 但是一般不用、因为不支持各种 Redis 的命令，绝大多数情况下是不够用的，需要自己再封装。
+
 
 ## 5.3 版本控制
 
