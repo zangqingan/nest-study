@@ -3211,7 +3211,7 @@ getAllAndOverride 会返回第一个非空的 metadata。
 
 ```
 
-## 4.5 接口多版本
+## 4.5 版本控制
 应用开发完一版上线之后，还会不断的迭代。后续可能需要修改已有的接口，但是为了兼容，之前版本的接口还要保留。也就是路由相同但是版本不一样。Nest 内置了这个功能。在控制器中传入一个配置对象声明版本信息，然后单独用 @Version 把 version 2 的接口标识一下。最后在 main.ts 里调用 enableVersioning 开启接口版本功能。
 ```js
 import { VersioningType } from '@nestjs/common';
@@ -4012,9 +4012,7 @@ export class AppService {
 ```
 
 
-## 5.3 版本控制
-
-## 5.4 任务调度
+## 5.3 任务调度
 任务调度(定时任务)可以在固定的日期/时间、重复的时间间隔之后，或者在指定的时间间隔之后执行任意代码（方法/函数）。在Linux世界中，通常使用像CRON这样的包来处理操作系统级别的定时任务。对于Node.js应用程序，有几个包可以模拟类似CRON的功能。Nest提供了@nestjs/schedule包，它集成了流行的Node.js cron包。
 
 ### 1. 使用
@@ -4101,7 +4099,7 @@ handleTimeout() {
 
 
 
-## 5.5 队列
+## 5.4 队列
 
 ### 1. 概述
 队列是一种强大的设计模式、可以解决如下问题:
@@ -4141,7 +4139,7 @@ export class AppModule {}
 
 ```
 
-## 5.6 日志
+## 5.5 日志
 之前我们是使用 console.log 打印的日志，这样有不少弊端：没有日志的不同级别的区分，不能通过开关控制是否打印等。
 
 Nest 内置了一个基于文本的日志记录器，在应用程序引导和其他情况下（例如显示捕获的异常，即系统日志）中使用。
@@ -4781,7 +4779,7 @@ export class UserController {
 
 
 
-## 5.7 事件
+## 5.6 事件
 Event Emitter包（@nestjs/event-emitter）提供了一个简单的观察者实现，允许您订阅和监听应用程序中发生的各种事件。事件作为应用程序各个方面解耦的很好方式，因为单个事件可以有多个不相互依赖的监听器。
 
 ### 1. 使用
@@ -4842,7 +4840,7 @@ export class FindCatsAllListener {
 ```
 
 
-## 5.8 压缩
+## 5.7 压缩
 压缩可以大大减小响应体的大小，从而提高Web应用的速度。这个主要说的是打包构建时。和在express中一样使用 compression 中间件包来启用 Gzip 压缩、安装完成后，将压缩中间件应用为全局中间件。
 
 安装:`$ npm i --save compression`
@@ -4855,7 +4853,7 @@ app.use(compression());
 ```
 
 
-## 5.9 文件上传
+## 5.8 文件上传
 Nest 的文件上传是基于 Express 的中间件 multer 实现的,为此 Nest提供了一个基于express-multer中间件包的内置模块。express 的 multer 包是用来处理 multipart/form-data 格式的文件上传请求的。通过 single 方法处理单个字段的单个文件，array 方法处理单个字段的多个文件，fields 方法处理多个字段的文件，any 处理任意数量字段的文件，分别用 req.file 和 req.files 来取解析出的文件。其余非文件字段不会处理，还是通过 req.body 来取。
 
 
@@ -5432,7 +5430,7 @@ put();
 ```
 
 
-## 5.10 网络请求
+## 5.9 网络请求
 nodejs是可以作为中后端、和前端一样发起网络请求的。Nest同样也可以使用任何通用的 Node.js HTTP 客户端库。这里我们使用 Axios、因为Nest 封装了 Axios 并通过内置的 HttpModule 提供访问。HttpModule 导出了 HttpService 类，它提供了基于 Axios 的方法来执行 HTTP 请求。该库还将得到的 HTTP 响应转换为 Observables。Observable可以使用rxjs的firstValueFrom或lastValueFrom来以promise的形式获取请求的数据。
 
 安装: `$ npm i --save @nestjs/axios axios`
@@ -5485,7 +5483,7 @@ export class CatsModule {}
 ```
 
 
-## 5.11 静态资源服务器
+## 5.10 静态资源服务器
 在express里是使用 express.static() 内置方法、而koa是使用koa-static中间件。Nest 默认在底层使用 Express 库。因此，适用于 Express 的每种技术也同样适用于 Nest。比如静态资源服务器、模板引擎等。
 只需要安装需要的依赖包、然后再入口文件配置即可
 ```JavaScript
@@ -5515,97 +5513,95 @@ bootstrap();
 
 ```
 
-## 5.12 认证
+## 5.11 认证
 
 ### 1. 概述
-在开始学习原生node时、我们知道http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。
-而基本所有网站或者应用都有登录认证功能，登录之后再次请求依然是登录状态(也就是认证了)。
-那么如何实现登录状态的保持呢？业界基本使用两种解决方案
-1. 服务端保存 session + cookie 的方案。
-第一次登录时后端返回凭证信息，前端存储在cookie中，之后每次http请求都会自动携带上cookie中保存的凭证信息，算是给请求打上了唯一标识。后端根据前端传过来的标识去查找与之对应的数据 session即可。
-
-缺点：有CSRF(跨站请求伪造)风险，因为 cookie 会在请求时自动带上，那你在一个网站登录了，再访问别的网站，万一里面有个按钮会请求之前那个网站的，那 cookie 依然能带上。而这时候就不用再登录了。为了解决这个问题，我们一般会验证 referer，就是请求是哪个网站发起的，如果发起请求的网站不对，那就阻止掉。但这样依然不能完全解决问题，万一你用的浏览器也是有问题的，能伪造 referer 呢？
-
-所以一般会用随机值来解决，每次随机生成一个值返回，后面再发起的请求需要包含这个值才行，否则就认为是非法的。这个随机值叫做 token，可以放在参数中，也可以放在 请求头 header 中，因为钓鱼网站拿不到这个随机值，就算带了 cookie 也没发通过服务端的验证。
-
-还有一个问题当并发量比较高时会使用分布式部署，这时不同服务器之间的 session就会不同。
-这个问题的解决有两种方案：
-  - 一种是 session 复制，也就是通过一种机制在各台机器自动复制 session，并且每次修改都同步下。这个有对应的框架来做，比如 java 的 spring-session。各台服务器都做了 session 复制了，那你访问任何一台都能找到对应的 session。
-  - 还有一种方案是把 session 保存在 redis，这样每台服务器都去那里查，只要一台服务器登录了，其他的服务器也就能查到 session，这样就不需要复制了。
-分布式会话的场景，redis + session 的方案更常用一点。
-
-2. 客户端保存 jwt token 的方案。
-session + cookie 的方案是把状态数据保存在服务端，再把 id 保存在 cookie 里来实现的。既然这样的方案有那么多的问题，那我反其道而行之，不把状态保存在服务端了，直接全部放在请求里，也不放在 cookie 里了，而是放在HTTP请求头对象的 header 里，这样是不是就能解决那一堆问题了呢？
-
-token 的方案常用 json 格式来保存，叫做 json web token，简称 JWT。它是保存在 request header 里的一段字符串（比如用 header 名可以叫 authorization）。
-它由三部分组成：header头部、payload载荷、verify signature 验证签名
- - header 部分保存当前的加密算法，
- - payload 部分是具体存储的数据，
- - verify signature 部分是把 header 和 payload 还有 salt 做一次加密之后生成的。
-
-这三部分会分别做Base 64加密后再返回、然后一般放到请求头header 的 authorization:Bearer xxx.xxx.xxx 字段上。
-请求的时候把这个 header 带上，服务端就可以解析出对应的 header、payload、verify signature 这三部分，然后根据 header 里的算法也对 header、payload 加上 salt 做一次加密，如果得出的结果和 verify signature 一样，就接受这个 token。也就是认证成功。
-而把状态数据都保存在 payload 部分，这样就实现了有状态的 http。
-
-
-所以整个认证流程是: 
+认证是大多数应用程序的重要组成部分，有许多不同的方法和策略来处理认证。它是一个完整的主题，从前端提交用户信息开始，到后端验证用户信息，生成令牌，到客户端存储令牌，再到后端验证令牌。
+整个认证流程大体是: 
 1. 前端用户登录提交用户名和密码 --> 
 2. 后端接收并认证 --> 
-3. 后端认证通过生成 jwt token并返回给前端 --> 
-4. 前端本地(localStorage、sessionStorage)保存返回的jwt token  -->  
-5. 前端之后每次请求都在请求头中携带jwt token  -->  
+3. 后端认证通过生成令牌并返回给前端 --> 
+4. 前端本地(localStorage、sessionStorage)保存返回的令牌 -->  
+5. 前端之后每次请求都在请求头中携带令牌  -->  
 6. 后端拦截请求并验证 --> 
 7. 验证通过执行业务逻辑并返回数据 --> 
 8. 前端展示数据 --> 
 9. 如果是验证不通过返回错误信息 --> 
 10. 前端提示错误信息并返回登录页面。至此整个登录认证流程结束。
 
-这个方案就没有第一种的问题，但是这个方案也有安全性问题，因为它是把数据直接 Base64 之后就放在了 header 里，那别人就可以轻易从中拿到状态数据，比如用户名等敏感信息，也能根据这个 JWT 去伪造请求。所以 JWT 要搭配 https 协议来用，让别人拿不到 header。
+而在这个流程中，我们知道 http 是无状态的协议，也就是说上一次请求和下一次请求之间没有任何关联。那么如何保证用户是登录的正确用户呢？即**如何保持当前用户的登录状态**是关键，业界有两种解决方案它们都有各自的优缺点。
 
-性能问题：JWT 把状态数据都保存在了 header 里，每次请求都会带上，比起只保存个 id 的 cookie 来说，请求的内容变多了，性能也会差一些。所以 JWT 里一般也不要保存太多数据。
-
-没法让 JWT 失效：session 因为是存在服务端的，那我们就可以随时让它失效，而 JWT 不是，因为是保存在客户端，那我们是没法手动让他失效的。比如踢人、退出登录、改完密码下线这种功能就没法实现。
-
-
-### 2. cookie + session 方案
-
-#### 1. cookies
-HTTP cookie是由用户的浏览器存储的小型数据片段。Cookie的设计目的是成为网站记住有状态信息的可靠机制。当用户再次访问网站时，Cookie会自动随请求一起发送。
-
-安装依赖: `$ npm i cookie-parser`、`$ npm i -D @types/cookie-parser`。
-
-安装完成后，将cookie-parser中间件应用为全局中间件即可。该中间件将解析请求的Cookie头，并将Cookie数据暴露为req.cookies属性，如果提供了密钥，则还将暴露为req.signedCookies属性。这些属性是cookie名称到cookie值的键值对。这样就可以从路由处理程序中读取Cookie。
-```JavaScript
-// main.ts
-import * as cookieParser from 'cookie-parser';
-// somewhere in your initialization file
-app.use(cookieParser());
-
-// 使用
-import { Req,Res } from '@nestjs/common'
-import { Request,Response } from 'express'
-// 获取cookie
-@Get()
-findAll(@Req() request: Request) {
-  console.log(request.cookies); // or "request.cookies['cookieKey']"
-  // or console.log(request.signedCookies);
-}
-// 设置cookie返回
-@Get()
-findAll(@Res({ passthrough: true }) response: Response) {
-  response.cookie('key', 'value')
-}
+#### 1 服务端保存 session + cookie 的方案
+用户第一次登录时后端返回凭证信息，前端存储在cookie中，之后每次http请求都会自动携带上cookie中保存的凭证信息，算是给之后的每个请求打上了唯一标识。后端根据前端传过来的标识去查找与之对应的数据叫做 session 即可。这
+就是 session + cookie 的给 http 添加状态的方案。
+```js
+// 前端有cookie
+sid = 1
+// 后端有session
+{id: 1, name: '张三'}
+{id: 2, name: '李四'}
+// 通过不同id匹配对应session数据也就可以知道当前用户是谁了
 
 ```
 
-#### 2. session
-HTTP会话提供了一种在多个请求之间存储用户信息的方式，这对于MVC应用程序特别有用。
-在 Nest 里实现 session 还是用的 express 的中间件 express-session。
-安装 express-session 和它的 ts 类型定义
-`$ npm i express-session` `$ npm i -D @types/express-session`
+**缺点1：** 有CSRF(跨站请求伪造)风险，因为 cookie 会在请求时自动带上，那你在一个网站登录了，再访问别的网站，万一里面有个按钮会请求之前那个网站的，那 cookie 依然能带上。而这时候就不用再登录了。
 
-安装完成后，将 express-session 中间件应用为全局中间件在入口模块里启用它。
-```JavaScript
+**解决方法：**为了解决这个问题，一般会验证 referer，就是请求是哪个网站发起的，如果发起请求的网站不对，那就阻止掉。但这样依然不能完全解决问题，万一你用的浏览器也是有问题的，能伪造 referer 呢？
+
+所以一般会用随机值来解决，每次随机生成一个值返回，后面再发起的请求需要包含这个值才行，否则就认为是非法的。这个随机值叫做 token，可以放在参数中，也可以放在 请求头 header 中，因为钓鱼网站拿不到这个随机值，就算带了 cookie 也没发通过服务端的验证。
+
+**缺点2：** 还有一个问题，session 是把状态数据保存在服务端的，当并发量比较高时会使用分布式部署，这时不同服务器之间的 session 就会不同。那不同服务器之间的 session 怎么同步？
+
+**解决方法：** 有两种方案：
+  - 一种是 session 复制，也就是通过一种机制在各台机器自动复制 session，并且每次修改都同步下。这个有对应的框架来做，比如 java 的 spring-session。各台服务器都做了 session 复制了，那你访问任何一台都能找到对应的 session。
+  - 还有一种方案是把 session 保存在 redis，这样每台服务器都去redis服务器里查，只要一台服务器登录了，其他的服务器也就能查到 session，这样就不需要复制了。
+分布式会话的场景，redis + session 的方案更常用一点。
+
+**缺点3：** 跨域问题，cookie 为了安全，不能跨域。
+
+**解决方法：** 需要前后端共同处理。
+
+
+
+#### 2 客户端保存 jwt token 的方案
+session + cookie 的方案是把状态数据保存在服务端，再把 id 保存在 cookie 里来实现的。既然这样的方案有那么多的问题，那我反其道而行之，不把状态保存在服务端了，直接全部放在请求里，也不放在 cookie 里了，而是放在HTTP请求头对象的 header 里，这样是不是就能解决那一堆问题了呢？
+
+token 的方案常用 json 格式来保存，叫做 json web token，简称 JWT。本质上它就是保存在 request header(请求头) 里的一段字符串（比如用 header 名可以叫 authorization）。
+
+它由三部分组成：header头部、payload载荷、verify signature 验证签名
+ - header 部分保存当前的加密算法，
+ - payload 部分是具体存储的数据，
+ - verify signature 部分是把 header 和 payload 还有 salt值 做一次加密之后生成的字符串。
+
+这三部分会再分别做一次 Base64 加密后再返回、然后一般放到请求头header 的 authorization:Bearer xxx.xxx.xxx 字段上。
+
+前端发起请求的时候把这个 header 带上，服务端就可以解析出对应的 header、payload、verify signature 这三部分，然后根据 header 里的算法也对 header、payload 加上 salt 做一次加密，如果得出的结果和 verify signature 一样，就接受这个 token。也就是认证成功这样就实现了有状态的 http。
+
+这个方案就没有第一种的问题，但是这个方案也有自己的问题。
+
+**缺点1：**安全性问题，因为它是把数据直接 Base64 之后就放在了 header 里，那别人就可以轻易从中拿到状态数据，比如用户名等敏感信息，也能根据这个 JWT 去伪造请求。
+
+**解决方法：** JWT 要搭配 https 协议来用，让别人拿不到 header。
+
+
+**缺点2：**性能问题，JWT 把状态数据都保存在了 header 里，每次请求都会带上，比起只保存个 id 的 cookie 来说，请求的内容变多了，性能也会差一些。
+
+**解决方法：** JWT 里一般也不要保存太多数据,JWT 适合保存用户信息，比如用户 ID、用户名、权限、角色等信息。
+
+**缺点3：**没法让 JWT 失效，session 因为是存在服务端的，那我们就可以随时让它失效，而 JWT 不是，因为是保存在客户端，那我们是没法手动让他失效的。比如踢人、退出登录、改完密码下线这种功能就没法实现。
+
+**解决方法：** 可以设置过期时间，过期后前端需要重新登录获取新的 token。
+
+
+### 2. NestJS实现
+
+#### 1. session + cookie 方案
+这个方案是服务的存session，前端存cookie。在 Nest 里实现 session 还是用的 express 的中间件 express-session。
+
+1. 安装 express-session 和它的 ts 类型定义 `$ npm i express-session` `$ npm i -D @types/express-session`
+
+2. 安装完成后，将 express-session 中间件应用为全局中间件应用接口，如在入口模块里启用它。然后就可以在路由处理程序中设置和读取会话值。
+```js
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as session from 'express-session';
@@ -5614,9 +5610,9 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.use(session({
-    secret: 'guang',// 指定加密的密钥 secret
+    secret: 'guang',// 指定加密的密钥 secret 防止篡改
     resave: false,// 每次访问时是否都会更新 session，不管有没有修改 session 的内容，而 false 是只有 session 内容变了才会去更新 session。
-    name: 'ww' // 生成客户端cookie 的名字 默认 connect.sid
+    name: 'ww' // 自定义生成客户端cookie 的名字 默认 connect.sid
     saveUninitialized: false // 不管是否设置 session，都会初始化一个空的 session 对象。
     cookie: {
       httpOnly: true,
@@ -5635,29 +5631,49 @@ import { Request,Response } from 'express'
 // 设置了上述配置后，您现在可以在路由处理程序内设置和读取会话值
 @Get()
 findAll(@Req() request: Request) {
-  request.session.visits = request.session.visits ? request.session.visits + 1 : 1;
+  const user = request.session.user 
+  console.log(user)
+  return { message: '登录成功' };
 }
 
 // 也可以直接使用 @Session() 装饰器从请求中提取会话对象
 import { Session} from '@nestjs/common'
 @Get()
 findAll(@Session() session: Record<string, any>) {
-  session.visits = session.visits ? session.visits + 1 : 1;
+  session.user = { id: 1, username: body.username };
+  return { message: '登录成功' };
+  // 设置session属性后会通过响应头返回给客户端
+  Set-Cookie:nestsession=...; Path=/; HttpOnly; Secure; SameSite=Strict
+  Set-Cookie:connect.sid=s%3ANdQhvsYoZkn-GpNr-162lfBHm-w8ZWd_.TO8yWIB9VfwixhDfvDLgHxWxBX8fViPGx8BMRRCxu8I; Path=/; Expires=Thu, 14 Aug 2025 02:46:17 GMT; HttpOnly
+  // 前端就可以通过响应头获取会话信息。
+  // 之后的请求会在请求头中携带这个cookie信息，服务端会解析这个cookie信息，并获取会话信息。
+  Cookie：connect.sid=s%3ANdQhvsYoZkn-GpNr-162lfBHm-w8ZWd_.TO8yWIB9VfwixhDfvDLgHxWxBX8fViPGx8BMRRCxu8I
+}
+其它请求携带这个cookie时后端就能从session中解析出会话信息。
+// 格式
+Session {
+  cookie: {
+    path: '/',
+    _expires: 2025-08-14T02:53:01.642Z,
+    originalMaxAge: 3600000,
+    httpOnly: true,
+    secure: false
+  },
+  user: { id: 1, username: 'test' }
 }
 
 ```
 
-### 3. jwt token 方案
-在 Nest 里实现 jwt 需要引入 @nestjs/jwt 这个包它可以生成和验证 JWT 令牌
-安装：`$ npm install --save @nestjs/jwt`
+#### 2. jwt token 方案
+在 Nest 里实现 jwt 需要引入 @nestjs/jwt 这个包它可以生成和验证 JWT 令牌。需要注意的：前端携带 jwt 一般是加在名为 authorization 的 header 里，以 Bearer xxxtokenxxx 的格式，但是后端在返回 jwt 时可以放在任何地方，header、cookie 或者 body 里都可以。
 
-然后在 AppModule 里引入 JwtModule,那就是全局注册，也可以在指定 module 文件中注册。
-JwtModule 是一个动态模块，通过 register 传入 option。
-或者是 registerAsync，然后通过 useFactory 异步拿到 option 传入。
+1. 安装依赖：`$ npm install --save @nestjs/jwt`
 
-```JavaScript
+2. 在模块中注册，一般是在 AppModule 里引入 JwtModule 全局注册，也可以在指定 module 文件中注册。JwtModule 是一个动态模块，通过 register 传入 option。或者是 registerAsync，然后通过 useFactory 异步拿到 option 传入。
+```js
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
+import {ConfigModule, ConfigService} from '@nestjs/config';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -5667,8 +5683,23 @@ import { AppService } from './app.service';
       global: true, // 注册为全局模块其他任何地方不用再导入 JwtModule
       secret: 'qingan', // 指定 secret
       signOptions: {
+        //  token 过期时间 expiresIn
         expiresIn: '7d'
       }
+    })
+  ],
+  // 工厂函数注册
+  imports: [
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      useFactory: async (configService: ConfigService) => ({
+        global: true, // 注册为全局模块其他任何地方不用再导入 JwtModule
+        secret: configService.get('JWT_SECRET'), // 指定 secret
+        signOptions: {
+          expiresIn: configService.get('JWT_EXPIRES_IN') // 从配置文件里获取过期时间
+        }
+      }),
+      inject: [ConfigService]
     })
   ],
   controllers: [AppController],
@@ -5676,40 +5707,10 @@ import { AppService } from './app.service';
 })
 export class AppModule {}
 
-// 也可以单独定义一个模块只在某些模块里用
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-// 登录校验
-import { PassportModule } from '@nestjs/passport';
-import { JwtModule } from '@nestjs/jwt';
-import { UserService } from './user.service';
-import { UserController } from './user.controller';
-import { User } from './entities/user.entity';
-// 注入策略
-import { LocalStrategy } from 'src/common/guards/local.strategy';
-import { JwtStrategy } from 'src/common/guards/jwt.strategy';
-
-// 定义 jwt 模块方便注入
-const jwtModuleA = JwtModule.register({
-  secret: 'test123456', // 指定加密 jwt 的密钥
-  signOptions: { expiresIn: '4h' }, // 设置过期时间 expiresIn 设置为4小时
-});
-@Module({
-  // 注册实体类
-  imports: [TypeOrmModule.forFeature([User]), PassportModule, jwtModuleA],
-  controllers: [UserController],
-  providers: [UserService, LocalStrategy, JwtStrategy],
-  exports: [jwtModuleA],
-})
-export class UserModule {}
-
-
-
 ```
 
-注册成功后就可以在 controller 里注入 JwtModule 里的 JwtService 了。
-
-```JavaScript
+3. 注册成功后在需要的地方引入JwtService就可以，比如在 AppService 里注入使用。
+```js
 import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
@@ -5720,48 +5721,90 @@ export class AppService {
     private readonly jwtService: JwtService,
   ) {}
   // 或者定义私有属性 
+  @Inject(JwtService)
   private readonly jwtService: JwtService
-}
-// 然后添加一个 handler返回即可：使用 jwtService.sign 来生成一个 jwt token，放到 response header 里。
-// 注意：注入 response 对象之后，默认不会把返回值作为 body 了，需要设置 passthrough 为 true 才可以。
-@Get('ttt')
-ttt(@Res({ passthrough: true}) response: Response) {
+
+  // 然后使用 jwtService.sign 来生成一个 jwt token，放到 response header 里。
+  // 注意：注入 response 对象之后，默认不会把返回值作为 body 了，需要设置 passthrough 为 true 才可以。
+  //  这种是把jwt token放在header里返回，也可以生成后直接通过请求体返回。
+  // 响应头返回
+  @Get('jwt-header')
+  getJwt(@Res({ passthrough: true }) response: Response) {
     const newToken = this.jwtService.sign({
-      count: 1
+      count: 1,
+      name: 'zhangsan',
     });
 
     response.setHeader('token', newToken);
     return 'hello';
-}
- // 具体实现认证方法
-  async signIn(data: SignInDto) {
-    const { firstName, lastName } = data;
-    console.log(firstName, lastName);
+  }
+  // 请求体返回
+  @Get('jwt-body')
+  getJwtBody() {
+    const newToken = this.jwtService.sign({
+      count: 1,
+      name: 'zhangsan',
+    });
+    return { token: newToken };
+  }
+
+  // 直接返回+认证过程例子
+  async signIn(username: string, pass: string): Promise<any> {
     // 根据前端传参查找数据库是否存在用户
-    const user = await this.usersService.findOne(firstName, lastName);
-    // 判断用户密码是否一致
-    if (user?.lastName !== lastName) {
+    const user = await this.usersService.findOne(username);
+    if (user?.password !== pass) {
       throw new UnauthorizedException();
     }
-    // 上面的判断可以封装成一个守卫
-    // 一样 生成jwt并返回给前端
-    const payload = { sub: user.firstName, username: user.lastName };
+    const payload = { sub: user.userId, username: user.username };
+    // 生成jwt并返回给前端
     return {
       access_token: await this.jwtService.signAsync(payload),
     };
   }
 
-// 然后是定义一个守卫来统一处理
-// public.decorator.ts
-import { SetMetadata } from '@nestjs/common';
-export const IS_PUBLIC_KEY = 'isPublic';
-export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
-// 一个自定义的 @Public() 装饰器，我们可以将其用于装饰任何方法。用来声明哪些路由是公开的
-@Public()
-@Get()
-findAll() {
-  return [];
+  // 之后可以直接检查是否携带token并验证
+  @Get('verifyHeaderToken')
+  getHeaderToken(@Req() request: Request) {
+    const token = request.headers['token'];
+    const token = request.headers['authorization'].split(' ')[1];// 也有通过这个字段名的
+    const payload = this.jwtService.verify(token);
+    return payload;
+  }
+  // 或者通过 @Headers() 装饰器
+  @Get('verifyHeaderToken1')
+  getHeaderToken1(@Headers('authorization') authorization: string) {
+    if (!authorization) {
+      return 'token不存在';
+    }
+    console.log(authorization);
+    const token = authorization.split(' ')[1];
+    const payload1 = this.jwtService.verify(token);
+    return payload1;
+  }
+  
 }
+
+```
+
+4. 封装一个守卫用来处理token验证问题，因为很多接口都需要验证token，所以封装一个守卫来处理。而对应少数的接口我们可以声明白名单称来忽略token验证，或者自定义装饰器来忽略token验证。
+```js
+// 创建守卫
+$ nest g guard auth
+export const jwtConstants = {
+  secret: 'DO NOT USE THIS VALUE. INSTEAD, CREATE A COMPLEX SECRET AND KEEP IT SAFE OUTSIDE OF THE SOURCE CODE.',
+};
+// auth.guard.ts
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { Reflector } from '@nestjs/core';
+import { Request } from 'express';
+import { jwtConstants } from './constants';
+import { IS_PUBLIC_KEY } from './decorators/public.decorator'
 
 
 @Injectable()
@@ -5769,90 +5812,317 @@ export class AuthGuard implements CanActivate {
   constructor(private jwtService: JwtService, private reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // 对应少数接口可以提前验证返回进而忽略token校验(也就是不用token也能访问)
+    // 一种是是否在白名单内
+    // 一种是使用是公开接口(使用自定义装饰器声明的接口)
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
     if (isPublic) {
-      // 💡 See this condition
+      // 💡 查看此条件
       return true;
     }
 
+
+    // 切换到http请求
     const request = context.switchToHttp().getRequest();
+    // 获取token
     const token = this.extractTokenFromHeader(request);
     if (!token) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('登录 token 错误');
     }
+    // 验证token
     try {
-      const payload = await this.jwtService.verifyAsync(token, {
-        secret: jwtConstants.secret,
-      });
-      // 💡 We're assigning the payload to the request object here
-      // so that we can access it in our route handlers
+      const payload = await this.jwtService.verifyAsync(
+        token,
+        {
+          secret: jwtConstants.secret
+        }
+      );
+      // 💡 我们在这里将 payload 分配给 request 对象
+      // 以便我们可以在路由处理程序中访问它
       request['user'] = payload;
-    } catch {
-      throw new UnauthorizedException();
+    } catch(e) {
+      throw new UnauthorizedException('登录 token 失效，请重新登录');
     }
     return true;
   }
-
+  // 从请求头中获取token
   private extractTokenFromHeader(request: Request): string | undefined {
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
     return type === 'Bearer' ? token : undefined;
   }
 }
-// 也可以使用nest提供的守卫 
-import { AuthGuard } from '@nestjs/passport';
-// passport-jwt策略token验证-使用本地的策略文件，要自定义 local.strategy.ts
-  @ApiOperation({ summary: '用户登陆' })
-  @UseGuards(AuthGuard('local')) // 增加登录导航校验守卫
-  @Post('login')
-  login(@Body() user: LoginDto, @Req() req) {
-    return this.userService.login(req);
-  }
-import { IStrategyOptions, Strategy } from 'passport-local';
-import { PassportStrategy } from '@nestjs/passport';
-import {
-  BadRequestException,
-  Injectable,
-  HttpException,
-  HttpStatus,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../../modules/user/entities/user.entity';
-// 解密
-import * as bcrypt from 'bcryptjs';
-@Injectable()
-export class LocalStrategy extends PassportStrategy(Strategy) {
-  constructor(
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
-  ) {
-    super({
-      usernameField: 'username',
-      passwordField: 'password',
-    } as IStrategyOptions);
-  }
 
-  async validate(username: string, password: string): Promise<any> {
-    const user = await this.userRepository.findOne({
-      where: { username },
-    });
-    if (!user) {
-      throw new BadRequestException('用户名不正确！');
-    }
-    if (!bcrypt.compareSync(password, user.password)) {
-      throw new HttpException('密码错误', HttpStatus.BAD_REQUEST);
-    }
-    console.log('user', user);
-    return user; // 会自动挂载在req.user对象下
-  }
+// 一般绝大多数接口都是需要token的即都应该受到保护，那就把守卫声明为全局。一般是在根模块中声明。但其实使用以下结构在任何模块中注册 AuthGuard 就会变为全局守卫。
+providers: [
+  {
+    provide: APP_GUARD,
+    useClass: AuthGuard,
+  },
+],
+
+import { Module , APP_GUARD} from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AuthGuard } from './auth.guard';
+
+@Module({
+  controllers: [AppController],
+  providers: [
+    AppService, 
+    {
+       provide: APP_GUARD,
+       useClass: AuthGuard,
+     },
+  ],
+})
+export class AppModule { }
+
+// 声明一个公共装饰器用来忽略token校验
+// decorators/public.decorator
+import { SetMetadata } from '@nestjs/common';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+// 现在我们有了自定义的 @Public() 装饰器，我们可以使用它来装饰任何方法，如下所示：
+@Public()
+@Get()
+findAll() {
+  return [];
 }
-// 策略也是一个提供者可以注入的。
+
 ```
 
-## 5.13 授权
+
+
+
+### 3. 认证(登录注册)实战
+我们已经知道了如何实现用户登录状态的保持，现在我们来实现一下用户登录注册的全流程。也就是把操作数据、字段校验、认证等内容在一个nest项目里实现一下。
+```js
+// 创建项目
+$ nest new login-register-demo -p npm
+// 安装相关依赖
+$ npm install --save @nestjs/typeorm typeorm mysql2
+$ npm install @nestjs/jwt
+$ npm install class-validator class-transformer
+// 注册连接数据库、jwt模块
+// 创建一个守卫验证
+$ nest g guard auth --no-spec --flat
+// 创建一个用户模块
+$ nest g resource user
+// 用户实体定义
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+
+@Entity()
+export class User {
+
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column({
+        length: 50,
+        comment: '用户名'
+    })
+    username: string;
+
+    @Column({
+        length:50,
+        comment: '密码'
+    })
+    password: string;
+
+    @CreateDateColumn({
+        comment: '创建时间'
+    })
+    createTime: Date;
+
+    @UpdateDateColumn({
+        comment: '更新时间'
+    })
+    updateTime: Date;
+
+}
+
+//index.dto.ts
+import { IsNotEmpty, IsString, Length, Matches } from "class-validator";
+
+export class RegisterDto {
+    @IsString()
+    @IsNotEmpty()
+    @Length(6, 30)
+    @Matches(/^[a-zA-Z0-9#$%_-]+$/, {
+        message: '用户名只能是字母、数字或者 #、$、%、_、- 这些字符'
+    })
+    username: string;
+
+    @IsString()
+    @IsNotEmpty()
+    @Length(6, 30)
+    password: string;
+}
+
+export class LoginDto{
+    @IsNotEmpty()
+    username: string;
+
+    @IsNotEmpty()
+    password: string;
+}
+
+// 在 UserController 里添加两个 handler
+import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import { UserService } from './user.service';
+
+@Controller('user')
+export class UserController {
+  constructor(private readonly userService: UserService) {}
+
+  // 用户登录
+  @Post('login')
+  login(@Body() loginDto: LoginDto) {
+    return this.userService.login(loginDto);
+  }
+
+  // 用户注册，把用户信息存到数据库里
+  @Post('register')
+  register(@Body() registerDto: RegisterDto) {
+    return this.userService.register(registerDto);
+  }
+}
+// user.service.ts
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { JwtService } from '@nestjs/jwt';
+import { Repository } from 'typeorm';
+import * as crypto from 'crypto';
+import { LoginDto, RegisterDto } from './dto/index.dto';
+import { User } from './entities/user.entity';
+
+function md5(str) {
+  const hash = crypto.createHash('md5');
+  hash.update(str);
+  return hash.digest('hex');
+}
+
+@Injectable()
+export class UserService {
+
+  private logger = new Logger();
+
+  @InjectRepository(User)
+  private userRepository: Repository<User>;
+
+  @Inject(JwtService)
+  private jwtService: JwtService;
+
+  // 用户注册
+  async register(user: RegisterDto) {
+    // 根据用户名查找数据库
+    const foundUser = await this.userRepository.findOneBy({
+      username: user.username
+    });
+    // 抛出异常让异常过滤器处理
+    if(foundUser) {
+      throw new HttpException('用户已存在', 200);
+    }
+    // 创建用户实例插入数据库
+    const newUser = new User();
+    newUser.username = user.username;
+    newUser.password = md5(user.password);
+
+    try {
+      await this.userRepository.save(newUser);
+      return '注册成功';
+    } catch(e) {
+      this.logger.error(e, UserService);
+      return '注册失败';
+    }
+  }
+
+  // 登录
+  @Post('login')
+  async login(@Body() user: LoginDto) {
+    // 根据用户名查找用户
+    const foundUser = await this.userRepository.findOneBy({
+      username: user.username,
+    });
+    // 没找到就抛出用户不存在的异常
+    if(!foundUser) {
+      throw new HttpException('用户名不存在', 200);
+    }
+    // 校验密码-密码不一致也抛出异常
+    if(foundUser.password !== md5(user.password)) {
+      throw new HttpException('密码错误', 200);
+    }
+
+    // 登录成功之后我们要把用户信息放在 jwt 或者 session 中一份
+    const payload = { username: foundUser.username, sub: foundUser.id };
+    const token = await this.jwtService.signAsync(payload);
+    return {
+      access_token: token,
+    }
+  }
+}
+
+// 守卫验证 jwt 逻辑
+import { JwtService } from '@nestjs/jwt';
+import { CanActivate, ExecutionContext, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Request } from 'express';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(private jwtService: JwtService, private reflector: Reflector) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    // 对应少数接口可以提前验证返回进而忽略token校验(也就是不用token也能访问)
+    // 一种是是否在白名单内
+    // 一种是使用是公开接口(使用自定义装饰器声明的接口)
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      // 💡 查看此条件
+      return true;
+    }
+    // 切换到http请求
+    const request = context.switchToHttp().getRequest();
+    // 获取token
+    const token = this.extractTokenFromHeader(request);
+    if (!token) {
+      throw new UnauthorizedException('登录 token 错误');
+    }
+    // 验证token
+    try {
+      const payload = await this.jwtService.verifyAsync(
+        token,
+        {
+          secret: jwtConstants.secret
+        }
+      );
+      // 💡 我们在这里将 payload 分配给 request 对象
+      // 以便我们可以在路由处理程序中访问它
+      request['user'] = payload;
+    } catch(e) {
+      throw new UnauthorizedException('登录 token 失效，请重新登录');
+    }
+    return true;
+  }
+  // 从请求头中获取token
+  private extractTokenFromHeader(request: Request): string | undefined {
+    const [type, token] = request.headers.authorization?.split(' ') ?? [];
+    return type === 'Bearer' ? token : undefined;
+  }
+}
+// 到这里就实现了注册和基于 JWT 的登录功能。
+
+```
+
+## 5.12 授权
 前面说的认证只是知道你是自己人也就是登录了、但是你的等级(权限)不知道。也就是说，身份验证通过之后还需要再做一步权限的校验，也就是授权。
 授权与认证是正交且独立的、授权需要用到认证机制。授权（Authorization）指的是确定用户能够执行什么操作的过程。例如，管理员用户被允许创建、编辑和删除帖子。非管理员用户只能被授权阅读帖子。处理授权业界也是有许多不同的方法和策略、这里介绍常见的3种、它们适用于不同需求。
 身份认证（Authentication）、鉴权（Authorization）。
@@ -6093,7 +6363,7 @@ for(let i = 0; i < requiredPermissions.length; i++) {
 
 ### 3. 基于 策略 的权限控制
 
-## 5.14 其它安全相关知识
+## 5.13 其它安全相关知识
 
 ### 1. 加密和哈希
 加密是对信息进行编码的过程。这个过程将信息的原始表示（称为明文）转换为另一种形式，称为密文。理想情况下，只有授权的参与者可以将密文解密回到明文，并访问原始信息。加密本身并不防止干扰，但它将可理解的内容拒绝给潜在的拦截者。加密是一个双向函数；使用正确的密钥可以对加密内容进行解密。
@@ -6198,7 +6468,7 @@ export class UsersController {
 // 可以用在类或函数上。
 ```
 
-## 5.15 OpenAPI 
+## 5.14 OpenAPI 
 OpenAPI 规范是一种语言无关的定义格式，用于描述 RESTful API。Nest 提供了一个专门的模块，通过利用装饰器来生成这样的规范。也就是配置接口文档 swagger。
 ```JavaScript
 // 安装所需的依赖：
