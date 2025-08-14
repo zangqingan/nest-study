@@ -5513,7 +5513,7 @@ bootstrap();
 
 ```
 
-## 5.11 认证
+## 5.11 认证(Authentication)
 
 ### 1. 概述
 认证是大多数应用程序的重要组成部分，有许多不同的方法和策略来处理认证。它是一个完整的主题，从前端提交用户信息开始，到后端验证用户信息，生成令牌，到客户端存储令牌，再到后端验证令牌。
@@ -6122,18 +6122,26 @@ export class AuthGuard implements CanActivate {
 
 ```
 
-## 5.12 授权
-前面说的认证只是知道你是自己人也就是登录了、但是你的等级(权限)不知道。也就是说，身份验证通过之后还需要再做一步权限的校验，也就是授权。
-授权与认证是正交且独立的、授权需要用到认证机制。授权（Authorization）指的是确定用户能够执行什么操作的过程。例如，管理员用户被允许创建、编辑和删除帖子。非管理员用户只能被授权阅读帖子。处理授权业界也是有许多不同的方法和策略、这里介绍常见的3种、它们适用于不同需求。
-身份认证（Authentication）、鉴权（Authorization）。
+## 5.12 授权(Authorization)
 
-### 1. 基于 ACL 的权限控制
+### 1. 概述
+前面说的认证是指身份认证（Authentication）只是知道你的身份你是谁，但是你的等级(权限)不知道。也就是说，身份认证通过之后还需要再做一步权限的校验，也就是授权。比如有的接口，不只需要登录，可能还需要一定的权限(必须是管理员)才能操作，这个就叫授权（Authorization）。
+
+身份认证（Authentication）、授权（Authorization）。
+
+授权与认证是正交且独立的、授权需要用到认证机制。授权（Authorization）指的是确定用户能够执行什么操作的过程。比如管理员登录后，可以调用用户管理的接口，但普通用户登录后就不可以。比如管理员用户被允许创建、编辑和删除帖子。非管理员用户只能被授权阅读帖子。
+
+业界处理授权也是有许多不同的方法和策略、这里介绍常见的2种授权方式、它们适用于不同需求。
+
+### 2. 基于 ACL 的权限控制
 给不同用户分配权限最简单的办法就是直接给用户分配权限、比如用户 1 有权限 A、B、C，用户 2 有权限 A，用户 3 有权限 A、B。
-这种记录每个用户有什么权限的方式，叫做访问控制表（Access Control List）。它是一种多对多关系、一个用户可以拥有多种权限。
-一种权限也可以分配给多个用户。存储这种关系需要用户表、角色表、用户-角色的中间表。3个表才能实现这种多对多关系。
+
+这种记录每个用户有什么权限的方式，叫做访问控制表（Access Control List）。用户和权限之间是一种多对多关系、一个用户可以拥有多种权限、一种权限也可以分配给多个用户。
+
+所以在数据库中就需要三张表才能实现这种多对多关系：用户表、角色表、用户-角色的中间表。
 
 **用户表实体:** User 有 id、username、password、createTime、updateTime 5 个字段。
-```JavaScript
+```js
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 @Entity()
 export class User {
@@ -6156,6 +6164,8 @@ export class User {
     @UpdateDateColumn()
     updateTime: Date;
 
+    
+    // 实际是通过一个中间表而不是强绑定关系
     // 通过 @ManyToMany 装饰器声明和 Permisssion 表的多对多关系。
     @ManyToMany(() => Permission)
     // 通过 @JoinTable 装饰器声明并指定中间表的名字，执行后会自动生成
@@ -6169,7 +6179,7 @@ export class User {
 ```
 
 **权限表:**  permission 有 id、name、desc、createTime、updateTime 5 个字段，desc 字段可以为空。
-```JavaScript
+```js
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 @Entity()
 export class Permission {
@@ -6196,21 +6206,52 @@ export class Permission {
 
 ```
 
-然后还需要一个 PermissionGuard 守卫、这个跟我们之前自定义装饰器的 @Roles装饰器类似的。
-可以通过设置元数据来来判断、不过一般也是将它定义成一个装饰器。
-```Javascript
-// 安装
+**用户-权限中间表**  user_permission_relation 有 id、userId(外键)、permissionId(外键)、createTime、updateTime 5 个字段。注意要设置为级联。
+```js
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+@Entity()
+export class UserPermissionRelation {
+    @PrimaryGeneratedColumn()
+    id: number;
+
+    @Column({
+      name: 'user_id'
+    })
+    userId: number;
+
+    @Column({
+      name: 'permission_id'
+    })
+    permissionId: number;
+
+    @CreateDateColumn()
+    createTime: Date;
+
+    @UpdateDateColumn()
+    updateTime: Date;
+
+}
+
+```
+
+
+然后还需要一个 PermissionGuard 守卫做登录用户的权限控制、检查是否有权限，没有就返回 401，有的话才会继续处理请求。
+```js
+// 生成
 $ nest g guard permission --no-spec --flat
 import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { Observable } from 'rxjs';
 import { Reflector } from '@nestjs/core';
+import { UserService } from './user.service';
 
 @Injectable()
 export class PermissionGuard implements CanActivate {
     // 注入依赖
   constructor(private reflector: Reflector) {}
 
+  @Inject(UserService) 
+  private userService: UserService;
 
   canActivate(
     context: ExecutionContext,
@@ -6218,7 +6259,19 @@ export class PermissionGuard implements CanActivate {
     console.log(context);
     // 通过设置的元数据信息来判断当前 handler 需要的权限来判断是否返回 true
     const permission = this.reflector.get<string>('permission', context.getHandler());
+    // 不用权限直接返回
+    if (!permission) {
+      return true;
+    }
+    // 需要权限查询用户比对权限
     // 查数据库当前用户对应拥有的权限集合、如果包含 permission就返回true、否则抛出没有权限的异常。
+    // 一般呢在登录时会将数据缓存到redis中了，直接去redis中查询就行。不然会频繁查询数据库。
+    const request: Request = context.switchToHttp().getRequest();
+    cosnt userPermissions = this.userService.getUserPermissions(request.user.id);
+    if (!userPermissions.includes(permission)) {
+      throw new ForbiddenException('没有权限访问');
+    }
+    // 有权限通过
     return true;
   }
 }
@@ -6233,14 +6286,19 @@ findAll() {}
 // permission.decorator.ts
 import { SetMetadata } from '@nestjs/common';
 export const Permission = (...permission: string[]) => SetMetadata('permission', permission);
+
 ```
 
-### 2. 基于 RBAC 的权限控制
-RBAC 是 Role Based Access Control，即基于角色的权限控制是最常用的一种权限控制方案。相比于 ACL 的权限控制，RBAC 是给角色分配权限，然后给用户分配角色。用户--> 角色--> 权限 它们都是多对多的关系。
-好处是当多个用户需要增加同一种角色时，只需增加一个角色然后把权限封装到这个角色里，再把这个角色授予用户即可。
+### 3. 基于 RBAC 的权限控制
+RBAC 是 (Role Based Access Control)，即基于角色的权限控制是最常用的一种权限控制方案。相比于 ACL 直接给用户分配权限，RBAC 是先给角色分配权限，然后给用户分配角色。比如：用户1 属于角色1，角色1有权限1、权限2，那么用户1就可以执行权限1、2。用户--> 角色--> 权限、它们都是多对多的关系。
 
-**用户表**
-```JavaScript
+好处是当多个用户需要增加同一种权限时，只需增加一个角色然后把权限封装到这个角色里，再把这个角色授予用户即可。而不用像 ACL 一样分别给每一个用户增加权限。
+
+这里我们需要创建五个表来实现角色权限控制：一个用户表，一个角色表，一个权限表，一个用户角色中间表，一个角色权限中间表。实际用若以的角色权限控制为例练习即可，而不是像下面一样强绑定关系
+
+
+**用户表** 有 id、username、password、createTime、updateTime 5 个字段。
+```js
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
@@ -6276,8 +6334,8 @@ export class User {
 
 ```
 
-**Role表** 有 id、name、createTime、updateTime 4 个字段。
-```JavaScript
+**角色表** 有 id、name、createTime、updateTime 4 个字段。
+```js
 import { Column, CreateDateColumn, Entity,PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
@@ -6308,8 +6366,8 @@ export class Role {
 
 ```
 
-**权限表**
-```JavaScript
+**权限表** 有 id、name、createTime、updateTime 4 个字段。
+```js
 import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 
 @Entity()
@@ -6336,32 +6394,68 @@ export class Permission {
 }
 
 ```
-这样就会生成 user、role、permission 这 3 个表，还有 user_roole_relation、role_permission_relation 这 2 个中间表。这时候关键时使用typeorm时需要指定说明关联表的关联关系 relations 才能查出关联的角色信息。
 
-定义一个 permission 装饰器 @RequirePermission(permissionName)。
-```JavaScript
-import { SetMetadata } from '@nestjs/common';
-export const  RequirePermission = (...permissions: string[]) => SetMetadata('require-permission', permissions);
-// 在守卫里取出
-const requiredPermissions = this.reflector.getAllAndOverride<string[]>('require-permission', [
-  context.getClass(),
-  context.getHandler()
-])
 
-console.log(requiredPermissions);
-// 从角色表中拿出所有权限信息比较当选需要的权限、找到返回true、找不到说明没有权限
-for(let i = 0; i < requiredPermissions.length; i++) {
-  const curPermission = requiredPermissions[i];
-  const found = permissions.find(item => item.name === curPermission);
-  if(!found) {
-    throw new UnauthorizedException('您没有访问该接口的权限');
+这样就会生成 user、role、permission 这 3 个表，还有 user_roole_relation、role_permission_relation 这 2 个中间表。
+
+同样定义一个角色守卫，RolesGuard 守卫做登录用户的权限控制、检查是否有权限，没有就返回 401，有的话才会继续处理请求。
+```js
+$ nest g guard roles --no-spec --flat
+import { CanActivate, ExecutionContext, Inject, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { Request } from 'express';
+import { Observable } from 'rxjs';
+import { UserService } from './user.service';
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  @Inject(UserService) 
+  private userService: UserService;
+
+  canActivate(
+    context: ExecutionContext,
+  ): boolean | Promise<boolean> | Observable<boolean> {
+
+    // 在守卫里取出所有角色
+   const requiredRoles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    // 不需要角色放行
+    if (!requiredRoles) {
+      return true;
+    }
+
+
+   // 需要角色和当前用户角色比对，
+   // 实际应该也是从redis中取比对  
+  //  这个用户是我们在登录认证时的守卫放进去的 request.user
+    const { user } = context.switchToHttp().getRequest();
+    return requiredRoles.some((role) => user.roles?.includes(role));
   }
 }
 
+// 定义一个 roles 装饰器 @Roles('admin') 用于指定接口需要的角色
+export enum Role {
+  User = 'user',
+  Admin = 'admin',
+}
+import { SetMetadata } from '@nestjs/common';
+import { Role } from '../enums/role.enum';
+
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: Role[]) => SetMetadata(ROLES_KEY, roles);
+
+@Post()
+@Roles(Role.Admin)
+create(@Body() createCatDto: CreateCatDto) {
+  this.catsService.create(createCatDto);
+}
 
 ```
 
-### 3. 基于 策略 的权限控制
 
 ## 5.13 其它安全相关知识
 
