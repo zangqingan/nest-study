@@ -1974,8 +1974,18 @@ export class ValidationPipePipe implements PipeTransform<any> {
   }
 }
 // 常用验证装饰器
-import { Contains, IsDate, IsEmail, IsFQDN, IsInt, Length, Max, Min } from 'class-validator';
+// 字符串可以通过 @MinLength、@MaxLength、@Length 来限制长度：
+import { Contains, IsDate, IsEmail, IsNotEmpty, IsString, IsOptional, IsIn, IsNotIn, IsFQDN, IsInt, IsArray, Length, Max, Min } from 'class-validator';
 export class Ppp {
+
+    @IsNotEmpty({message: 'aaa 不能为空'})
+    @IsString({message: 'aaa 必须是字符串'})
+    @IsEmail({}, {message: 'aaa 必须是邮箱'})
+    @IsOptional()// 变为可选
+    @IsIn(['a', 'b', 'c'], {message: 'aaa 必须是 a,b,c 中的一个'})
+    @IsNotIn(['a', 'b', 'c'], {message: 'aaa 不能是 a,b,c 中的一个'})
+    aaa: string;
+
     @Length(10, 20) // 长度
     title: string;
   
@@ -4011,17 +4021,120 @@ export class AppService {
 
 ```
 
+#### 3 应用(分布式session)
+session 是在服务端保存用户数据，然后通过 cookie 返回 sessionId。cookie 在每次请求的时候会自动带上，服务端就能根据 sessionId 找到对应的 session，拿到用户的数据
 
-## 5.3 任务调度
-任务调度(定时任务)可以在固定的日期/时间、重复的时间间隔之后，或者在指定的时间间隔之后执行任意代码（方法/函数）。在Linux世界中，通常使用像CRON这样的包来处理操作系统级别的定时任务。对于Node.js应用程序，有几个包可以模拟类似CRON的功能。Nest提供了@nestjs/schedule包，它集成了流行的Node.js cron包。
+基于 redis 实现一个分布式 session :分布式 session 就是在多台服务器都可以访问到同一个 session。所以我们要在redis中存储session数据并实现增删改查功能。一般使用 Redis 的 Hash 结构存储（推荐）或 String（需序列化）。
 
-### 1. 使用
+本质是redis在一台单独的服务器上存储session数据，其他服务器访问session数据。
+
+```js
+// 安装依赖
+$ npm install --save redis
+// 创建一个redis模块、服务
+nest g module redis
+nest g service redis
+
+// 封装一个redis模块操作操作 Redis
+// redis.module.ts
+import { Global, Module } from '@nestjs/common';
+import { createClient } from 'redis';
+import { RedisService } from './redis.service';
+
+@Global()
+@Module({
+  providers: [
+    RedisService,
+    {
+      provide: 'REDIS_CLIENT',
+      async useFactory() {
+        const client = createClient({
+            socket: {
+                host: 'localhost',
+                port: 6379
+            }
+        });
+        await client.connect();
+        return client;
+      }
+    }
+  ],
+  exports: [RedisService]
+})
+export class RedisModule {}
+
+// redis.service.ts 封装增删改查方法
+import { Inject, Injectable } from '@nestjs/common';
+import { RedisClientType } from 'redis';
+
+@Injectable()
+export class RedisService {
+
+    @Inject('REDIS_CLIENT') 
+    private redisClient: RedisClientType;
+
+    async hashGet(key: string) {
+        return await this.redisClient.hGetAll(key);
+    }
+
+    async hashSet(key: string, obj: Record<string, any>, ttl?: number) {
+        for(let name in obj) {
+            await this.redisClient.hSet(key, name, obj[name]);
+        }
+
+        if(ttl) {
+            await this.redisClient.expire(key, ttl);
+        }
+    }
+}
+
+// 再封装一个 SessionModule 来读写 redis 中的 session
+
+```
+
+#### 4 应用(redis+地图实现附近的物品)
+
+
+
+
+
+
+
+## 5.3 任务调度(定时任务)
+任务调度(定时任务)可以在固定的日期/时间、重复的时间间隔之后，或者在指定的时间间隔之后自动执行任意代码（方法/函数）。在Linux世界中，通常使用像CRON这样的包来处理操作系统级别的定时任务。对于Node.js应用程序，有几个包可以模拟类似CRON的功能。而Nest则是提供了@nestjs/schedule包，它集成了流行的Node.js cron包。
+
+cron 表达式有这 7 个字段，ron模式字符串中的每个位置的解释方式
+* * * * * * *
+| | | | | | year(optional),年一般省略，值：1970-2099，,-*/ 四个字符
+| | | | | day of week 星期几，值：1-7的整数(1=sun=星期天)，,-*?/LC# 八个字符
+| | | | months 月份，值：1-12的整数，,-*/ 四个字符
+| | | day of month 日期，值：1-31的整数，,-*?/LWC 八个字符
+| | hours 小时，值：0-23的整数，,-*/ 四个字符
+| minutes 分钟，值：0-59的整数，,-*/ 四个字符
+seconds (optional) 秒，值：0-59的整数，,-*/ 四个字符
+
+只有日期和星期可以指定? 表示忽略。日期和星期还支持几个特殊字符 L 是 last，L 用在星期的位置就是星期六，L 用在日期的位置就是每月最后一天。W 代表工作日 workday，只能用在日期位置，代表从周一到周五
+
+
+**常见如下的cron模式:**
+| 名称                         | 含义                                     |
+| ---------------------------- | ---------------------------------------- |
+| * * * * * *                  | 每秒钟执行一次                           |
+| 45 * * * * *                 | 每分钟的第45秒执行一次                   |
+| 0 10 * * * *                 | 每小时的第10分钟执行一次                 |
+| 0 */30 9-17 * * *            | 在上午9点到下午5点之间，每30分钟执行一次 |
+| 0 30 11 * * 1-5              | 周一到周五上午11点30分执行一次           |
+| 提供一个JavaScript的Date对象 | 在指定的日期执行一次。                   |
+
+在nest中有 3 种定时任务：@Cron、@Interval、@Timeout 。
+
+### 5.3.1 使用
 要开始使用它，首先我们需要安装所需的依赖。
 
 安装: `$ npm install --save @nestjs/schedule`
 
-1. 要启用任务调度，将ScheduleModule导入到根AppModule中，并按如下所示运行forRoot()静态方法。这个方法调用会初始化调度器并注册应用程序中存在的任何声明式的cron jobs(定时任务)、timeouts(超时任务)和intervals(间隔任务)。注册发生在onApplicationBootstrap生命周期钩子发生时，确保所有模块已加载并声明了任何计划的任务。
-```JavaScript
+1. 注册初始化：要启用任务调度，将ScheduleModule导入到根AppModule中，并按如下所示运行forRoot()静态方法。这个方法调用会初始化调度器并注册应用程序中存在的任何声明式的cron jobs(定时任务)、timeouts(超时任务)和intervals(间隔任务)。注册发生在onApplicationBootstrap生命周期钩子发生时，确保所有模块已加载并声明了任何计划的任务。
+```js
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 
@@ -4034,11 +4147,11 @@ export class AppModule {}
 
 ```
 
-2. 声明一个定时任务、使用 @Cron()装饰器在包含要执行代码的方法定义之前就可以声明一个cron任务。
+2. 声明一个定时任务、使用 @Cron() 装饰器在包含要执行代码的方法定义之前就可以声明一个cron任务。@Cron()装饰器支持所有标准的cron模式。
 Cron任务可以调度一个任意的函数（方法调用）以自动运行。
   - 一次，在指定的日期/时间。
   - 定期运行；定期任务可以在指定的间隔内的指定时间点运行（例如，每小时一次，每周一次，每5分钟一次）。
-```JavaScript
+```js
 import { Inectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
@@ -4046,37 +4159,19 @@ import { Cron } from '@nestjs/schedule';
 export class TasksService {
   private readonly logger = new Logger(TasksService.name);
 
-// 声明一个cron任务、这个任务每当当前秒数为45时，handleCron()方法都会被调用。换句话说，该方法将每分钟运行一次，在第45秒标记时运行。
+// 声明一个cron任务、这个任务每当当前秒数为45时，handleCron()方法都会被调用。换句话说，该方法将每分钟运行一次，在第45秒标记时运行。 Nest 提供了一些常量可以直接用。
   @Cron('45 * * * * *')
   handleCron() {
     this.logger.debug('Called when the current second is 45');
   }
 }
 
-// cron模式字符串中的每个位置的解释方式
-* * * * * *
-| | | | | |
-| | | | | day of week
-| | | | months
-| | | day of month
-| | hours
-| minutes
-seconds (optional)
 
 ```
-@Cron()装饰器支持所有标准的cron模式、常见如下:
 
-| 名称                         | 含义                                     |
-| ---------------------------- | ---------------------------------------- |
-| * * * * * *                  | 每秒钟执行一次                           |
-| 45 * * * * *                 | 每分钟的第45秒执行一次                   |
-| 0 10 * * * *                 | 每小时的第10分钟执行一次                 |
-| 0 */30 9-17 * * *            | 在上午9点到下午5点之间，每30分钟执行一次 |
-| 0 30 11 * * 1-5              | 周一到周五上午11点30分执行一次           |
-| 提供一个JavaScript的Date对象 | 在指定的日期执行一次。                   |
 
 3. 定义一个间隔任务、指定时间间隔内运行重复运行。使用@Interval()装饰器、将时间间隔值作为毫秒数传递给装饰器。本质是使用了JavaScript的setInterval()函数。你也可以使用cron任务来安排重复的任务。 
-```JavaScript
+```js
 
 @Interval(10000)
 handleInterval() {
@@ -4086,7 +4181,7 @@ handleInterval() {
 ```
 
 4. 超时任务、在指定的超时时间内运行（一次），将方法定义前缀为@Timeout()装饰器。内部使用了JavaScript的setTimeout()函数。
-```JavaScript
+```js
 
 @Timeout(5000)
 handleTimeout() {
@@ -4097,6 +4192,109 @@ handleTimeout() {
 
 5. 要使用只需要把定时任务引入到模块中即可。
 
+### 5.3.2 应用(定时器+redis实现阅读量统计)
+流程就是redis存储用户-文章数据key，10 分钟后删除，如果存在这个 key，就说明该用户看过这篇文章，就不更新阅读量，否则才更新。10 分钟后，这个人再看这篇文章，就可以算是新的一次阅读量了。访问文章时把阅读量加载到 redis，之后的阅读量计数只更新 redis，不更新数据库，等业务低峰期再把最新的阅读量写入数据库。这里在业务低峰期，比如凌晨 4 点的时候写入数据库，可以用定时任务来做。
+
+
+```js
+
+import { Global, Module } from '@nestjs/common';
+import { createClient } from 'redis';
+import { RedisService } from './redis.service';
+
+@Global()
+@Module({
+  providers: [
+    RedisService,
+    {
+      provide: 'REDIS_CLIENT',
+      async useFactory() {
+        const client = createClient({
+            socket: {
+                host: 'localhost',
+                port: 6379
+            }
+        });
+        await client.connect();
+        return client;
+      }
+    }
+  ],
+  exports: [RedisService]
+})
+export class RedisModule {}
+
+import { Inject, Injectable } from '@nestjs/common';
+import { RedisClientType } from 'redis';
+
+@Injectable()
+export class RedisService {
+
+    @Inject('REDIS_CLIENT') 
+    private redisClient: RedisClientType;
+
+    async get(key: string) {
+        return await this.redisClient.get(key);
+    }
+
+    async set(key: string, value: string | number, ttl?: number) {
+        await this.redisClient.set(key, value);
+
+        if(ttl) {
+            await this.redisClient.expire(key, ttl);
+        }
+    }
+
+    async hashGet(key: string) {
+        return await this.redisClient.hGetAll(key);
+    }
+
+    async hashSet(key: string, obj: Record<string, any>, ttl?: number) {
+        for(let name in obj) {
+            await this.redisClient.hSet(key, name, obj[name]);
+        }
+
+        if(ttl) {
+            await this.redisClient.expire(key, ttl);
+        }
+    }
+}
+
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
+import { ArticleService } from 'src/article/article.service';
+
+@Injectable()
+export class TaskService {
+
+  @Inject(ArticleService)
+  private articleService: ArticleService;
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleCron() {
+    await this.articleService.flushRedisToDB();
+  }
+}
+// 把所有的 key 对应的值存入数据库
+async flushRedisToDB() {
+    const keys = await this.redisService.keys(`article_*`);
+
+    for (let i = 0; i < keys.length; i++) {
+      const key = keys[i];
+
+      const res = await this.redisService.hashGet(key);
+
+      const [, id] = key.split('_');
+
+      await this.entityManager.update(Article, {
+        id: +id
+      }, {
+        viewCount: +res.viewCount,        
+      });
+    }
+}
+
+```
 
 
 ## 5.4 队列
@@ -4779,15 +4977,16 @@ export class UserController {
 
 
 
-## 5.6 事件
-Event Emitter包（@nestjs/event-emitter）提供了一个简单的观察者实现，允许您订阅和监听应用程序中发生的各种事件。事件作为应用程序各个方面解耦的很好方式，因为单个事件可以有多个不相互依赖的监听器。
+## 5.6 事件通信
+在nest中各个模块之间除了依赖注入，也可以使用事件通信(event emitter )。NestJS提供了事件发射器包(@nestjs/event-emitter),它提供了一个简单的观察者实现，允许您订阅和监听应用程序中发生的各种事件。事件作为应用程序各个方面解耦的很好方式，因为单个事件可以有多个不相互依赖的监听器。
 
 ### 1. 使用
 
 安装所需的包: `$ npm i --save @nestjs/event-emitter`
 
 安装完成后，将EventEmitterModule导入到根AppModule中，并像下面显示的那样运行forRoot()静态方法：forRoot()调用会初始化事件发射器并注册应用程序中存在的任何声明性事件监听器。注册发生在onApplicationBootstrap生命周期钩子发生时，确保所有模块都已加载并声明了任何预定的作业。
-```JavaScript
+
+```js
 
 import { Module } from '@nestjs/common';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -4801,9 +5000,15 @@ export class AppModule {}
 
 ```
 
-**emit触发事件:**要调度（即触发）一个事件，首先使用标准构造函数注入来注入EventEmitter2,然后在一个类中使用它即可。
-```JavaScript
-import {EventEmitter2} from '@nestjs/event-emitter'
+**事件派发(emit触发事件)**要调度（即触发）一个事件，首先使用标准构造函数注入来注入EventEmitter2,然后在一个类中使用它即可。
+```js
+import {EventEmitter2} from '@nestjs/event-emitter';
+
+// 属性注入
+@Inject(EventEmitter2)
+private eventEmitter: EventEmitter2;
+
+// 构造函数注入
 constructor(private eventEmitter: EventEmitter2) {}
 
 this.eventEmitter.emit(
@@ -4817,7 +5022,7 @@ this.eventEmitter.emit(
 ```
 
 **监听事件:**要声明一个事件监听器，使用@OnEvent()装饰器在包含要执行的代码的方法定义之前进行修饰即可。作为一个提供者传入模块即可。
-```JavaScript
+```js
 import { Injectable } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
@@ -4835,8 +5040,6 @@ export class FindCatsAllListener {
   }
 }
 
-// 模块类中依赖注入
- providers: [CatsService, valueProvider, factoryProvider, FindCatsAllListener],
 ```
 
 
@@ -5433,14 +5636,14 @@ put();
 ## 5.9 网络请求
 nodejs是可以作为中后端、和前端一样发起网络请求的。Nest同样也可以使用任何通用的 Node.js HTTP 客户端库。这里我们使用 Axios、因为Nest 封装了 Axios 并通过内置的 HttpModule 提供访问。HttpModule 导出了 HttpService 类，它提供了基于 Axios 的方法来执行 HTTP 请求。该库还将得到的 HTTP 响应转换为 Observables。Observable可以使用rxjs的firstValueFrom或lastValueFrom来以promise的形式获取请求的数据。
 
-安装: `$ npm i --save @nestjs/axios axios`
+安装依赖: `$ npm i --save @nestjs/axios axios`
 
-### 1. 使用
-安装完成后，要使用 HttpService，首先需要导入 HttpModule。
-接下来，使用普通的构造函数注入来注入 HttpService。
-```JavaScript
+### 5.9.1 使用
+安装完成后，要使用 HttpService，首先需要导入 HttpModule。接下来，使用普通的构造函数注入来注入HttpService。注意 HttpService 方法的返回值是一个 Observable，我们可以使用 rxjs 的 firstValueFrom 或 lastValueFrom 来以 Promise 形式获取请求数据。
+```js
 // 模块类
 import { HttpModule, HttpService } from '@nestjs/axios'
+import { catchError, firstValueFrom } from 'rxjs';
 import { map } from 'rxjs';
 @Module({
   imports: [HttpModule],
@@ -5448,7 +5651,7 @@ import { map } from 'rxjs';
 })
 export class CatsModule {}
 
-// 提供者
+// 提供者-使用
 @Injectable()
 export class CatsService {
   constructor(private readonly httpService: HttpService) {}
@@ -5458,22 +5661,42 @@ export class CatsService {
       .get('http://localhost:3000/cats')
       .pipe(map((response) => response.data));;
   }
+
+  async findAll(): Promise<Cat[]> {
+    const { data } = await firstValueFrom(
+      this.httpService.get<Cat[]>('http://localhost:3000/cats').pipe(
+        catchError((error: AxiosError) => {
+          throw 'An error happened!';
+        }),
+      ),
+    );
+    return data;
+  }
 }
 
 
 ```
 
-### 2. 配置
-Axios可以通过多种选项进行配置，以自定义HttpService的行为。
-要配置底层的Axios实例，请在导入HttpModule时将一个可选的选项对象传递给其register()方法。这个选项对象将直接传递给底层的Axios构造函数。
-```JavaScript
+### 5.9.2 配置
+Axios可以通过多种选项进行配置，以自定义HttpService的行为。要配置底层的Axios实例，请在导入HttpModule时将一个可选的选项对象传递给其register()方法。这个选项对象将直接传递给底层的Axios构造函数。其实就是 new 了一个 Axios 实例。
+```js
 
 @Module({
   imports: [
     HttpModule.register({
       timeout: 5000,// 超时
       maxRedirects: 5,// 最大重定向数
+      baseURL: 'http://localhost:3000',// 基础URL
     }),
+    // 异步配置
+   HttpModule.registerAsync({
+     imports: [ConfigModule],
+     useFactory: async (configService: ConfigService) => ({
+       timeout: configService.get('HTTP_TIMEOUT'),
+       maxRedirects: configService.get('HTTP_MAX_REDIRECTS'),
+     }),
+     inject: [ConfigService],
+   });
   ],
   providers: [CatsService],
 })
@@ -5481,6 +5704,98 @@ export class CatsModule {}
 
 
 ```
+
+### 5.9.3 实战(天气预报查询)
+使用**和风天气**的免费 api、
+Geo-api查询地区对应信息：https://mg487radvh.re.qweatherapi.com/geo/v2/city/lookup?location=nanning&key=24c7fa372f0d4a328d333b0ea97a2ee2
+
+根据城市id查询7天天气：https://mg487radvh.re.qweatherapi.com/v7/weather/now?location=101010100&key=24c7fa372f0d4a328d333b0ea97a2ee2
+
+location是城市id，key是和风天气api key
+
+实际应该用redis缓存同一个城市的一天内只查一次，避免接口反复调用。
+
+```js
+// 注册服务
+import { Module } from '@nestjs/common';
+import { HttpModule } from '@nestjs/axios';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+
+@Module({
+  imports: [
+    HttpModule.register({
+      timeout: 5000,
+      maxRedirects: 5,
+      baseURL: 'https://mg487radvh.re.qweatherapi.com',
+    }),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule { }
+
+import { Controller, Get, Param } from '@nestjs/common';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) { }
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+
+  @Get('weather/:city')
+  getWeather(@Param('city') city: string): Promise<any> {
+    console.log(city);
+    return this.appService.getWeatherByLocation(city);
+  }
+}
+
+
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+
+@Injectable()
+export class AppService {
+  constructor(private readonly httpService: HttpService) { }
+
+  getHello(): string {
+    return 'Hello World!';
+  }
+
+  async getWeatherByLocation(location: string) {
+    // 先获取城市信息对应城市id
+    const { data } = await firstValueFrom(
+      this.httpService.get('/geo/v2/city/lookup', {
+        params: {
+          location,
+          key: '24c7fa372f0d4a328d333b0ea97a2ee2',
+        },
+      }),
+    );
+    const locationId = data?.location[0]?.id;
+    if (!locationId) {
+      throw new NotFoundException('未找到该城市');
+    }
+    const { data: weatherData } = await firstValueFrom(
+      this.httpService.get(`/v7/weather/now`, {
+        params: {
+          location: locationId,
+          key: '24c7fa372f0d4a328d333b0ea97a2ee2',
+        },
+      }),
+    );
+    // 再根据id去请求天气信息
+    return weatherData;
+  }
+}
+
+```
+
 
 
 ## 5.10 静态资源服务器
@@ -6122,6 +6437,885 @@ export class AuthGuard implements CanActivate {
 
 ```
 
+### 4，实际应用
+
+#### 1. 基于 access_token 和 refresh_token 实现登录状态无感刷新
+jwt 是有有效期的，如果用户还在访问系统的某个页面，结果访问某个接口返回 token 失效了，让重新登录。那体验感就很差。为了解决这个问题，服务端一般会返回两个 token：access_token 和 refresh_token。access_token 就是用来认证用户身份的，之前我们返回的就是这个 token。而 refresh_token 是用来刷新 token 的，刷新后服务端会返回新的 access_token 和 refresh_token。
+
+一般 access_token 设置 30 分钟过期，而 refresh_token 设置 7 天过期。这样 7 天内，如果 access_token 过期了，那就可以用 refresh_token 刷新下，拿到新 token。核心代码就是生成的token过期时间不一样。rrefresh_token 失效或者错误时，会返回 401 的响应码，提示需要重新登录。后端的处理就完成了，关键是前端如何触发。
+
+其实是一样的，前端登录时获取到 access_token 和 refresh_token，并保存在 localStorage 中。在后续请求中请求头带上 access_token，后端会验证，如果通过，则返回数据，如果失败，则返回 401，前端收到 401 响应码，会触发 refresh_token 的请求，拿到新的 access_token 和 refresh_token，并保存在 localStorage 中。
+核心原理：
+1. 在请求拦截器中注入access_token
+2. 在响应拦截器中捕获401错误
+3. 使用refresh_token获取新的access_token
+4. 重试失败的请求
+5. 处理并发请求的Token刷新问题
+
+**前端实现**
+```js
+// utils/request.js
+import axios from 'axios'
+import store from '@/store'
+import router from '@/router'
+
+// 创建axios实例
+const service = axios.create({
+  baseURL: process.env.VUE_APP_BASE_API,
+  timeout: 10000
+})
+
+// 是否正在刷新token的标志
+let isRefreshing = false
+// 存储等待token刷新的请求队列
+let requestsQueue = []
+
+// 尝试刷新token的函数
+const tryRefreshToken = async () => {
+  try {
+    const res = await axios.post('/api/refresh_token', {
+      refresh_token: store.getters.refreshToken
+    })
+    const { access_token, expires_in } = res.data
+    // 更新存储中的token
+    store.commit('SET_TOKEN', {
+      accessToken: access_token,
+      expiresAt: Date.now() + expires_in * 1000
+    })
+    return access_token
+  } catch (error) {
+    // 刷新失败则清除用户信息并跳转登录
+    store.dispatch('user/logout')
+    router.push(`/login?redirect=${router.currentRoute.fullPath}`)
+    throw new Error('刷新Token失败')
+  }
+}
+
+// 请求拦截器设置请求头携带token
+service.interceptors.request.use(
+  config => {
+    // 获取access_token
+    const accessToken = store.getters.accessToken
+    // 或者本地获取
+    // const accessToken = localStorage.getItem('access_token')
+    // 如果token存在且未过期，注入Authorization头
+    if (accessToken) {
+      // 判断是否临近过期（如小于30秒），可以在此处提前刷新
+      const isNearExpiry = store.getters.tokenExpiresAt - Date.now() < 30000
+      
+      if (isNearExpiry && !isRefreshing) {
+        // 触发提前刷新
+        isRefreshing = true
+        tryRefreshToken().finally(() => {
+          isRefreshing = false
+        })
+      }
+      
+      config.headers.Authorization = `Bearer ${accessToken}`
+    }
+    
+    return config
+  },
+  error => Promise.reject(error)
+)
+
+// 响应拦截器处理
+service.interceptors.response.use(
+  response => response.data,
+  async error => {
+    // 处理错误
+    const { config, response } = error
+    // 获取原来的请求对象
+    const originalRequest = config
+    // 获取状态码
+    const status = response?.status ? response.status: null;
+    // 检查是否为401错误且请求未标记重试
+    if (status === 401 && !originalRequest._retry && originalRequest.url !== '/refreshToken') {
+      
+      // 标记此请求已重试，防止无限循环
+      originalRequest._retry = true
+      
+      // 如果正在刷新，则将请求加入队列
+      if (isRefreshing) {
+        return new Promise((resolve) => {
+          // push的是一个函数,接受新的token
+          requestsQueue.push(newToken => {
+            originalRequest.headers.Authorization = `Bearer ${newToken}`
+            resolve(service(originalRequest))
+          })
+        })
+      }
+      
+      // 标记刷新状态
+      isRefreshing = true
+      
+      try {
+        // 尝试刷新token
+        const newToken = await tryRefreshToken()
+        
+        // 更新当前请求的header
+        originalRequest.headers.Authorization = `Bearer ${newToken}`
+        
+        // 重试原始请求
+        const retryResponse = await service(originalRequest)
+        
+        // 执行等待队列中的所有请求
+        requestsQueue.forEach(callback => callback(newToken))
+        requestsQueue = []
+        
+        return retryResponse
+        
+      } catch (refreshError) {
+        // 刷新失败，清空队列并报错
+        requestsQueue = []
+        router.push('/login')// 跳转登录页
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
+      }
+    }
+    
+    // 其他错误直接返回
+    return Promise.reject(error)
+  }
+)
+
+export default service
+
+```
+
+**后端实现**
+```js
+@Inject(JwtService)
+private jwtService: JwtService;
+
+@Post('login')
+async login(@Body() loginUser: LoginUserDto) {
+    const user = await this.userService.login(loginUser);
+
+    const access_token = this.jwtService.sign({
+      userId: user.id,
+      username: user.username,
+    }, {
+      expiresIn: '30m'
+    });
+
+    const refresh_token = this.jwtService.sign({
+      userId: user.id
+    }, {
+      expiresIn: '7d'
+    });
+
+    return {
+      access_token,
+      refresh_token
+    }
+}
+
+// 实现token刷新
+  @Get('refresh')
+  async refresh(@Query('refresh_token') refreshToken: string) {
+    try {
+      const data = this.jwtService.verify(refreshToken);
+
+      const user = await this.userService.findUserById(data.userId);
+      
+      // 重新生成两个token
+      const access_token = this.jwtService.sign({
+        userId: user.id,
+        username: user.username,
+      }, {
+        expiresIn: '30m'
+      });
+
+      const refresh_token = this.jwtService.sign({
+        userId: user.id
+      }, {
+        expiresIn: '7d'
+      });
+
+      return {
+        access_token,
+        refresh_token
+      }
+    } catch(e) {
+      throw new UnauthorizedException('token 已失效，请重新登录');
+    }
+  }
+
+
+```
+
+#### 2. 单 token 无限续期，实现登录状态无感刷新
+实际上单 token 自动续期的方式用的也非常多。原理也很简单，就是登录后返回 jwt，每次请求接口带上这个 jwt，然后每次访问接口返回新的 jwt，然后前端更新下本地的 jwt token。这样也能实现无感刷新。比如这个 token 是 7 天过期，那只要 7 天内访问过一次系统，就会刷新 token。7 天内不访问系统，token 过期，就需要重新登录了。
+
+**后端实现**
+```js
+import { BadRequestException, Body, Controller, Inject, Post } from '@nestjs/common';
+import { UserService } from './user.service';
+import { LoginUserDto } from './dto/login-user.dto';
+import { JwtService } from '@nestjs/jwt';
+
+@Controller('user')
+export class UserController {
+  constructor(private readonly userService: UserService) {}
+
+  @Inject(JwtService)
+  jwtService: JwtService;
+
+  @Post('login')
+  async login(@Body() loginDto: LoginUserDto) {
+    if(loginDto.username !== 'zhang' || loginDto.password !== '123456') {
+      throw new BadRequestException('用户名或密码错误');
+    }
+    const jwt = this.jwtService.sign({
+      username: loginDto.username
+    }, {
+      secret: 'zhang',
+      expiresIn: '7d'
+    });
+    return jwt;
+  }
+}
+
+import { JwtService } from '@nestjs/jwt';
+import { CanActivate, ExecutionContext, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Request, Response } from 'express';
+import { Observable } from 'rxjs';
+
+@Injectable()
+export class LoginGuard implements CanActivate {
+
+  @Inject(JwtService)
+  private jwtService: JwtService;
+
+  canActivate(
+    context: ExecutionContext,
+  ): boolean | Promise<boolean> | Observable<boolean> {
+
+    const request: Request = context.switchToHttp().getRequest();
+    const response: Response = context.switchToHttp().getResponse();
+
+    const authorization = request.headers.authorization;
+
+    if(!authorization) {
+      throw new UnauthorizedException('用户未登录');
+    }
+
+    try{
+      const token = authorization.split(' ')[1];
+      const data = this.jwtService.verify(token);
+      // 每次请求都重新生成token,实际应该检查过期时间还有多久,到临界值才重新生成
+      response.setHeader('token', this.jwtService.sign({
+        username: data.username
+      }, {
+        expiresIn: '7d'
+      }));
+      // 后端需要支持在 Access-Controll-Expose-Headers 里加上这个 header
+      response.setHeader('Access-Controll-Expose-Headers', 'token');
+      return true;
+    } catch(e) {
+      throw new UnauthorizedException('token 失效，请重新登录');
+    }
+  }
+}
+
+
+```
+
+**前端实现**
+```js
+// 单token刷新是后端通过响应头返回,那么前端也是从响应头中获取并更新到本地存储或者vuex中即可
+axios.interceptors.response.use(
+  (response) => {
+    const newToken = response.headers['token'];
+    if(newToken) {
+      localStorage.setItem('token ', newToken);
+    }
+    return response;
+  }
+)
+
+```
+
+
+### 5. 基于策略(Strategy)的认证
+
+#### 1. 概述
+身份认证逻辑是很通用的，而且也有多种方式，比如用户名密码、jwt、google 登录、github 登录等。所以一般会封装成一个库。可以用策略模式把它们封装成一个个策略类（Strategy），其实本质是实现了一个接口的多个类，这些类可以相互替换。我们并不需要知道每个策略类具体如何实现，我们知道怎么用即可。从高层次来看，做认证的步骤是类似的：
+1. 通过验证用户"凭证"（如用户名/密码从request的body里取出。、JSON Web Token (JWT) 从request的 Authorization的header取或身份提供商提供的身份令牌）来认证用户。总之不同策略都会从 request 中取出一些东西来认证。
+2. 管理认证状态（通过签发可移植令牌如 JWT，或创建 Express session）
+3. 自动将认证用户的信息附加到 Request 对象中，以便在后续路由处理器中进一步使用。一般是在 request.user 上存放认证后的 user 信息，
+这就是它们的共同点。
+
+在nodejs 中 Passport 库(身份认证库) 是最流行的 node.js 认证库，被社区广泛了解并成功用于许多生产应用程序。它就是把不同的认证逻辑封装成了不同 Strategy，每个 Stategy 都有 validate 方法来验证。每个 Strategy 都是从 request 取出一些东西，交给 validate 方法验证，validate 方法返回 user 信息，自动放到 request.user 属性上。
+
+而在NestJS中使用 @nestjs/passport 模块将 Passport 库与 Nest 应用程序集成并标准化为熟悉的 Nest 结构。所以无论选择哪种 Passport 策略，您始终需要安装 @nestjs/passport 和 passport 包。之后使用哪种策略就安装特定认证策略的策略专用包即可。
+依赖安装：`$ npm install --save @nestjs/passport passport`
+
+#### 2. 用户名/密码认证策略(passport-local)
+Passport 提供了一个名为 passport-local 的策略，它实现了用户名/密码认证机制。允许用户使用用户名/密码进行认证。流程是从 reqeust 的 body 中取出 username 和 password 去认证，认证过了之后返回 user，它会把 user 放到 request.user 上，如果认证不通过，就抛异常，由 exception filter 处理。
+
+安装依赖：`$ npm install --save passport-local`、`$ npm install --save-dev @types/passport-local`
+
+**具体实现代码**
+```js
+$ nest g module modules/auth
+$ nest g service modules/auth --no-spec
+
+// auth.module.ts
+import { Module } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { LocalStrategy } from './local.strategy';// 注入策略
+import { UsersModule } from '../users/users.module';
+
+@Module({
+  imports: [UsersModule],
+  providers: [AuthService,LocalStrategy],
+})
+export class AuthModule {}
+
+// auth.service.ts
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { UserService } from '../user/user.service';
+
+@Injectable()
+export class AuthService {
+  constructor(private userService: UserService) { }
+  // 根据用户名密码去校验，但是查询用户的逻辑应该在 UserModule 里
+  async validateUser(username: string, password: string): Promise<any> {
+    const user = await this.userService.findOne(username);
+
+    console.log(username, password);
+    if (!user) {
+      throw new UnauthorizedException('用户不存在');
+    }
+    if (user.password !== password) {
+      throw new UnauthorizedException('密码错误');
+    }
+    // 不返回密码
+    const { password, ...result } = user;
+    return result;
+  }
+}
+
+// local.strategy.ts
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { Strategy } from 'passport-local';
+import { AuthService } from './auth.service';
+
+@Injectable()
+export class LocalStrategy extends PassportStrategy(Strategy) {
+  constructor(private authService: AuthService) {
+    super();
+    // 可以在这里传入自定义名字
+    super({ usernameField: 'email' })
+  }
+  // 在 @nestjs/passport 中通过 validate() 方法固定实现验证函数，它会从 request 中取出 body 的 username 和 password 交给我们的 validate 方法去认证，认证完会返回 user 信息，放到 request.user 上。
+  // 注意：它是 passport-local 策略默认要求请求体包含名为 username 和 password 的属性。
+  async validate(username: string, password: string) {
+    const user = await this.authService.validateUser(username, password);
+    return user;
+  }
+}
+ 
+// 创建一个用户模块
+$ nest g module modules/user
+$ nest g service modules/user --no-spec
+
+// user.module.ts
+import { Module } from '@nestjs/common';
+import { UserService } from './user.service';
+
+@Module({
+  providers: [UserService],
+  exports: [UserService],// 导出服务
+})
+export class UserModule { }
+
+// user.service.ts
+import { Injectable } from '@nestjs/common';
+
+@Injectable()
+export class UserService {
+  private readonly users = [
+    {
+      userId: 1,
+      username: 'zhangsan',
+      password: '123456',
+    },
+    {
+      userId: 2,
+      username: 'lisi',
+      password: '654321',
+    },
+  ];
+
+  async findOne(username: string) {
+    return this.users.find((user) => user.username === username);
+  }
+}
+
+// 到这一步 passport 的流程就完成了。那要怎么应用策略呢，@nestjs/passport 已经做了封装了。它提供了内置的认证守卫AuthGuard，该守卫会调用 Passport 策略并触发上述步骤（获取凭证、运行验证函数、创建 user 属性等）。
+// 对于passport-local策略需要传入"local"参数
+import { Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { AppService } from './app.service';
+import { AuthGuard } from '@nestjs/passport';
+import { Request } from 'express';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+  @UseGuards(AuthGuard('local'))
+  @Post('login')
+  async login(@Req() req: Request) {
+    console.log(req.user);
+    return req.user;
+  }
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+}
+
+// 守卫可以声明为方法，控制器，全局看需要。
+// 至此, 基于 passport-local 的登录就完成了，不用我们自己从 request 取 body 中的 username 和 password，也不用我们把查询结果放到 request.user 上，更不用自己实现 Guard。可以说是非常方便了。
+// 虽然这种方式可行，但直接将策略名称传入 AuthGuard() 会在代码中引入魔术字符串。所以最佳实践是创建自定义类即自定义一个守卫集成自 AuthGuard('local')
+$ nest g guard local-auth
+
+// local-auth.guard.ts
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export class LocalAuthGuard extends AuthGuard('local') {}
+
+// 使用是一样的
+@UseGuards(LocalAuthGuard)
+@Post('auth/login')
+async login(@Request() req) {
+  // 自动挂载在这里
+  return req.user;
+}
+
+
+```
+
+
+#### 3. JWT认证策略(passport-jwt)
+登录的时候通过用户名/密码进行身份验证，认证成功会返回 jwt，然后再次访问会在 Authorization 的 header 携带 jwt，然后通过 header 的 jwt 来认证。这是一种新的认证方式，需要用新的策略。返回 jwt 需要安装`npm install --save @nestjs/jwt`,jwt相关的策略需要安装 `$ npm install --save passport-jwt`、`$ npm install --save-dev @types/passport-jwt`。
+
+@nestjs/jwt 包是用于 JWT 操作的实用工具包。passport-jwt 是 Passport 实现 JWT 策略的包，而 @types/passport-jwt 则提供了 TypeScript 类型定义。
+
+```js
+// 接着上面的逻辑我们在登录成功后返回jwt，而不是用户信息。
+// 先注册jwt服务。
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AuthModule } from './modules/auth/auth.module';
+import { UserModule } from './modules/user/user.module';
+
+@Module({
+  imports: [
+    AuthModule,
+    UserModule,
+    JwtModule.register({
+      secret: '123456',
+      signOptions: { expiresIn: '60s' },
+    }),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule { }
+
+// 使用
+import { Controller, Get, Post, UseGuards, Request } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { JwtService } from '@nestjs/jwt';
+import { LocalAuthGuard } from './modules/auth/local-auth.guard';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
+  constructor(
+    private readonly appService: AppService,
+    private jwtService: JwtService,
+  ) { }
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+
+  @UseGuards(AuthGuard('local'))
+  @Post('auth/login')
+  async login(@Request() req) {
+    console.log(req.user);
+    // 生成jwt token
+    const payload = { username: req.user.username, userId: req.user.userId };
+    const token = this.jwtService.sign(payload);
+    return { token };
+  }
+
+  @UseGuards(LocalAuthGuard)
+  @Post('login')
+  async login2(@Request() req) {
+    console.log(req.user);
+    return req.user;
+  }
+}
+// 生成策略文件
+// jwt.strategy.ts
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { PassportStrategy } from '@nestjs/passport';
+import { Injectable } from '@nestjs/common';
+import { jwtConstants } from './constants';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Strategy) {
+  constructor() {
+    super({
+      // 需要初始化配置所以传入一个配置对象
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),// 提供从 Request 中提取 JWT 的方法。即指定从 request 的 header 里提取 token，然后取出 payload 之后会传入 validate 方法做验证，返回的值同样会设置到 request.user。
+      ignoreExpiration: false,
+      secretOrKey: "123456",
+    });
+  }
+  // Passport 首先会验证 JWT 签名并解码 JSON 数据，随后调用我们的 validate() 方法。最后 jwt token 验证成功后，Passport 会根据这个方法的返回值构建一个用户对象，这个对象会挂载在 request.user 属性上。验证不通过报错。
+  async validate(payload: any) {
+    // 可以在这里进行数据库查询以获取更多用户信息
+    return { userId: payload.sub, username: payload.username };
+  }
+}
+
+// auth.module.ts 添加策略
+import { Module } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { LocalStrategy } from './local.strategy';// 注入策略
+import { JwtStrategy } from './jwt.strategy';
+import { UsersModule } from '../users/users.module';
+
+@Module({
+  imports: [UsersModule],
+  providers: [AuthService,LocalStrategy,JwtStrategy],
+})
+export class AuthModule {}
+
+// 具体使用和基于用户姓名/密码策略一样的，不过策略名改为'jwt'
+// jwt-auth.guard.ts
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {}
+
+// app.controller.ts
+import { Controller, Get, Post, UseGuards, Request } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { JwtService } from '@nestjs/jwt';
+import { LocalAuthGuard } from './modules/auth/local-auth.guard';
+import { JwtAuthGuard } from './modules/auth/jwt-auth.guard';
+import { AppService } from './app.service';
+
+@Controller()
+export class AppController {
+  constructor(
+    private readonly appService: AppService,
+    private jwtService: JwtService,
+  ) { }
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+
+  @UseGuards(AuthGuard('local'))
+  @Post('auth/login')
+  async login(@Request() req) {
+    console.log(req.user);
+    // 生成jwt token
+    const payload = { username: req.user.username, userId: req.user.userId };
+    const token = this.jwtService.sign(payload);
+    return { token };
+  }
+
+  // 测试local-auth
+  @UseGuards(LocalAuthGuard)
+  @Post('login')
+  async login2(@Request() req) {
+    console.log(req.user);
+    return req.user;
+  }
+
+  // 测试jwt-auth - 守卫将自动调用我们自定义配置的 passport-jwt 策略，验证 JWT，并将 user 属性赋值给 Request 对象。
+  @UseGuards(AuthGuard('jwt'))
+  @Get('profile1')
+  getProfile1(@Request() req) {
+    console.log('jwt', req.user);
+    return { user: req.user, test: 'test' };
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('profile2')
+  getProfile2(@Request() req) {
+    return { user: req.user, test: 'test' };
+  }
+}
+// 这样我们也就完成了 JWT 认证
+
+```
+
+
+
+
+
+#### 4. Github 第三方登录策略(passport-github2)
+网站除了用户名、密码登录外，一般也都支持三方登录。比如 google 登录、github 登录等等。这样免去了输入用户名密码的麻烦，直接用别的账号来登录当前网站。要实现基于 github 的三方登录，我们需要使用  passport-github2 策略模块。
+
+安装依赖：`$ npm i passport-github2 --save`， `$ npm install --save-dev @types/passport-github2`然后登录GitHub (点击 settings > developer settings > new OAuth App) 获取 client id 和 secret。有了 client id 和 secret 之后，就能实现 github 登录了。
+
+在返回的 request.user 中就能获取用户信息,其中有 id 属性就可以唯一标识这个用户。我们可以在用户表里添加一个 githubId 的字段，第一次用 github 登录的时候，记录返回的 id、username、avater 等信息，然后打开一个页面让用户完善其他信息，比如 email、password 等。后续用 github 登录的时候，直接根据 githubId 来查询用户即可。
+
+```js
+// 生成GitHub策略文件
+// github.strategy.ts
+import { Injectable } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { Profile, Strategy } from 'passport-github2';
+
+@Injectable()
+export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
+  constructor() {
+    super({
+      clientID: 'xxxxxx',// GitHub客户端ID
+      clientSecret: 'xxxxxxx',// GitHub客户端密钥
+      callbackURL: 'http://localhost:3000/callback',// GitHub登录成功后回调的 url地址
+      scope: ['public_profile'],// 请求的数据的范围
+    });
+  }
+
+  async validate(accessToken: string, refreshToken: string, profile: Profile) {
+    return profile;
+  }
+}
+
+// auth模块引入
+import { Module } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { LocalStrategy } from './local.strategy';// 注入策略
+import { JwtStrategy } from './jwt.strategy';
+import { GithubStrategy } form  './github.strategy';
+import { UsersModule } from '../users/users.module';
+
+@Module({
+  imports: [UsersModule],
+  providers: [AuthService,LocalStrategy,JwtStrategy,GithubStrategy],
+})
+export class AuthModule {}
+
+// github-auth.guard.ts
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export class GithubAuthGuard extends AuthGuard('github') {}
+// 在 AppController 添加两个路由
+
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+import { GithubAuthGuard } from './github-auth.guard';
+
+@Controller('')
+export class AppController {
+  constructor(private appService: AppService) {}
+
+  // 访问这个接口就会跳转 github 登录授权页面 触发 github 登录的，
+  @Get('github/login')
+  @UseGuards(AuthGuard('github'))
+  async githublogin() { }
+
+  // callback 是回调的 url。
+  @Get('callback')
+  @UseGuards(AuthGuard('github'))
+  async authCallback(@Request() req) {
+    return req.user;
+  }
+
+  @Get('callback')
+  @UseGuards(GithubAuthGuard)
+  async authCallback(@Request() req) {
+    // 它会把很多东西挂载在这个对象下。实际是根据返回的GitHub id 去数据库查询用户是否存在
+    return req.user;
+    return this.appService.findUserByGithubId(req.user.id);
+  }
+}
+
+```
+
+#### 5. Google 第三方登录策略(passport-google-oauth20)
+原理一样的也是要获取 client id 和 client secret，先安装依赖：`npm install --save passport-google-oauth20`、`npm install --save-dev @types/passport-google-oauth20`
+
+它会返回邮箱信息同样可以唯一标识用户，不过一般用 google 账号登录之后，都是会让你完善一些信息完成注册。之后再用google 登录，就会查到这个账号，从而直接登录，不用输密码。
+
+```js
+// 创建谷歌策略文件 google.strategy.ts
+import { Injectable } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+import { Strategy } from 'passport-google-oauth20';
+
+@Injectable()
+export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+  constructor() {
+    super({
+      clientID: 'xxxxx',
+      clientSecret: 'xxxxxx',
+      callbackURL: 'http://localhost:3000/callback/google',
+      scope: ['email', 'profile'],
+    });
+  }
+
+  validate (accessToken: string, refreshToken: string, profile: any) {
+    const { name, emails, photos } = profile
+    const user = {
+      email: emails[0].value,
+      firstName: name.givenName,
+      lastName: name.familyName,
+      picture: photos[0].value,
+      accessToken
+    }
+    return user;
+  }
+}
+
+// auth模块引入
+import { Module } from '@nestjs/common';
+import { AuthService } from './auth.service';
+import { LocalStrategy } from './local.strategy';// 注入策略
+import { JwtStrategy } from './jwt.strategy';
+import { GithubStrategy } from  './github.strategy';
+import { GoogleStrategy } from './google.strategy';
+import { UsersModule } from '../users/users.module';
+
+@Module({
+  imports: [UsersModule],
+  providers: [AuthService,LocalStrategy,JwtStrategy,GithubStrategy,GoolgleStrategy],
+})
+export class AuthModule {}
+
+// 使用
+// google-auth.guard.ts
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export class GoogleAuthGuard extends AuthGuard('google') {}
+
+// app.controller.ts
+import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { AppService } from './app.service';
+import { AuthGuard } from '@nestjs/passport';
+import { GoogleAuthGuard } from './google-auth.guard';
+
+@Controller()
+export class AppController {
+  constructor(private readonly appService: AppService) {}
+
+  @Get()
+  getHello(): string {
+    return this.appService.getHello();
+  }
+
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth() {}
+
+  @Get('callback/google')
+  @UseGuards(GoogleAuthGuard)
+  googleAuthRedirect(@Request() req) {
+    // 根据 email 查询 google 方式登录的 user，如果有，就自动登录。
+   const user = await this.appService.findGoogleUserByEmail(req.user.email);
+
+    if(!user) {
+      // 没有，跳转到信息完善页面，用户填信息后注册。
+      const newUser = this.appService.registerByGoogleInfo(req.user);
+      return newUser;
+    } else {
+      return user;
+    }
+  }
+}
+
+```
+
+
+#### 6. 策略认证守卫的扩展
+策略认证守卫是由 @nestjs/passport 提供的，如果想扩展，可以继承内置类并在子类中重写方法。即继承 AuthGuard('xxx') 然后重写下 canActivate 方法就好了。
+
+AuthGuard()也可以传入一个策略名字符串数组，认证失败会依次通过每个策略，如果所有策略都失败则最终认证失败。
+
+它同样也可以注册为全局守卫、这样就需要提供一种机制来声明公共路由也就是使用 SetMetadata 装饰器工厂函数创建自定义装饰器。到这里和我们在守卫中的学习内容是一样的。
+
+```js
+$ nest g decorator is-public --flat --no-spec
+// src/common/decorators/public.decorator.ts
+import { SetMetadata } from '@nestjs/common';
+
+export const IS_PUBLIC_KEY = 'isPublic';
+export const IsPublic = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+// xxx.controller.ts
+// public 的，不需要身份认证
+@IsPublic()
+@Get('aaa')
+aaa() {
+    return 'aaa';
+}
+
+// jwt-auth.guard.ts
+import { ExecutionContext, Injectable } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { AuthGuard } from "@nestjs/passport";
+import { IS_PUBLIC_KEY } from "src/is-public.decorator";
+
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  // 记得调用super()
+  constructor(private reflector: Reflector) {
+    super();
+  }
+  // 重写覆盖父类的canActivate方法
+  canActivate(context: ExecutionContext) {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+    return super.canActivate(context);
+  }
+}
+
+// 多个策略依次认证
+export class JwtAuthGuard extends AuthGuard(['strategy_jwt_1', 'strategy_jwt_2', '...']) { ... }
+
+// 全局守卫-使用以下构造方法（在任何模块中）将 JwtAuthGuard 注册为全局守卫-一般是在根模块中
+providers: [
+  {
+    provide: APP_GUARD,
+    useClass: JwtAuthGuard,
+  },
+],
+
+```
+
 ## 5.12 授权(Authorization)
 
 ### 1. 概述
@@ -6563,10 +7757,76 @@ export class UsersController {
 ```
 
 ## 5.14 OpenAPI 
-OpenAPI 规范是一种语言无关的定义格式，用于描述 RESTful API。Nest 提供了一个专门的模块，通过利用装饰器来生成这样的规范。也就是配置接口文档 swagger。
-```JavaScript
+
+### 5.14.1 概述
+后端开发完接口后，需要给前端一份接口文档，描述有哪些接口，是 GET 还是 POST，有哪些参数，响应是什么。写完代码后再去单独写一份这样的文档还是很麻烦的，并且改动接口之后也要同步去修改接口文档。那么能不能自动生成呢？可以使用swagger。
+
+OpenAPI 规范是一种语言无关的定义格式，用于描述 RESTful API。Nest 为此提供了一个专门的模块，通过利用装饰器来生成这样的规范，也就是配置接口文档 swagger。
+
+
+**装饰器:** 所有可用的 OpenAPI 装饰器都带有 Api 前缀，以区别于核心装饰器。
+| 装饰器                         | 说明              |
+| ------------------------------ | ----------------- |
+| @ApiBasicAuth()	方法/控制器    | 基本认证          |
+| @ApiBearerAuth()	方法/控制器   | Bearer 认证       |
+| @ApiBody()	方法                | 请求体            |
+| @ApiConsumes()	方法/控制器     | 消费类型          |
+| @ApiCookieAuth()	方法/控制器   | Cookie 认证       |
+| @ApiExcludeController()	控制器 | 排除控制器        |
+| @ApiExcludeEndpoint()	方法     | 排除方法          |
+| @ApiExtension()	方法           | 扩展              |
+| @ApiExtraModels()	方法/控制器  | 额外模型          |
+| @ApiHeader()	方法/控制器       | 请求头            |
+| @ApiHideProperty()	模型        | 隐藏属性          |
+| @ApiOAuth2()	方法/控制器       | OAuth2 认证       |
+| @ApiOperation()	方法           | 接口的描述        |
+| @ApiParam()	方法/控制器        | 路由查询参数      |
+| @ApiProduces()	方法/控制器     | 生产类型          |
+| @ApiSchema()	模型              | 模式              |
+| @ApiProperty()	模型            | 标识dto,vo 的属性 |
+| @ApiPropertyOptional()	模型    | 可选属性          |
+| @ApiQuery()	方法/控制器        | 查询参数说明      |
+| @ApiResponse()	方法/控制器     | 接口的响应说明    |
+| @ApiSecurity()	方法/控制器     | 安全              |
+| @ApiTags()	方法/控制器         | 接口声明分组      |
+| @ApiCallbacks()	方法/控制器    | 回调              |
+
+这些装饰器共同工作，能够为你的 NestJS 应用生成丰富、结构化且易于导航的 API 文档。这不仅有助于开发者理解和使用 API，而且通过这种自动化的文档方式，可以大大减少手动编写和维护 API 文档的工作。
+
+其中比较常用的是
+@ApiOperation({ summary: '接口的描述' })
+@ApiResponse({ status: 200, description: '成功' })
+@ApiQuery({ name: 'name', description: '用户名' })
+@ApiParam({ name: 'id', description: '用户id' })
+@ApiBody({ type: CccDto })
+@ApiProperty({ name: 'name', enum: ['a1', 'a2', 'a3'], maxLength: 30, minLength: 2, required: true})
+@ApiPropertyOptional({ name: 'bbb', maximum: 60, minimum: 40, default: 50, example: 55})声明 dto、vo 的属性信息，相当于 required: false 的 @ApiProperty。
+@ApiTags('用户接口')：对接口进行分组
+@ApiBearerAuth：通过 jwt 的方式认证，也就是 Authorization: Bearer xxx
+@ApiCookieAuth：通过 cookie 的方式认证
+@ApiBasicAuth：通过用户名、密码认证，在 header 添加 Authorization: Basic xxx 
+
+
+```js
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+
+export class CccDto {
+    @ApiProperty({ name: 'aaa', enum: ['a1', 'a2', 'a3'], maxLength: 30, minLength: 2, required: true})
+    aaa: string;
+
+    @ApiPropertyOptional({ name: 'bbb', maximum: 60, minimum: 40, default: 50, example: 55})
+    bbb: number;
+
+    @ApiProperty({ name: 'ccc' })
+    ccc: Array<string>;
+}
+
+```
+
+```js
 // 安装所需的依赖：
-$ npm install --save @nestjs/swagger swagger-ui-express
+$ npm install --save @nestjs/swagger 
+$ npm install --save swagger-ui-express
 // 安装完成后在main.ts 文件并使用 SwaggerModule 类初始化 Swagger
 
 import { NestFactory } from '@nestjs/core';
@@ -6575,17 +7835,32 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  // 配置swagger
+  // 配置swagger配置对象
   const config = new DocumentBuilder()
     .setTitle('nest学习记录')
     .setDescription('nest学习记录接口文档汇总')
-    .setVersion('1.0')
-    .addBearerAuth() // 接口增加token认证
+    .setVersion('1.0')// 接口增加接口认证
+    .addBasicAuth({
+      type: 'http',
+      name: 'basic',
+      description: '用户名 + 密码'
+    })
+    .addCookieAuth('sid', {
+      type: 'apiKey',
+      name: 'cookie',
+      description: '基于 cookie 的认证'
+    })
+    .addBearerAuth({
+      type: 'http',
+      description: '基于 jwt 的认证',
+      name: 'bearer'
+    })
     .build();
+    // 工厂方法专门用于在请求时生成 Swagger 文档。
   const document = SwaggerModule.createDocument(app, config);
   // 设置访问接口地址--> http://localhost:3000/api-docs#/ 查看swagger文档
   SwaggerModule.setup('api-docs', app, document, { jsonDocumentUrl: 'api-docs.json' });
-  // http://localhost:3000/api-docs.json 地址是json格式，可以导入apifox等软件中自动同步接口文档 
+  // http://localhost:3000/api-docs.json 地址是json格式，用于生成并下载 Swagger JSON 文件。比如可以导入apifox等软件中自动同步接口文档 
 
   await app.listen(3000);
 }
@@ -6664,7 +7939,7 @@ findAll() {
 }
 
 // @ApiResponse({ status: ..., description: ..., type: ... })
-// 定义方法的响应类型及状态码。type 选项用于指定返回数据的类型，这对生成精确的响应模型极为重要。
+// 定义方法的响应类型及状态码。type 选项用于指定返回数据的类型即VO，这对生成精确的响应模型极为重要。
 @Get()
 @ApiResponse({
   status: 200,
@@ -6684,7 +7959,7 @@ findOne(@Param('id') id: string) {
 }
 
 // @ApiBody({ description: ..., type: ..., required: ... })
-// 用于定义 API 请求体的细节。它非常有用，特别是对于 POST 和 PUT 请求。
+// 用于定义 API 请求体的细节即DTO。它非常有用，特别是对于 POST 和 PUT 请求。
 @Post()
 @ApiBody({ description: 'User payload', type: CreateUserDto, required: true })
 create(@Body() createUserDto: CreateUserDto) {
@@ -6707,7 +7982,308 @@ export class CreateUserDto {
   @ApiProperty({ description: "用户邮箱", example: "moment@qq.com" })
   email: string;
 }
-这些装饰器共同工作，能够为你的 NestJS 应用生成丰富、结构化且易于导航的 API 文档。这不仅有助于开发者理解和使用 API，而且通过这种自动化的文档方式，可以大大减少手动编写和维护 API 文档的工作。
+
+
+```
+
+
+### 5.14.2 类型和参数
+在构建 CRUD（创建/读取/更新/删除）等功能时，基于基础实体类型创建变体通常很有用。Nest 提供了几个实用函数来执行类型转换，使这项任务更加便捷。
+
+PickType 是从已有 dto 类型中取某个字段。
+OmitType 是从已有 dto 类型中去掉某个字段。
+PartialType 是把 dto 类型变为可选。
+IntersectionType 是组合多个 dto 类型。
+
+```js
+import { ApiProperty, PartialType, PickType, OmitType,IntersectionType } from '@nestjs/swagger';
+
+export class CreateCatDto {
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  age: number;
+
+  @ApiProperty()
+  breed: string;
+}
+
+export class AdditionalCatInfo {
+  @ApiProperty()
+  color: string;
+}
+
+// 将输入类型的所有属性都被设置为可选。
+export class UpdateCatDto extends PartialType(CreateCatDto) {}
+
+// 从输入类型中选择一组属性来构造新类型。只有age属性了且并不会变为可选
+export class UpdateCatAgeDto extends PickType(CreateCatDto, ['age']) {}
+
+// 从输入类型中排除一组属性取剩下的来构造新类型。删除name属性，还有age、breed属性
+export class UpdateCatDtoWithoutName extends OmitType(CreateCatDto, ['name']) {}
+
+// 交叉类型-合并
+export class UpdateCatDto extends IntersectionType(
+  CreateCatDto,
+  AdditionalCatInfo
+) {}
+
+// PartialType、PickType、OmitType、IntersectionType 经常会组合用
+export class UpdateAaaDto extends IntersectionType(
+    PickType(CreateAaaDto, ['name', 'age']), 
+    PartialType(OmitType(XxxDto, ['yyy']))
+) {
+
+}
+```
+
+
+
+
+## 5.15 文档
+Nest 项目会有很多模块，模块之间相互依赖。当项目复杂之后，模块之间的关系错综复杂。那有没有什么办法可以把依赖关系可视化呢？也是有的，我们可以用 compodoc 生成一份文档。
+
+Compodoc 是一款专为 Angular 应用设计的文档工具。由于 Nest 和 Angular 具有相似的项目与代码结构，Compodoc 同样适用于 Nest 应用程序。
+
+在现有 Nest 项目中配置 Compodoc 非常简单。安装 compodoc：`npm install --save-dev @compodoc/compodoc`、然后生成一份文档：`npx @compodoc/compodoc -p tsconfig.json -s -o --theme postmark` 。
+-p 是指定 tsconfig 文件
+-s 是启动静态服务器
+-o 是打开浏览器
+--theme 可以指定主题，一共有 gitbook,aravel, original, material, postmark, readthedocs, stripe, vagrant 这 8 个主题。
+常用的也就基本这几个了。
+
+会在根目录下生成 documentation 文件夹，里面就是整个项目的文档资料。
+
+
+## 5.16 邮件发送
+
+### 5.16.1 概述
+邮件有专门的协议：发邮件用 SMTP 协议。收邮件用 POP3 协议、或者 IMAP 协议。在 node 里也有对应的包，发邮件用 nodemailer 包，收邮件用 imap 包。邮件是支持 html + css文件发送的。
+
+qq邮箱授权码:`shrtiselrdjzfejd`
+安装依赖 `$ npm install --save nodemailer`、`$ npm install --save-dev @types/nodemailer`
+
+```js
+// 原生node实现邮件发送
+const nodemailer = require("nodemailer");
+
+const transporter = nodemailer.createTransport({
+    host: "smtp.qq.com",
+    port: 587,
+    secure: false,
+    auth: {
+        user: 'xxx@qq.com',
+        pass: 'shrtiselrdjzfejd'
+    },
+});
+
+async function main() {
+  const info = await transporter.sendMail({
+    from: '"xxx" <xxxx@qq.com>',
+    to: "xxxx@xx.com",
+    subject: "Hello 111", 
+    text: "xxxxx"
+  });
+
+  console.log("邮件发送成功：", info.messageId);
+}
+
+main().catch(console.error);
+
+// 原生node实现邮件接收
+const { MailParser } =require('mailparser');
+const fs = require('fs');
+const path = require('path');
+const Imap = require('imap');
+
+const imap = new Imap({
+    user: 'xx@qq.com',
+    password: '你的授权码',
+    host: 'imap.qq.com',
+    port: 993,
+    tls: true
+});
+
+imap.once('ready', () => {
+    imap.openBox('INBOX', true, (err) => {
+        imap.search([['SEEN'], ['SINCE', new Date('2023-07-10 19:00:00').toLocaleString()]], (err, results) => {
+            if (!err) {
+                handleResults(results);
+            } else {
+                throw err;
+            }
+        });
+    });
+});
+
+
+function handleResults(results) {
+    imap.fetch(results, { 
+        bodies: '',
+    }).on('message', (msg) => {
+        const mailparser = new MailParser();
+
+        msg.on('body', (stream) => {
+
+            const info = {};
+            stream.pipe(mailparser);
+            mailparser.on("headers", (headers) => {
+                info.theme = headers.get('subject');
+                info.form = headers.get('from').value[0].address;
+                info.mailName = headers.get('from').value[0].name;
+                info.to = headers.get('to').value[0].address;
+                info.datatime = headers.get('date').toLocaleString();
+            });
+
+            mailparser.on("data", (data) => {
+                if (data.type === 'text') {
+                    info.html = data.html;
+                    info.text = data.text;
+
+                    const filePath = path.join(__dirname, 'mails', info.theme + '.html');
+                    fs.writeFileSync(filePath, info.html || info.text)
+
+                    console.log(info);
+                }
+                if (data.type === 'attachment') {
+                    const filePath = path.join(__dirname, 'files', data.filename);
+                    const ws = fs.createWriteStream(filePath);
+                    data.content.pipe(ws);
+                }
+            });
+        });
+    });
+}
+
+imap.connect();
+
+
+```
+
+### 5.16.2 应用(基于邮箱验证码的认证)
+通过邮箱验证码来验证登录。流程是用户填入邮箱地址，点击发送验证码，后端会生成验证码，发送邮件。并且还要把这个验证码存入 redis，以用户邮箱地址为 key。之后用户输入验证码，点击登录。后端根据邮箱地址去 redis 中查询下验证码，如果没查找，就返回验证码已失效。如果查找和用户传过来的验证码比对下，如果一致，就从 mysql 数据库中查询该用户的信息，放入 jwt 中返回。如果不一致，就返回验证码不正确。
+
+```js
+
+import { Injectable } from '@nestjs/common';
+import { createTransport, Transporter} from 'nodemailer';
+
+@Injectable()
+export class EmailService {
+
+    transporter: Transporter
+    
+    constructor() {
+        this.transporter = createTransport({
+            host: "smtp.qq.com",
+            port: 587,
+            secure: false,
+            auth: {
+                user: 'xx@xx.com',// 由配置文件配置
+                pass: '你的授权码'
+            },
+        });
+    }
+
+    async sendMail({ to, subject, html }) {
+      await this.transporter.sendMail({
+        from: {
+          name: '系统邮件',
+          address: 'xx@xx.com'
+        },
+        to,
+        subject,
+        html
+      });
+    }
+}
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { createTransport, Transporter} from 'nodemailer';
+
+@Injectable()
+export class EmailService {
+
+    transporter: Transporter
+    
+    constructor(private configService: ConfigService) {
+      this.transporter = createTransport({
+          host: "smtp.qq.com",
+          port: 587,
+          secure: false,
+          auth: {
+              user: this.configService.get('email_user'),
+              pass: this.configService.get('email_password')
+          },
+      });
+    }
+
+    async sendMail({ to, subject, html }) {
+      await this.transporter.sendMail({
+        from: {
+          name: '系统邮件',
+          address: this.configService.get('email_user')
+        },
+        to,
+        subject,
+        html
+      });
+    }
+
+}
+
+import { Controller, Get, Inject, Query } from '@nestjs/common';
+import { RedisService } from 'src/redis/redis.service';
+import { EmailService } from './email.service';
+
+@Controller('email')
+export class EmailController {
+  constructor(private readonly emailService: EmailService) {}
+
+  @Inject()
+  private redisService: RedisService;
+
+  @Get('code')
+  async sendEmailCode(@Query("address") address) {
+    const code = Math.random().toString().slice(2,8);
+
+    await this.redisService.set(`captcha_${address}`, code, 5 * 60);
+
+    await this.emailService.sendMail({
+      to: address,
+      subject: '登录验证码',
+      html: `<p>你的登录验证码是 ${code}</p>`
+    });
+    return '发送成功';
+  }
+}
+
+
+@Inject(RedisService)
+private redisService: RedisService;
+
+@Post('login')
+async login(@Body() loginUserDto: LoginUserDto) {
+
+    const { email, code } = loginUserDto;
+
+    const codeInRedis = await this.redisService.get(`captcha_${email}`);
+
+    if(!codeInRedis) {
+      throw new UnauthorizedException('验证码已失效');
+    }
+    if(code !== codeInRedis) {
+      throw new UnauthorizedException('验证码不正确');
+    }
+
+    const user = await this.userService.findUserByEmail(email);
+
+    console.log(user);
+
+    return 'success';
+}
+
 
 ```
 
@@ -7077,8 +8653,205 @@ CMD ["pm2-runtime", "/app/main.js"]
 
 ```
 
+## 8.5 Docker Compose
+docker 的方式需要手动 docker build 来构建 nest 应用的镜像。然后按顺序使用 docker run。而Docker Compose它是一个用于定义和运行多容器Docker应用程序的工具。它使用一个 YAML 文件来配置应用程序的服务、网络和卷。通过一个简单的命令，就可以启动、停止、重启、删除应用程序的所有容器。它还提供了一些其他的功能，比如滚动更新、负载均衡、日志查看等。方便docker 多个容器可以一起管理。docker compose 只需要写一个 docker-compose.yml 文件，配置多个 service 的启动方式和 depends_on 依赖顺序。然后 docker-compose up 就可以批量按顺序启动一批容器。
 
-# 九、实战
+
+```js
+//  docker-compose.yml
+services:
+  // 每个 services 都是一个 docker 容器，名字随便指定。
+  nest-app:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    depends_on: // 启动顺序，会先启动另外两个，再启动这个，
+      - mysql-container
+      - redis-container
+    ports: // 指定映射端口
+      - '3000:3000'
+  mysql-container:
+    image: mysql // 指定镜像
+    ports:
+      - '3306:3306'
+    volumes:
+      - /Users/guang/mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: aaa
+      MYSQL_ROOT_PASSWORD: guang
+  redis-container:
+    image: redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - /Users/guang/aaa:/data
+
+// 启动
+$ docker-compose up
+
+// docker-compose 和 docker 命令是一起的，docker 能用，docker-compose 就能用。
+
+```
+
+## 8.6 docker 容器通信
+多个 docker 容器之间的通信，我们是通过指定宿主机 ip 和端口的方式。这是因为容器都映射到了宿主机的端口，那 nest 的容器就可以通过宿主机来实现和其他容器的通信。
+
+
+桥接网络: `docker network create common-network`
+启动容器时指定网络：`docker run -d --network common-network -v /Users/guang/mysql-data:/var/lib/mysql --name mysql-container mysql`
+
+```js
+// docker-compose.yml 
+version: '3.8'
+services:
+  nest-app:
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    depends_on:
+      - mysql-container
+      - redis-container
+    ports:
+      - '3000:3000'
+    networks: // 指定桥接网络
+      - common-network
+  mysql-container:
+    image: mysql
+    volumes:
+      - /Users/guang/mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: aaa
+      MYSQL_ROOT_PASSWORD: guang
+    networks:
+      - common-network
+  redis-container:
+    image: redis
+    volumes:
+      - /Users/guang/aaa:/data
+    networks:
+      - common-network
+networks:// 指定创建的 common-network 桥接网络，网络驱动程序指定为 bridge。
+  common-network:
+    driver: bridge
+
+```
+
+# 九、Nginx
+
+## 9.1 概述
+Nginx 是流行的服务器，一般用它对静态资源做托管、对动态资源做反向代理。Docker 是流行的容器技术，里面可以跑任何服务。那 Docker + Nginx 如何结合使用呢？nginx 托管静态 html 页面主要知道配置文件和页面都存在哪里就行。一般是xxx/nginx/html/ 目录下面就是所有的静态文件。nginx 配置文件，也就是 /etc/nginx/nginx.conf。
+
+## 9.2 静态资源托管
+可以说安装好nginx后在 xxx/nginx/html/ 下就是存放静态资源的位置。主配置文件在 /etc/nginx/nginx.conf，而子配置文件在 /etc/nginx/conf.d 目录下。
+
+默认的 html 路径是 /usr/share/nginx/html。
+location = /aaa 是精确匹配 /aaa 的路由。
+location /bbb 是前缀匹配 /bbb 的路由。
+location ~ /ccc.*.html 是正则匹配。可以再加个 * 表示不区分大小写 location ~* /ccc.*.html
+location ^~ /ddd 是前缀匹配，但是优先级更高。
+
+这 4 种语法的优先级是这样的：精确匹配（=） > 高优先级前缀匹配（^~） > 正则匹配（～ ~*） > 普通前缀匹配
+
+```js
+// 精准匹配，也就是只有完全相同的 url 才会匹配这个路由。
+location = /111/ {
+    default_type text/plain;
+    return 200 "111 success";
+}
+// 不带 = 代表根据前缀匹配，后面可以是任意路径。
+location /222 {
+    default_type text/plain;
+    return 200 $uri;// $uri 是取当前路径
+}
+// 支持正则，就可以加个 ~。
+location ~ ^/333/bbb.*\.html$ {
+    default_type text/plain;
+    return 200 $uri;
+}
+// 让正则不区分大小写，可以再加个 *
+location ~* ^/444/AAA.*\.html$ {
+    default_type text/plain;
+    return 200 $uri;
+}
+// 提高优先级，可以使用 ^~ 优先匹配
+location ^~ /444 {
+    default_type text/plain;
+    return 200 'xxxx';
+}
+
+
+
+```
+
+## 9.3 动态资源的反向代理
+从用户的角度看，方向一致的就是正向，反过来就是反向。代理的用户请求，和用户请求方向一致，叫做正向代理。代理服务器处理用户请求，和用户请求方向相反，叫做反向代理。
+
+也可以做负载均衡。默认是轮询的方式。
+
+一共有 4 种负载均衡策略：
+1. 轮询：默认方式。
+2. weight：在轮询基础上增加权重，也就是轮询到的几率不同。
+3. ip_hash：按照 ip 的 hash 分配，保证每个访客的请求固定访问一个服务器，解决 session 问题。
+4. fair：按照响应时间来分配，这个需要安装 nginx-upstream-fair 插件。
+
+
+```js
+
+// 负载均衡在 upstream 里配置它代理的目标服务器的所有实例。
+upstream backend {
+  ip_hash;
+  server 192.168.1.6:3000;
+  server 192.168.1.7:3000 weight=5;
+}
+// nginx 配置
+location ^~ /api {
+    proxy_pass http://192.168.1.6:3000;
+    proxy_pass http://backend; // proxy_pass 通过 upstream 的名字来指定。
+}
+
+
+```
+
+## 9.4 应用(灰度系统)
+软件开发一般不会上来就是最终版本，而是会一个版本一个版本的迭代。新版本上线前都会经过测试，但就算这样，也不能保证上线了不出问题。所以，在公司里上线新版本代码一般都是通过灰度系统。灰度系统可以把流量划分成多份，一份走新版本代码，一份走老版本代码。而且灰度系统支持设置流量的比例，比如可以把走新版本代码的流量设置为 5%，没啥问题再放到 10%，50%，最后放到 100% 全量。流量控制用的就是负载均衡功能。
+
+而且灰度系统不止这一个用途，比如产品不确定某些改动是不是有效的，就要做 AB 实验，也就是要把流量分成两份，一份走 A 版本代码，一份走 B 版本代码。
+
+nginx 是一个反向代理的服务，用户请求发给它，由它转发给具体的应用服务器。这一层一般叫做网关层。
+
+而Cookie 的设置一般都有灰度配置系统，可以配置不同的版本的比例，然后流量经过这个系统之后，就会返回 Set-Cookie 的 header，里面按照比例来分别设置不同的 cookie。比如随机数载 0 到 0.2 之间，就设置 version=2.0 的 cookie，否则，设置 version=1.0 的 cookie。这个过程称为流量染色。
+
+```js
+upstream version1.0_server {
+    server 192.168.1.6:3000;
+}
+ 
+upstream version2.0_server {
+    server 192.168.1.6:3001;
+}
+
+upstream default {
+    server 192.168.1.6:3000;
+}
+set $group "default";
+if ($http_cookie ~* "version=1.0"){
+    set $group version1.0_server;
+}
+
+if ($http_cookie ~* "version=2.0"){
+    set $group version2.0_server;
+}
+// 如果包含 version=1.0 的 cookie，那就走 version1.0_server 的服务，有 version=2.0 的 cookie 就走 version2.0_server 的服务，否则，走默认的。
+location ^~ /api {
+    rewrite ^/api/(.*)$ /$1 break;
+    proxy_pass http://$group;
+}
+
+
+
+```
+
+# 十、实战
 
 ## 9.1 图书管理系统实战1
 目的是为了把nest基础知识串联起来用一下，加深理解。不包含数据库。
@@ -7230,5 +9003,5 @@ User 相关
 -put /user:id 修改用户 信息
 -delete /user:id 删除用户
 
-# 十、总结
+# 十一、总结
 Nest作为一个Web应用程序使用至此可以说是学习结束。至于 WebSockets、微服务、或者独立应用程序的开发，可以等待下一次学习。
