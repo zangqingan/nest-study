@@ -3837,7 +3837,6 @@ export class AppModule {}
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 
-export type CatDocument = HydratedDocument<Cat>;
 // @Schema() 装饰器将一个类标记为模式定义。它将我们的 Cat 类映射到一个同名的 MongoDB 集合，但在末尾添加了一个附加的“s”，因此最终的 MongoDB 集合名称将是 cats。
 @Schema()
 export class Cat {
@@ -3854,7 +3853,8 @@ export class Cat {
 }
 // 根据类创建 schema
 export const CatSchema = SchemaFactory.createForClass(Cat);
-
+// 文档类型 - 在 Dog 类型的基础上加了一个 _id 属性
+export type CatDocument = HydratedDocument<Cat>;
 ```
 
 4. 在模块中注入、MongooseModule 也是使用 forFeature() 方法来配置模块，其中包括定义应在当前范围内注册哪些模型。
@@ -3906,6 +3906,17 @@ export class CatsService {
 
   async findAll(): Promise<Cat[]> {
     return this.catModel.find().exec();
+  }
+  async findOne(id: string) {
+    return this.catModel.findById(id);
+  }
+
+  async update(id: string, updateDogDto: UpdateDogDto) {
+    return this.catModel.findByIdAndUpdate(id, updateDogDto);
+  }
+
+  async remove(id: number) {
+    return this.catModel.findByIdAndDelete(id);
   }
 }
 
@@ -4854,16 +4865,16 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           new winston.transports.Console({
             format: winston.format.combine(
               winston.format.colorize({ all: true }),
-            winston.format.printf(
-              ({ timestamp, level, message, context, trace }) => {
-                const defaultAppStr = chalk.green(`[App]`);
-                const contextStr = context
-                  ? chalk.yellow(`[${context}]`)
-                  : defaultAppStr;
-                return `${timestamp} ${contextStr} ${level}: ${message}${trace ? `\n${trace}` : ''
-                  }`;
-              },
-            ),
+              winston.format.printf(
+                 ({ timestamp, level, message, context, trace }) => {
+                   const defaultAppStr = chalk.green(`[App]`);
+                   const contextStr = context
+                     ? chalk.yellow(`[${context}]`)
+                     : defaultAppStr;
+                   return `${timestamp} ${contextStr} ${level}: ${message}${trace ? `\n${trace}` : ''
+                     }`;
+                 },
+               ),
             ),
           }),
           
@@ -4971,9 +4982,113 @@ export class UserController {
     return result;
   }
 }
+
 ```
 
+### 4. 实战(记录登录日志)
+Nest 服务会不断处理用户用户的请求，如果我们想记录下每次请求的日志呢？很明显要使用拦截器。在拦截器中引入logger即可。难处在于需要构建自己想要的日志格式。常见： method、path、ip、user agent，调用的目标 class、handler 等信息。然后记录下响应的状态码和请求时间还有响应内容。
 
+ip转换工具安装:`$ npm install --save request-ip`
+字符集编码转换工具:`$ npm install iconv-lite`
+
+```js
+// 创建一个拦截器
+import {
+  CallHandler,
+  ExecutionContext,
+  Inject,
+  Injectable,
+  NestInterceptor,
+} from '@nestjs/common';
+import { Observable, tap } from 'rxjs';
+import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
+import { Logger } from 'winston';
+import * as requestIp from 'request-ip';
+import { HttpService } from '@nestjs/axios';
+import iconv from 'iconv-lite';
+
+@Injectable()
+export class RequestLogInterceptor implements NestInterceptor {
+  constructor(
+    @Inject(WINSTON_MODULE_PROVIDER) private readonly logger: Logger,
+    private readonly httpService: HttpService,
+  ) { }
+
+  async intercept(
+    context: ExecutionContext,
+    next: CallHandler,
+  ): Promise<Observable<any>> {
+    const startTime = Date.now();
+    const request = context.switchToHttp().getRequest();
+    const response = context.switchToHttp().getResponse();
+    const className = context.getClass().name; // 控制器类名
+    const handlerName = context.getHandler().name; // 控制器方法名
+    const userAgent = request.headers['user-agent']; // 获取客户端信息
+
+    const { ip, method, path } = request;
+    const clientIp = requestIp.getClientIp(request) || ip;
+    const { addr } = await this.getCityInfo('171.109.70.249');
+    const { statusCode } = response;
+    const { body } = response;
+
+    console.log(statusCode);
+    console.log(addr);
+
+    return next.handle().pipe(
+      tap({
+        next: () => {
+          const duration = Date.now() - startTime;
+          const logInfo = `${method} ${path} - ${userAgent} - ${duration}ms - IP: ${clientIp} - City: ${addr}`;
+          if (statusCode >= 500) {
+            this.logger.error(logInfo, {
+              context: `${className}.${handlerName}`,
+            });
+          } else if (statusCode >= 400) {
+            this.logger.warn(logInfo, {
+              context: `${className}.${handlerName}`,
+            });
+          } else {
+            this.logger.info(logInfo, {
+              context: `${className}.${handlerName}`,
+            });
+          }
+        },
+        error: (error) => {
+          const duration = Date.now() - startTime;
+          this.logger.error(
+            `${method} ${path} - ${userAgent} - ${duration}ms - IP: ${clientIp}- City: ${addr}`,
+            {
+              context: `${className}.${handlerName}`,
+              error: error.message,
+              stack: error.stack,
+            },
+          );
+        },
+      }),
+    );
+  }
+
+  // 根据ip地址获取城市信息-实际应该放在外部请求一次即可
+  async getCityInfo(ip: string) {
+    const { data } = await this.httpService.axiosRef.get(
+      `https://whois.pconline.com.cn/ipJson.jsp?ip=${ip}&json=true`,
+      {
+        responseType: 'arraybuffer',
+        transformResponse: [
+          function (data) {
+            const str = iconv.decode(data, 'gbk');
+            return JSON.parse(str);
+          },
+        ],
+      },
+    );
+    return data;
+  }
+}
+
+
+
+```
 
 
 
@@ -5043,11 +5158,75 @@ export class FindCatsAllListener {
 ```
 
 
-## 5.7 压缩
-压缩可以大大减小响应体的大小，从而提高Web应用的速度。这个主要说的是打包构建时。和在express中一样使用 compression 中间件包来启用 Gzip 压缩、安装完成后，将压缩中间件应用为全局中间件。
+## 5.7 压缩文件
 
-安装:`$ npm i --save compression`
-```JavaScript
+### 5.7.1 压缩图片
+图片上传时经常有大小的限制，这时候就可以使用压缩工具对图片进行压缩。这里介绍一个npm包：sharp 它可以用来调整图片的大小，对图片做旋转、颜色调整、合成图片等。安装依赖`$ npm install sharp $ npm i --save-dev  @types/sharp`。
+
+```js
+const sharp = require('sharp');
+
+sharp('1.image.gif', {
+    animated: true,// 读取所有的帧，不然默认只会读取 gif 的第一帧。
+    limitInputPixels: false // 不限制大小，默认太大的图片是会报错的。
+}).gif({
+    colours: 10 // 颜色的数量，默认是 256。
+}).toFile('2.image.gif')
+
+sharp('input.jpg')
+  .rotate()
+  .resize(200)
+  .jpeg({ mozjpeg: true })
+  .toBuffer()
+  .then( data => { ... })
+  .catch( err => { ... });
+
+
+// 在nestjs中使用sharp
+@Get('compression')
+async compression(
+    @Query('path') filePath: string,
+    @Query('color', ParseIntPipe) color:number,
+    @Res() res: Response
+) {
+
+    if(!existsSync(filePath)) {
+      throw new BadRequestException('文件不存在');
+    }
+
+    const data = await sharp(filePath, {
+        animated: true,
+        limitInputPixels: false
+    }).gif({
+        compressionLevel: level,
+        colours: color
+    }).toBuffer();
+
+   // GIF 压缩（减少颜色数量）  
+   sharp(inputPath, { animated: true, limitInputPixels: false })  
+     .gif({ compressionLevel: 9, colours: 64 }) // 压缩级别9，颜色数64  
+        .toFile(outputPath);  
+   // PNG/JPEG 压缩  
+   sharp(inputBuffer)  
+     .png({ quality: 80, progressive: true }) // 渐进式加载  
+     .jpeg({ mozjpeg: true }) // 启用 MozJPEG 优化
+     .toFile(outputPath);
+
+
+    res.set('Content-Disposition', `attachment; filename="dest.gif"`);
+
+    res.send(data);
+}
+
+```
+
+### 5.7.2 ​运行时动态压缩​​
+压缩可以大大减小响应体的大小，从而提高Web应用的速度。和在express中一样使用 compression 中间件包来启用 Gzip 压缩、安装完成后，将压缩中间件应用为全局中间件。
+
+它是​运行时动态压缩​​在服务器发送响应前，实时调用 Node.js 的 zlib库压缩数据流。它是用来提升传输效率，尤其适合文本类 API 响应和动态内容！
+
+安装:`$ npm i --save compression $ npm i --save-dev @types/compression`
+```js
 // 根模块
 import * as compression from 'compression';
 // somewhere in your initialization file
@@ -5056,7 +5235,9 @@ app.use(compression());
 ```
 
 
-## 5.8 文件上传
+## 5.8 文件上传下载
+
+### 5.8.1 概述
 Nest 的文件上传是基于 Express 的中间件 multer 实现的,为此 Nest提供了一个基于express-multer中间件包的内置模块。express 的 multer 包是用来处理 multipart/form-data 格式的文件上传请求的。通过 single 方法处理单个字段的单个文件，array 方法处理单个字段的多个文件，fields 方法处理多个字段的文件，any 处理任意数量字段的文件，分别用 req.file 和 req.files 来取解析出的文件。其余非文件字段不会处理，还是通过 req.body 来取。
 
 
@@ -5149,7 +5330,7 @@ app.listen(3000, () => console.log('Example app listening on port 3000!'));
 
 为了获得更好的类型安全性，安装Multer的类型定义包: `$ npm i -D @types/multer`安装了此包后，我们现在可以使用Express.Multer.File类型 `import { Express } from 'express'`
 
-### 1. 单个文件上传
+### 5.8.2 单个文件上传
 
 要上传单个文件，只需将FileInterceptor()拦截器绑定到路由处理程序，并使用@UploadedFile()装饰器从request 请求中提取file。
 
@@ -5199,7 +5380,7 @@ import { Express } from 'express';
 
 ```
 
-### 2. 多个文件上传
+### 5.8.3 多个文件上传
 把 FileInterceptor 换成 FilesInterceptor，把 UploadedFile 换成 UploadedFiles，都是多加一个 s。
 
 1. 要上传一个文件数组（通过一个单一的字段名标识），可以使用 FilesInterceptor() 装饰器（注意装饰器名称中的Files是复数形式）。这个装饰器接受三个参数：
@@ -5333,7 +5514,7 @@ uploadFile(@UploadedFiles() files: Array<Express.Multer.File>, @Body() body) {
 
 ```
 
-### 3. 没有文件
+### 5.8.4 没有文件
 只接受 multipart/form-data 数据类型但不允许上传任何文件，使用 NoFilesInterceptor装饰器。它会将数据设置为请求体的属性。如果请求中发送了任何文件，将会抛出 BadRequestException。
 ```js
 import {  Body } from '@nestjs/common';
@@ -5346,7 +5527,7 @@ handleMultiPartData(@Body() body) {
 
 ```
 
-### 4. 文件校验
+### 5.8.5 文件校验
 如果还需要对上传的文件做一些限制，比如文件大小、文件 MIME 类型等，很明显，这部分可以放在 pipe 里做并将其绑定到用 UploadedFile 装饰器注解的参数上。即给 @UploadedFile(myPipe) 装饰器传入管道。
 
 但像文件大小、类型的校验这种逻辑太过常见。为此Nest 提供了一个内置的 Pipe 管道来处理这些常见的情况，并促进/标准化新管道的添加。我们直接使用就行。
@@ -5454,10 +5635,10 @@ export CustomFileValidator extends FileValidator {
 
 ```
 
-### 5. 流式传输文件内容
-在Nest中同样可以对要传输的文件(图像、文档和任何其他文件类型。)进行流式传输减少服务端带宽的压力、是通过 可流式传输的文件类 StreamableFile 来实现的。
+### 5.8.6 流式下载文件内容
+在Nest中同样可以对要传输的大文件(图像、文档和任何其他文件类型。)进行流式传输(分片)减少服务端带宽的压力，在http中内置了这个功能，后端只需要通过设置请求头 `transfer-encoding:chunked` 实现分片传输。
 
-它是一个保存要返回的流的类。要创建一个新的StreamableFile，您可以将Buffer或Stream传递给StreamableFile构造函数。
+在nestjs中是通过 可流式传输的文件类 StreamableFile 来实现的。它是一个保存要返回的流的类。要创建一个新的StreamableFile，您可以将Buffer或Stream传递给StreamableFile构造函数。
 
 ```js
 import { Controller, Get, StreamableFile } from '@nestjs/common';
@@ -5469,14 +5650,20 @@ export class FileController {
   @Get()
   getFile(): StreamableFile {
     const file = createReadStream(join(process.cwd(), 'package.json'));
+    
     return new StreamableFile(file);
+    return new StreamableFile(stream, {
+      type: 'text/plain',// Content-Type 默认是 application/octet-stream 二进制流。可以修改
+      disposition: `attachment; filename="package.json"`// 
+    });
   }
+
 }
 
 
 ```
 
-### 6. 大文件切片上传
+### 5.8.7 大文件切片上传
 当文件很大的时候，需要对文件进行切片上传。比如1G的文件，可以分成10片，每片100M的小文件，然后这些文件并行上传。然后等 10 个小文件都传完之后，再发一个请求把这 10 个小文件合并成原来的大文件。这就是大文件分片上传的方案。
 
 所以关键在于如何拆分和合并文件文件。
@@ -5601,7 +5788,7 @@ export class FileController {
 
 ```
 
-### 7. OSS 文件上传
+### 5.8.8 OSS 文件上传
 文件上传是常见需求，一般我们不会把文件直接上传到应用服务器，因为单台服务器存储空间是有限的，不好扩展。而是会用单独的 OSS （Object Storage Service）对象存储服务来上传下载文件。
 本地的文件存储是目录-文件的组织方式、而云存储是一个桶里放一些文件。
 
@@ -5631,6 +5818,8 @@ async function put () {
 put();
 
 ```
+
+
 
 
 ## 5.9 网络请求
@@ -5801,7 +5990,7 @@ export class AppService {
 ## 5.10 静态资源服务器
 在express里是使用 express.static() 内置方法、而koa是使用koa-static中间件。Nest 默认在底层使用 Express 库。因此，适用于 Express 的每种技术也同样适用于 Nest。比如静态资源服务器、模板引擎等。
 只需要安装需要的依赖包、然后再入口文件配置即可
-```JavaScript
+```js
 // main.ts
 import { NestFactory } from '@nestjs/core';
 // 要引入express平台的
@@ -5830,7 +6019,7 @@ bootstrap();
 
 ## 5.11 认证(Authentication)
 
-### 1. 概述
+### 5.11.1 概述
 认证是大多数应用程序的重要组成部分，有许多不同的方法和策略来处理认证。它是一个完整的主题，从前端提交用户信息开始，到后端验证用户信息，生成令牌，到客户端存储令牌，再到后端验证令牌。
 整个认证流程大体是: 
 1. 前端用户登录提交用户名和密码 --> 
@@ -5908,7 +6097,7 @@ token 的方案常用 json 格式来保存，叫做 json web token，简称 JWT�
 **解决方法：** 可以设置过期时间，过期后前端需要重新登录获取新的 token。
 
 
-### 2. NestJS实现
+### 5.11.2 NestJS实现
 
 #### 1. session + cookie 方案
 这个方案是服务的存session，前端存cookie。在 Nest 里实现 session 还是用的 express 的中间件 express-session。
@@ -6214,7 +6403,7 @@ findAll() {
 
 
 
-### 3. 认证(登录注册)实战
+### 5.11.3 认证(登录注册)实战
 我们已经知道了如何实现用户登录状态的保持，现在我们来实现一下用户登录注册的全流程。也就是把操作数据、字段校验、认证等内容在一个nest项目里实现一下。
 ```js
 // 创建项目
@@ -6437,7 +6626,7 @@ export class AuthGuard implements CanActivate {
 
 ```
 
-### 4，实际应用
+### 5.11.4 实际应用
 
 #### 1. 基于 access_token 和 refresh_token 实现登录状态无感刷新
 jwt 是有有效期的，如果用户还在访问系统的某个页面，结果访问某个接口返回 token 失效了，让重新登录。那体验感就很差。为了解决这个问题，服务端一般会返回两个 token：access_token 和 refresh_token。access_token 就是用来认证用户身份的，之前我们返回的就是这个 token。而 refresh_token 是用来刷新 token 的，刷新后服务端会返回新的 access_token 和 refresh_token。
@@ -6739,7 +6928,7 @@ axios.interceptors.response.use(
 ```
 
 
-### 5. 基于策略(Strategy)的认证
+### 5.11.5 基于策略(Strategy)的认证
 
 #### 1. 概述
 身份认证逻辑是很通用的，而且也有多种方式，比如用户名密码、jwt、google 登录、github 登录等。所以一般会封装成一个库。可以用策略模式把它们封装成一个个策略类（Strategy），其实本质是实现了一个接口的多个类，这些类可以相互替换。我们并不需要知道每个策略类具体如何实现，我们知道怎么用即可。从高层次来看，做认证的步骤是类似的：
@@ -7315,6 +7504,36 @@ providers: [
 ],
 
 ```
+
+### 5.11.6 二维码登录认证
+扫码登录也是常见的功能，基本各种网站都支持。如果app没有登录，扫码后会先跳到登录页面登录之后，会进入确认界面，你可以选择授权登录或者取消。
+
+本质：二维码的内容是一个 url，流程是在 pc 选择扫码登录的方式
+1. 服务端有个 qrcode/generate 接口，会生成一个随机的二维码 id，存到 redis 里，并返回二维码。
+2. 还有个 qrcode/check 接口，会返回 redis 里的二维码状态，浏览器里可以轮询这个接口拿到二维码状态。
+3.  然后手机 APP 扫码之后，如果没登录，会先跳转到登录页面，登录之后会进入登录确认页面。这个时候就从二维码中拿到了 id，然后调用 qrcode/scan、qrcode/cancel、qrcode/confirm 就是修改二维码为不同的状态。这时候用户是登录了的，jwt 的登录认证方式会携带 token，服务端只要从 token 中取出用户信息，存入 redis 即可。
+4. 然后另一边的轮询接口发现是确认状态，会根据用户信息生成 jwt 返回。这样，手机 APP 里确认之后，pc 的浏览器就自动登录了该用户账号。这里的 jwt 是保存登录状态的一种方案，会把用户信息放在 token 里返回，然后每次访问接口带上 authorization 的 header，携带 token。
+
+安装生成二维码依赖:`$ npm install qrcode @types/qrcode`
+
+```js
+import { randomUUID } from 'crypto';
+import * as qrcode from 'qrcode';
+@Get('qrcode/generate')
+async generate() {
+    const uuid = randomUUID();
+    const dataUrl = await qrcode.toDataURL(uuid);
+    return {
+      qrcode_id: uuid,
+      img: dataUrl
+    }
+}
+
+
+
+```
+
+
 
 ## 5.12 授权(Authorization)
 
@@ -8286,6 +8505,261 @@ async login(@Body() loginUserDto: LoginUserDto) {
 
 
 ```
+
+## 5.17 短链服务
+一段很长的 url分享出去很不方便。这时候就可以通过短链服务把它缩短。点击短链会跳转到原链接。这种在短信里很常见。
+​​短链跳转机制​​
+  ​​302 临时重定向​​：每次访问短链均经服务端跳转，可记录访问数据（PV/UV/IP）
+  ​​301 永久重定向​​：浏览器缓存后直接跳转长链，减轻服务端压力但无法统计访问数据
+
+本质是在 mysql 里创建压缩码和长链接的对应关系的表，访问短链的时候，根据压缩码查询这个表，找到长链接，通过 302 重定向到这个链接，并且记录短链访问记录。
+
+```js
+// 核心步骤
+// 短链跳转（核心）
+  @Get(':code')
+  @Redirect()
+  async redirect(
+    @Param('code') code: string,
+    @Res() res: Response
+  ) {
+    const longUrl = await this.shortLongMapService.getLongUrl(code);
+    if (!longUrl) throw new NotFoundException('短链不存在');
+    return { url: longUrl, statusCode: 302 }; // 302重定向
+  }
+
+```
+
+## 5.18 爬虫(Puppeteer)
+
+### 5.18.1 使用
+和原生node使用一样的，安装`$ npm install --save puppeteer`
+
+```js
+// 原生用法
+import puppeteer from 'puppeteer';
+
+const browser = await puppeteer.launch({
+    headless: false,// 无头浏览器
+    defaultViewport: {
+        width: 0,
+        height: 0
+    }
+});
+
+const page = await browser.newPage();
+
+await page.goto('https://www.zhipin.com/web/geek/job');
+
+await page.waitForSelector('.job-list-box');
+
+await page.click('.city-label', {
+    delay: 500
+});
+
+await page.click('.city-list-hot li:first-child', {
+    delay: 500
+});
+
+await page.focus('.search-input-box input');
+
+await page.keyboard.type('前端', {
+    delay: 200
+});
+
+await page.click('.search-btn', {
+    delay: 1000
+});
+
+// 在nestjs中封装成一个服务
+
+
+```
+
+### 5.18.2 实战 
+
+
+
+## 5.19 excel导入导出
+Excel 是常用的办公软件，我们会用它来做数据的整理。后台管理系统一般都会支持从 Excel 导入数据，或者导出数据到 Excel 文件：在node里一般我们会用 exceljs 这个包来做。安装依赖：` npm install exceljs @types/exceljs`
+
+workbook（工作簿） > worksheet（工作表） > row（行） > cell（列）这样的层级关系。每一个都有对应的方法进行遍历查询。也可以直接调用 worksheet 的 getSheetValues 来拿到表格数据，不用自己遍历：
+
+```js
+const { Workbook } = require('exceljs');
+
+async function main(){
+    const workbook = new Workbook();
+
+    const workbook2 = await workbook.xlsx.readFile('./data.xlsx');
+
+    workbook2.eachSheet((sheet, index1) => {
+        console.log('工作表' + index1);
+        // 直接获取各个工作表内容
+        const values = sheet.getSheetValues();
+
+        // 遍历获取 
+        sheet.eachRow((row, index2) => {
+            const rowData = [];
+    
+            row.eachCell((cell, index3) => {
+                rowData.push(cell.value);
+            });
+
+            console.log('行' + index2, rowData);
+        })
+    })
+}
+
+main();
+
+// 在nestjs中实现
+import { Workbook } from 'exceljs';
+  @Get('excel')
+  async getExcel() {
+    // 获取excel文件内容
+    const workbook = new Workbook();
+    const workbook2 = await workbook.xlsx.readFile('./public/test2.xlsx');
+    const arrObj = {};
+    workbook2.eachSheet((sheet, index1) => {
+      console.log('工作表' + index1);
+      const values = sheet.getSheetValues();
+      arrObj[`sheet_${index1}`] = values;
+      console.log(values);
+
+      // sheet.eachRow((row, index2) => {
+      //   const rowData: Array<any> = []; // 显式声明类型
+
+      //   row.eachCell((cell, index3) => {
+      //     return rowData.push(cell.value);
+      //   });
+
+      //   console.log('行' + index2, rowData);
+      // });
+    });
+    return arrObj;
+  }
+
+  @Get('setExcel')
+  async setExcel(@Res({ passthrough: true }) res: Response) {
+    // 获取excel文件内容
+    const workbook = new Workbook();
+    const worksheet = workbook.addWorksheet('人员信息表');
+
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 20 },
+      { header: '姓名', key: 'name', width: 30 },
+      { header: '出生日期', key: 'birthday', width: 30 },
+      { header: '手机号', key: 'phone', width: 50 },
+    ];
+
+    const data = [
+      {
+        id: 1,
+        name: '光光',
+        birthday: new Date('1994-07-07'),
+        phone: '13255555555',
+      },
+      {
+        id: 2,
+        name: '东东',
+        birthday: new Date('1994-04-14'),
+        phone: '13222222222',
+      },
+      {
+        id: 3,
+        name: '小刚',
+        birthday: new Date('1995-08-08'),
+        phone: '13211111111',
+      },
+    ];
+    worksheet.addRows(data);
+    // 直接写入文件
+    // workbook.xlsx.writeFile('./data2.xlsx');
+    // 生成buffer
+    const buffer = await workbook.xlsx.writeBuffer();
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    );
+    res.setHeader('Content-Disposition', 'attachment; filename="data.xlsx"');
+    res.send(buffer);
+  }
+
+```
+
+## 5.20 国际化
+如果你的网站要支持多种语言访问，那就要做国际化。Nest 里做国际化用 nestjs-i18n 这个包。安装依赖`npm install --save nestjs-i18n`
+
+```js
+import { Module } from '@nestjs/common';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AcceptLanguageResolver, CookieResolver, HeaderResolver, I18nModule, QueryResolver } from 'nestjs-i18n';
+import * as path from 'path';
+
+@Module({
+  imports: [
+    I18nModule.forRoot({
+      fallbackLanguage: 'en',
+      loaderOptions: {
+        path: path.join(__dirname, '/i18n/'),
+        watch: true,
+      },
+      resolvers: [
+        new QueryResolver(["lang", "l"]),
+        new HeaderResolver(["x-custom-lang"]),
+        new CookieResolver(['lang']),
+        AcceptLanguageResolver,
+      ]
+    }),
+  ],
+  controllers: [AppController],
+  providers: [AppService],
+})
+export class AppModule {}
+
+
+// 在 nest-cli.json 里配置下自动复制,不然打包时dist中找不到i18n目录
+"assets": [
+  { "include": "i18n/**/*", "watchAssets": true }
+]
+
+import { Inject, Injectable } from '@nestjs/common';
+import { I18nContext, I18nService } from 'nestjs-i18n';
+
+@Injectable()
+export class AppService {
+
+  // 注入 I18nService
+  @Inject()
+  i18n: I18nService;
+
+  getHello(): string {
+    // 资源包中取 test.hello 的值，也就是对应 test.json 里的 hello 的值，用当前的语言。
+    return this.i18n.t('test.hello', { lang: I18nContext.current().lang })
+  }
+}
+
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  app.useGlobalPipes(new I18nValidationPipe());
+
+  app.useGlobalFilters(new I18nValidationExceptionFilter({
+    detailedErrors: false
+  }));
+
+  await app.listen(3000);
+}
+bootstrap();
+// 然后把 message 改为资源的 key 就可以通过管道拦截。
+```
+
 
 # 六、WebSockets
 
