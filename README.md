@@ -17,10 +17,15 @@ Nest 基础：Nest 各种功能的使用，包括 IOC、AOP、全局模块、动
 
 2025-7-7 集成eslint+commitlint、整理笔记。
 
-**目录说明**
-1. public、公共静态资源文件
-2. nest-single、nest做server服务
-3. nest-microservice、nest做微服务
+**本项目目录说明**
+nest-study
+├──.husky husky相关git钩子
+├──.vscode vscode 配置文件
+├──nest-microservice nest微服务相关内容
+├──nest-single nest单体应用相关内容
+├──public 公共静态资源文件
+├───── ，，，
+├───── ，，，，
 
 # 二、NestJS 概述
 
@@ -462,8 +467,8 @@ nest start 有个 --debug 的选项`nest start --debug`，原理就是 node --in
   // 悬停以查看现有属性的描述。
   // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
   // stopOnEntry 是在首行断住，和 --inspect-brk 一样的效果。
-  // attach是附加到已经启动了的nodeJs进程
-  // launch是启动一个新的nodejs进程来运行代码。
+  // attach(附加模式)是附加到已经启动了的nodeJs进程，将调试器连接到一个已经运行的外部进程。要启动服务，同时要启动一个ws服务nestjs提供的调试命令nest start --debug已经做好了。
+  // launch(启动模式)是启动一个新的nodejs进程来运行代码。VSCode 会作为应用程序的启动器，它会在内部创建一个进程来运行你的代码，并且这个进程会受到调试器的监控。
   "version": "0.2.0",
   "configurations": [
     {
@@ -478,7 +483,7 @@ nest start 有个 --debug 的选项`nest start --debug`，原理就是 node --in
     },
     {
       "name": "Attach",
-      "port": 9229,
+      "port": 9229,// 需要监听ws服务的端口号
       "request": "attach",
       "skipFiles": [
         "<node_internals>/**"
@@ -1391,7 +1396,7 @@ export class AppModule {
 ### 3 导航守卫 Guard
 
 #### 1. 概述
-Guard 是路由守卫的意思,它也是 NestJS 中实现 AOP 编程的五种方式之一，导航守卫就一个职责(单一职责)：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。即在调用某个 Controller 之前判断权限，返回 true 或 false 决定放不放行(也就是进不进入这个路由)。
+Guard 是路由守卫的意思,它也是 NestJS 中实现 AOP 编程的五种方式之一，导航守卫就一个职责(单一职责)：它们根据运行时出现的某些条件（例如权限，角色，ACL(访问控制列表)等）来确定给定的请求是否由路由处理程序处理。即在调用某个 Controller 之前判断权限，返回 true 或 false 决定放不放行(也就是进不进入这个路由)。即处理授权问题。
 
 而这通常被称为授权，也就是看它有无授权进而查看它是否能访问某些路由。本质上 Nest 守卫也是一个带有 @Injectable()装饰器装饰的类，同时守卫要实现 CanActivate 接口、实现 canActivate 方法，这个方法接收一个参数context，它是ExecutionContext 实例，通过它我们可以获取对 Request 请求对象的引用、一般情况下我们是通过获取当前路由的元数据以及判断 token 是否过期来决定是否放行。这个方法函数返回值是布尔值，应该返回一个布尔值true/false，指示当前请求是否被允许。如果返回 true，请求将被处理，如果返回 false, Nest 将拒绝请求。
 
@@ -1653,6 +1658,7 @@ export class TransformInterceptor implements NestInterceptor {
     );
   }
 }
+
 // 全局注册拦截器
 app.useGlobalInterceptors(new TransformInterceptor());
 // 或者在根模块中注册
@@ -1954,6 +1960,7 @@ import { plainToInstance } from 'class-transformer';
 @Injectable()
 export class ValidationPipePipe implements PipeTransform<any> {
   async transform(value: any, { metatype }: ArgumentMetadata) {
+    // 如果没有传入验证规则，则不验证，直接返回数据
     if (!metatype || !this.toValidate(metatype)) {
       return value;
     }
@@ -1963,6 +1970,7 @@ export class ValidationPipePipe implements PipeTransform<any> {
     // errors 是一个数组，里面存放着验证失败的错误信息。      
     const errors = await validate(object);
     if (errors.length > 0) {
+      // const msg = Object.values(errors[0].constraints)[0]; // 只需要取第一个错误信息并返回即可
       throw new BadRequestException(`Validation failed:${errors}`);
     }
     return value;
@@ -2197,10 +2205,93 @@ export class TestFilter<T> implements ExceptionFilter {
 }
 
 ```
-
+在实际应用上、通常使用过滤器优雅地统一处理响应体
+**比如**
 ```js
+{
+  data: any; // 业务数据
+  code: number; // 状态码
+  msg: string; // 响应信息
+  timestamp: number; // 时间戳
+}
+```
+
+
+```ts
+// 定义响应状态码枚举和类型 /enums/index.ts
  /**
- * 创建一个统一的异常处理器-在错误发生时做一个统一的过滤处理后再返回给前端
+ * @description: 响应码
+ */
+ export enum RESPONSE_CODE {
+   NOSUCCESS = -1, // 表示请求成功，但操作未成功
+   SUCCESS = 200, // 请求成功
+   BAD_REQUEST = 400, // 请求错误
+   UNAUTHORIZED = 401, // 未授权
+   FORBIDDEN = 403, // 禁止访问
+   NOT_FOUND = 404, // 资源未找到
+   INTERNAL_SERVER_ERROR = 500, // 服务器错误
+ }
+
+ /**
+ * @description: 请求提示语
+ */
+ export enum RESPONSE_MSG {
+   SUCCESS = '请求成功',
+   FAILURE = '请求失败',
+ }
+
+// /typings/index.d.ts
+declare namespace Api {
+ namespace Common {
+   /**
+    * @description: 全局响应体
+    */
+   type ResponseType<T = any> = {
+     code: number; // 状态码
+     data?: T; // 业务数据
+     msg: string; // 响应信息
+     timestamp: number; // 时间戳
+   };
+   /**
+    * @description: 分页数据
+    */
+   type PageResponseType<T = any> = {
+     current?: number; // 页码
+     size?: number; // 当前页条数
+     total?: number; // 总条数
+     records: T[]; // 业务数据
+   };
+ }
+}
+// 定义响应体 DTO 定义一个统一的响应数据传输对象（DTO），这将作为所有 API 响应的基本结构
+import { ApiProperty } from '@nestjs/swagger';
+
+import { RESPONSE_CODE, RESPONSE_MSG } from '@/enums';
+
+export class ResponseDto {
+  @ApiProperty({
+    type: Number,
+    description: '业务状态码',
+    default: RESPONSE_CODE.SUCCESS,
+  })
+  code: number;
+
+  @ApiProperty({
+    type: String,
+    description: '业务信息',
+    default: RESPONSE_MSG.SUCCESS,
+  })
+  msg: string;
+
+  @ApiProperty({ description: '业务数据' })
+  data?: any;
+
+  @ApiProperty({ type: Number, description: '时间戳', default: 1720685424078 })
+  timestamp: number;
+}
+
+ /**
+ * 创建一个统一的异常处理器-负责捕获作为 HttpException 类实例的异常，并为它们设置自定义响应逻辑。在错误发生时做一个统一的过滤处理后再返回给前端
  */
 import {
   ArgumentsHost,
@@ -2209,6 +2300,7 @@ import {
   HttpException,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import type { ResponseType } from '@/types';
 
 @Catch(HttpException)
 export class HttpExceptionFilter implements ExceptionFilter {
@@ -2217,24 +2309,72 @@ export class HttpExceptionFilter implements ExceptionFilter {
     // host 一个 ArgumentsHost 对象、它是一个强大的实用工具对象
     const ctx = host.switchToHttp(); // 获取请求上下文
     const response = ctx.getResponse<Response>(); // 获取请求上下文中的 response对象
-    const status = exception.getStatus(); // 获取异常状态码
+    const statusCode  = exception.getStatus(); // 获取异常状态码
     // 设置错误信息,没有时根据状态码值返回
     const message = exception.message
       ? exception.message
-      : `${status >= 500 ? 'Service Error' : 'Client Error'}`;
-    const errorResponse = {
-      data: {},
+      : `${statusCode >= 500 ? 'Service Error' : 'Client Error'}`;
+    const responseMsg : ResponseType = {
+      data: null,
       timestamp: new Date().toISOString(),
       message: message,
-      code: status,
+      code: statusCode ,
     };
 
     // 设置返回的状态码， 请求头，发送错误信息
-    response.status(status);
+    response.status(statusCode);
     response.header('Content-Type', 'application/json; charset=utf-8');
-    response.send(errorResponse);
+    response.send(responseMsg);
+    // 也可以如下设置
+    response.status(statusCode).json(responseMsg);
   }
 }
+
+/**
+ * 创建一个全局异常过滤器来处理所有的异常，并将其转换为统一的响应格式。
+ */
+// all-exception.filter.ts
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
+import { Response } from 'express';
+import type { ResponseType } from '@/types';
+// @Catch() 装饰器绑定所需的元数据到异常过滤器上。它告诉 Nest这个特定的过滤器正在寻找
+@Catch()
+export class AllExceptionsFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    // 获取上下文
+    const ctx = host.switchToHttp();
+    // 获取响应体
+    const response = ctx.getResponse<Response>();
+    // 获取状态码，判断是HTTP异常还是服务器异常
+    const statusCode =
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    // 自定义异常返回体
+    const responseMsg : ResponseType = {
+      data: null,
+      timestamp: new Date().toISOString(),
+      message: '服务器内部错误!',
+      code: statusCode ,
+    };
+
+    // 设置返回的状态码， 请求头，发送错误信息
+    response.status(statusCode);
+    response.header('Content-Type', 'application/json; charset=utf-8');
+    response.send(responseMsg);
+    // 也可以如下设置
+    response.status(statusCode).json(responseMsg);
+  }
+}
+
+
 
 // 绑定过滤器
 // 方法作用域：使用UseFilters装饰器装饰即可
@@ -2248,8 +2388,21 @@ async create(@Body() createCatDto: CreateCatDto) {
 @UseFilters(new HttpExceptionFilter())
 export class CatsController {}
 
-// 全局作用域过滤器：在入口文件中使用useGlobalFilters装饰器设置全局
-app.useGlobalFilters(new HttpExceptionFilter());
+// 全局作用域过滤器：在入口文件 main.ts 中注册全局的异常过滤器。使用useGlobalFilters装饰器设置全局
+import { AllExceptionsFilter } from '@/filter/all-exception.filter'; // 全局异常过滤器
+import { HttpExceptionFilter } from '@/filter/http-exception.filter'; // http 异常过滤器
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+
+  // 错误异常捕获 和 过滤处理
+  app.useGlobalFilters(new AllExceptionsFilter());
+  app.useGlobalFilters(new HttpExceptionFilter());
+
+  await app.listen(3000);
+}
+bootstrap();
+
 // 同样全局还有一种可以注入依赖的方式
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
@@ -2257,6 +2410,10 @@ import { APP_FILTER } from '@nestjs/core';
 @Module({
   providers: [
     {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
+        {
       provide: APP_FILTER,
       useClass: HttpExceptionFilter,
     },
@@ -2266,7 +2423,7 @@ export class AppModule {}
 
 ```
 
-### 6 总结
+### 7 总结
 NestJS面向AOP编程的五种方式可以把通用逻辑抽离出来，通过切面的方式添加到某个地方，可以复用和动态增删切面逻辑。各有各的用处而且用处基本是固定的。
 
 ## 3.5 自定义装饰器
@@ -2274,7 +2431,109 @@ NestJS面向AOP编程的五种方式可以把通用逻辑抽离出来，通过�
 ### 1. 概述
 NestJS 是基于一种称为**装饰器(Decorator)**的语言特性构建的。但是在JavaScript中是一个比较新的内容都没有定案成为一个标准。
 
-装饰器（Decorator）是用来增强 JavaScript 类（class）的功能、本质是一个函数写成 **@ + 函数名**，可以用来装饰类、方法、属性。
+装饰器（Decorator）是用来增强 JavaScript 类（class）的功能、本质是一个函数，使用时写成 **@ + 函数名**，可以用来装饰类、方法、属性、参数。
+
+```ts
+
+/**
+ * 类装饰器
+ * target类本身
+ */
+const doc: ClassDecorator = (target: any) => {
+    target.prototype.name = 'jmin'
+    console.log(target);
+}
+​
+@doc
+class App {
+    constructor() {   
+    }
+}
+​
+const app: Record<string, any> = new App()
+console.log('app name: ' + app.name);
+​
+// 传参
+​const doc2 = (param: string) : ClassDecorator => {
+    console.log("param：", param);
+    return (target: any) => {
+        target.prototype.name = 'jmin'
+        console.log(target);
+    }
+}
+​
+@doc2('person')
+class App2 {
+    constructor() {   
+    }
+}
+​
+const app2: Record<string, any> = new App2()
+console.log('app2 name: ' + app2.name);
+
+/**
+ * 属性装饰器
+ * target类本身
+ * propertyKey属性名
+ */
+const prop: PropertyDecorator = (target: Object, propertyKey: string | Symbol) => {
+    console.log('------属性装饰器-------');
+    
+    console.log(target);
+    console.log(propertyKey);
+    
+    console.log('------属性装饰器-------');
+
+}
+​
+class User {
+    @prop
+    name: string = 'jmin'
+}
+​
+​
+/**
+ * 方法装饰器
+ */
+const method: MethodDecorator = (target: Object, propertyKey: string | Symbol, descriptor: PropertyDescriptor) => {
+    console.log("---------------方法装饰器-----------------");
+    console.log(target);
+    console.log(propertyKey);
+    console.log(descriptor);
+    console.log("---------------方法装饰器-----------------");
+}
+​
+class User2 {
+    @method
+    getName() {
+        return 'jmin';
+    }
+}
+​
+/**
+ * 参数装饰器
+ */
+​
+const param: ParameterDecorator = (target: Object, propertyKey: string | Symbol | undefined, index: number) => {
+    console.log('-------------参数装饰器------------------');
+    console.log(target);
+    console.log(propertyKey);
+    console.log(index);
+    console.log('-------------参数装饰器------------------');   
+}
+​
+class User3 {
+    
+    getName(@param name: string) {
+        return name;
+    }
+}
+​
+const user3 = new User3();
+console.log(user3.getName('jmin'));
+​
+
+```
 
 
 ### 2. 使用
@@ -2368,6 +2627,24 @@ export const MyQuery = createParamDecorator(
 
 
 ```
+
+### 3.常见自定义装饰器
+获取请求IP地址
+请求域名合法性判断
+获取平台标识
+获取用户信息
+QPS限制
+接口下线管理
+接口白名单化
+获取用户所在国家代码
+自定义swagger响应数据结构
+
+
+```js
+
+
+```
+
 
 
 # 四、NestJS 进阶知识
@@ -3270,6 +3547,8 @@ export class AppController {
 
 
 
+
+
 # 五、其它技术知识
 
 ## 5.1 配置
@@ -3528,23 +3807,220 @@ export class AppController {
 ```
 
 ## 5.2 数据库相关
+
+### 5.2.1 数据库设计范式
 Nest 是数据库无关的，允许您轻松集成任何 SQL 或 NoSQL 数据库。依然是MySQL、mongodb、redis三个数据库为主。不同在于为了与 SQL 和 NoSQL 数据库集成，Nest 提供了 @nestjs/typeorm 包。它使用的是 ORM 技术（Object-Relational Mapping）,即把关系数据库的表结构映射到对象上来操作数据库、它和我们使用的 mongoose 包类似的。
 
-### 5.2.1 MySQL集成
+数据库范式：在做数据表结构设计的时候，需要遵循一定的规范，这些规范就是我们常说的范式，它帮助我们在设计出更为合理且可扩展的表结构。
+
+在数据库设计范式中，众所周知的是三大范式(1NF、2NF、3NF)，这也是实际业务中至少需要遵循的标准，除此之外还有BC范式、第四范式4NF、第五范式5NF。
+
+三大范式是业务开发中遵循的最低标准，每个范式之间是递进关系，也就是后面一个范式要基于前一个范式成立的基础上才有意义。
+
+第一范式：要求保证数据表中每一列具有原子性，也就是存储数据列是具有不可再分性。
+| 员工ID | 员工       | 技能   | 部门   |
+| ------ | ---------- | ------ | ------ |
+| 1      | 张三,男,30 | Vue    | 技术部 |
+| 1      | 张三,男,30 | React  | 技术部 |
+| 1      | 张三,男,30 | Node   | 技术部 |
+| 2      | 李四,女,22 | Word   | 财务部 |
+| 2      | 李四,女,22 | Excel  | 财务部 |
+| 3      | 王五,男,35 | Docker | 架构部 |
+| 3      | 王五,男,35 | K8s    | 架构部 |
+员工字段列包含了姓名、性别、年龄三种类型的信息，显然不符合第一范式：原子性。为了符合第一个范式，将员工字段拆分三个字段进行储存，应该将表结构改为：
+| 员工ID | 姓名 | 性别 | 年龄 | 技能   | 部门   |
+| ------ | ---- | ---- | ---- | ------ | ------ |
+| 1      | 张三 | 男   | 30   | Vue    | 技术部 |
+| 1      | 张三 | 男   | 30   | React  | 技术部 |
+| 1      | 张三 | 男   | 30   | Node   | 技术部 |
+| 2      | 李四 | 女   | 22   | Word   | 财务部 |
+| 2      | 李四 | 女   | 22   | Excel  | 财务部 |
+| 3      | 王五 | 男   | 35   | Docker | 架构部 |
+| 3      | 王五 | 男   | 35   | K8s    | 架构部 |
+
+第二范式：在第一范式基础上，第二范式要求数据表中每一列的数据，都必须依赖于主键。意味着每一列的数据都与主键存在关系，保证了一张表只能存储同一类型的数据，一张表只做一件事情。即：每一列都与主键列存在依赖关系。
+技能字段与员工信息似乎属于不同属性的数据，上面表的设计显然不能把员工ID作为主键，应该确保一张表中只储存一种类型的数据。应该拆分下面几张表：
+
+员工信息表：
+| 员工ID | 姓名 | 性别 | 年龄 | 部门   |
+| ------ | ---- | ---- | ---- | ------ |
+| 1      | 张三 | 男   | 30   | 技术部 |
+| 2      | 李四 | 女   | 22   | 财务部 |
+| 3      | 王五 | 男   | 35   | 架构部 |
+
+技能表：
+| 技能ID | 技能   |
+| ------ | ------ |
+| 1      | Vue    |
+| 2      | React  |
+| 3      | Node   |
+| 4      | Word   |
+| 5      | Excel  |
+| 6      | Docker |
+| 7      | K8s    |
+
+员工与技能关联表：多对多关系，一个员工可以会多种技能，一个技能可以给多名员工
+| 员工ID | 技能ID |
+| ------ | ------ |
+| 1      | 1      |
+| 1      | 2      |
+| 1      | 3      |
+| 2      | 4      |
+| 2      | 5      |
+| 3      | 6      |
+| 3      | 7      |
+
+第三范式：要求数据表中的非主键列的字段，不能与其他非主键列存在依赖关系，说白了内部不能搞小组织。即：非主键列之间不能存在依赖关系。
+在上面满足第二范式的员工表中新增一列部门老大字段：
+| 员工ID | 姓名 | 性别 | 年龄 | 部门   | 部门老大 |
+| ------ | ---- | ---- | ---- | ------ | -------- |
+| 1      | 张三 | 男   | 30   | 技术部 | 张总     |
+| 2      | 李四 | 女   | 22   | 财务部 | 李总     |
+| 3      | 王五 | 男   | 35   | 架构部 | 王总     |
+
+新增字段之后，此时表结构依旧满足第一范式和第二范式，但看部门与部门老大两个非主键字段就产生了依赖关系呀，一个员工归属于谁管，应该是由这个员工在哪个部门决定，有了部门才有部门老大这个岗位，员工只需存储该部门ID即可，因此需要进一步调整表结构。
+
+员工表：
+| 员工ID | 姓名 | 性别 | 年龄 |
+| ------ | ---- | ---- | ---- |
+| 1      | 张三 | 男   | 30   |
+| 2      | 李四 | 女   | 22   |
+| 3      | 王五 | 男   | 35   |
+
+部门表：
+| 部门ID | 部门名称 | 部门老大 |
+| ------ | -------- | -------- |
+| 1      | 技术部   | 张总     |
+| 2      | 财务部   | 李总     |
+| 3      | 架构部   | 王总     |
+
+员工部门关联表：
+| 员工ID | 部门ID |
+| ------ | ------ |
+| 1      | 1      |
+| 2      | 2      |
+| 3      | 3      |
+
+BC范式：每个数据项都应该直接依赖于整个主键，而不是主键的一部分。它是对第三范式的补充、因为第三范式没有覆盖某些场景，比如联合主键的场景。来看另一个例子：
+
+有一个学校的成绩记录表，这个表记录了每个学生上不同课程的成绩，以及这些课程是由哪位老师教的。表中每一行都代表一个学生在某个课程上的一个成绩记录。
+| 学生ID | 课程ID | 教师ID | 成绩 |
+| ------ | ------ | ------ | ---- |
+| 1      | 101    | 201    | 85   |
+| 1      | 102    | 202    | 90   |
+| 2      | 101    | 201    | 75   |
+| 2      | 102    | 202    | 80   |
+在这个表中：
+ 每个字段都是原子性的，满足1NF。
+ 学生ID和课程ID的组合可以作为主键，非主键字段（教师ID和成绩）完全依赖于主键，满足2NF。
+ 教师ID和成绩不依赖于其他非主键字段，满足3NF。
+
+第四范式是为了解决多值依赖问题而提出的、多值依赖的问题至少在三个字段以上的表结构中才会出现。
+来看一个经典的例子：用户、角色、权限问题。
+
+| user_id | user_name | user_sex | role  | permission |
+| ------- | --------- | -------- | ----- | ---------- |
+| 1       | Alice     | 女       | ADMIN | MANAGE     |
+| 2       | Bob       | 男       | USER  | VIEW       |
+| 3       | Charlie   | 男       | ADMIN | EDIT       |
+| 4       | David     | 男       | USER  | VIEW       |
+| 5       | Eve       | 女       | USER  | VIEW       |
+| 6       | Frank     | 男       | ADMIN | MANAGE     |
+上述表中，先来看是否满足前面的范式：
+每个字段都是独立不可再分的字段，符合原子性，满足第一范式1NF。
+每个独立字段都依赖于主键user_id，只存储用户权限这一属性数据，只做一件事，满足第二范式2N。
+非主键字段之间不存在相互依赖关系，具有独立性，符合第三范式3NF
+以user_id、role、permission作为联合主键，三个字段之间也不存在依赖性，满足BC范式。
+
+用户permission字段没法只根据role字段来决定，也无法只根据user_id来决定，而是要role与user_id两个字段共同决定，这就是所谓的多值依赖问题。消除这种问题的解决方案就是通过拆分表结构，将多值依赖问题拆分为多个表。
+
+用户表（`Users`）
+| user_id | user_name | user_sex |
+| ------- | --------- | -------- |
+| 1       | Alice     | 女       |
+| 2       | Bob       | 男       |
+| 3       | Charlie   | 男       |
+| 4       | David     | 男       |
+| 5       | Eve       | 女       |
+| 6       | Frank     | 男       |
+
+角色表（`Roles`）
+| role_id | role_name |
+| ------- | --------- |
+| 1       | ADMIN     |
+| 2       | USER      |
+
+权限表（`Permissions`）
+| permission_id | permission_name |
+| ------------- | --------------- |
+| 1             | MANAGE          |
+| 2             | VIEW            |
+| 3             | EDIT            |
+
+用户角色表（`UserRoles`）
+| user_id | role_id |
+| ------- | ------- |
+| 1       | 1       |
+| 2       | 2       |
+| 3       | 1       |
+| 4       | 2       |
+| 5       | 2       |
+| 6       | 1       |
+
+角色权限表（`RolePermissions`）
+| role_id | permission_id |
+| ------- | ------------- |
+| 1       | 1             |
+| 1       | 3             |
+| 2       | 2             |
+
+再来看另外一个例子，下表是存储学生ID、课程ID、讲师名字、成绩相关信息
+| StudentID | CourseID | Professor | Grade |
+| --------- | -------- | --------- | ----- |
+| 1         | 101      | Smith     | A     |
+| 1         | 102      | Jones     | B     |
+| 2         | 101      | Smith     | A     |
+| 2         | 103      | Brown     | B     |
+以StudentID + CourseID作为联合主键，是满足上面的几大范式的。
+但是会有个问题，StudentID + CourseID无法确定是哪个具体的讲师，只能确定成绩字段，而课程ID与讲师存在依赖关系，一个讲师可能教多个课程，形成一对多关系，这就是多值依赖问题。
+拆分：
+
+学生课程成绩表：
+
+| StudentID | CourseID | Grade |
+| --------- | -------- | ----- |
+| 1         | 101      | A     |
+| 1         | 102      | B     |
+| 2         | 101      | A     |
+| 2         | 103      | B     |
+
+课程讲师表：
+
+| CourseID | Professor |
+| -------- | --------- |
+| 101      | Smith     |
+| 102      | Jones     |
+| 103      | Brown     |
+
+第五范式，也被称为完美范式。它是为了消除连接依赖问题的，而连接依赖 是指数据可以通过多个表的连接来恢复的一种依赖关系。解决这类问题依旧是对表结构进行拆分，拆成粒度更细的表，解决数据冗余等问题。
+
+
+### 5.2.2 MySQL集成
 在 nodejs 里可以用 mysql2 和 typeorm 两种方式来操作 MysSQL 数据库。前者还是要写SQL语句、不推荐使用，后者是ORM技术( Object Relational Mapping)，对象关系映射。也就是说把关系型数据库的表映射成面向对象的一个类 class，表的字段映射成对象的属性映射，表与表的关联映射成属性的关联、最终会自动生成SQL语句。所以这里我们选择 typeORM 这个库来操作关系型数据库mysql、好处就是对表的增删改查就变成了对对象的操作。
 
 实现原理根据在 class 的属性上加的装饰器来生成建表 sql。所以学习这个也是学习这个包提供的装饰器而已。
+#### 1. typeorm
 
-#### 1. typeorm 学习
+##### 1. typeorm 学习
 对应 typeorm 的更多操作在单独的一个[仓库](https://github.com/zangqingan/typeorm-study)里学习,不过要注意的是表关系在实际开发中是逻辑声明的,也就是开发者约定关联关系而不是真的声明. 查的时候照样连表查询即可。
 
-#### 2. NestJS 集成 typeorm
+##### 2. NestJS 集成 typeorm
 TypeORM 的流程是：DataSource 里存放着数据库连接的配置用于创建数据库连接、实体类存放着数据库表的定义，DataSource 初始化之后就可以拿到 EntityManager 或者 Repository 通过这两个对象实现数据库的增删改查操作。
 
 安装依赖：`$ npm install --save @nestjs/typeorm typeorm mysql2`
 @nestjs/typeorm 就是把 typeorm api 封装了一层的包，安装必须的包之后就可以在 Nest 中进行配置进而通过代码实现对数据库的增删改查了。
 
-##### 集成步骤
+**集成步骤**
 将 typeorm 集成进 NestJS 中是比较简单的,步骤如下:
 
 1. 依赖完成安装后将 TypeOrmModule 导入到根 AppModule 中、在 nest 项目中注册使用动态模块的方式注册 typeORM。注册完成后 TypeORM 的 DataSource 和 EntityManager 对象将可在整个项目中进行注入（无需导入任何模块）。
@@ -3576,6 +4052,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
   controllers: [AppController],
   providers: [AppService],
 })
+
+// 也可以把配置抽离到一个配置文件 ormconfig.ts，或者动态获取配置文件的 
 
 ```
 
@@ -3748,7 +4226,7 @@ export class PostsService {
 
 ```
 
-##### 总结
+**总结**
 在 Nest 里集成只是对 TyprOrm 的 api 封装了一层。使用方式是在根模块 TypeOrmModule.forRoot 传入数据源配置。然后就可以在各处注入 DataSource、EntityManager 来做增删改查了。
 
 如果想用 Repository 来简化操作，还可以在用到的模块引入 TypeOrmModule.forFeature 的动态模块，传入 Entity，会返回对应的 Repository。这样就可以在模块内注入该 Repository 来用了。
@@ -3759,11 +4237,11 @@ export class PostsService {
 这就是 Nest 里集成 TypeOrm 的方式和实现原理。
 
 
-#### 3. 字段校验
+##### 3. 字段校验
 不管是前端传递的表单数据、还是声明实体时的实体字段一般都是需要校验的。比如必填、非空、数字等类型。而实体是类形式的、那么在 nest 中也可以使用之前学习过的 class-validator class-transformer 两个包来实现即可。非常的方便简单.
 
 
-#### 4. TypeORM 迁移
+##### 4. TypeORM 迁移
 在开启了 synchronize 时，只要创建或者修改了 Entity，那就会自动创建表和修改表结构。在生产环境下，用 synchronize 是很危险，很容易丢数据。所以在生产环境，不会用 synchronize 自动同步建表，而是用的 migration 的方式来建表。
 开发环境我们会用 synchronize 来同步 Entity 和数据库表，它会自动执行 create table、alter table，不用手动修改表结构，很方便。
 
@@ -3778,7 +4256,262 @@ migration 就是把 create table、alter table 等封装成一个个的 migratio
   migration:revert：撤销上次 migration，删掉数据库 migrations 里的上次执行记录
 
 
-### 5.2.2 MongoDB集成
+#### 2. Prisma
+
+##### 1. Prisma 介绍
+
+Prisma 是一个现代化的开源的下一代 ORM。Prisma 创造了一种 DSL（Domain Specific Language，领域特定语言）把表映射成了 DSL 里的 model，然后编译这个 DSL 会生成 prismaClient 的代码，之后就可以调用它的 find、delete、create 等 api 来做 CRUD 了。它简化了数据库操作，并提供了强类型支持和自动生成的数据库模型。Prisma 目前支持 PostgreSQL、MySQL、SQL Server、SQLite、MongoDB 和 CockroachDB。
+
+创建并初始化项目: `mkdir prisma-test`、`cd prisma-test `、`npm init -y`
+安装 typescript 相关的包：`npm install typescript ts-node @types/node --save-dev` typescript 是 tsc 编译器的包，ts-node 可以直接跑 ts 代码，而 @types/node 是 node api 的类型声明。
+创建 tsconfig.json:`npx tsc --init`
+安装 prisma依赖包：`npm install prisma --save-dev`
+安装 prisma 客户端(为了在 Nest 应用中与数据库进行交互，还要使用 Prisma Client) `npm install @prisma/client --save-dev`
+使用pnpm `pnpm add prisma @prisma/client -D`
+
+初始化prisma 设置、生成schema:`npx prisma init`、也可以指定数据源`npx prisma init --datasource-provider mysql`
+
+它包含了以下部分：
+Prisma Client: 自动生成、类型安全的查询构建器，用于 Node.js 和 TypeScript
+Prisma Migrate: 数据迁移系统
+Prisma Studio: 查询和编辑数据库中数据的图形化界面
+
+```js
+$ npx prisma init --datasource-provider mysql
+
+Initialized Prisma in your project
+
+  prisma/
+    schema.prisma
+  prisma.config.ts
+  .env
+  .gitignore
+
+Next, set up your database:
+  1. Configure your DATABASE_URL in prisma.config.ts
+  2. Run prisma db pull to introspect your database.
+
+Then, define your models in prisma/schema.prisma and run prisma migrate dev to apply your schema.
+
+Learn more: https://pris.ly/getting-started
+
+
+当前项目下就会多出如下内容：
+prisma-test
+├── prisma
+│   ├── schema.prisma // 指定数据库连接并包含数据库 schema，以及定义model的地方
+├── prisma.config.ts // prisma 配置文件
+└── .env // 配置数据库连接信息
+└── .gitignore // git 忽略文件
+
+连接数据库：在 .env 文件中，将 DATABASE_URL 修改为你的MySQL连接字符串。
+"DATABASE_URL=mysql://root:123456@localhost:3306/prisma-study"
+
+定义数据模型：在 prisma/schema.prisma 文件中定义你的数据表结构。
+比如：
+model User {
+  id    Int     @id @default(autoincrement())
+  email String  @unique
+  name  String?
+  posts Post[]
+}
+
+model Post {
+  id        Int     @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean @default(false)
+  author    User    @relation(fields: [authorId], references: [id])
+  authorId  Int
+}
+
+定义好模型后运行以下命令，Prisma会根据你的模型在数据库中创建对应的表，并生成供NestJS调用的Prisma Client代码
+`npx prisma generate`
+
+也可以使用迁移数据库：`npx prisma migrate dev --name init`、它会生成并执行建表 sql 文件。
+migrate: 这是 Prisma CLI 的一个子命令，用于管理数据库迁移。数据库迁移是数据库架构变更的过程，它允许你将数据库模型的更改应用到实际的数据库中。
+dev: 这是迁移命令的一个选项，它告诉 Prisma 创建一个开发迁移。开发迁移通常用于本地开发环境，它们不会应用到生产数据库上，而是用于测试和开发目的。
+--name init: 这是命令的一个参数，用于给迁移命名。在这个例子中，迁移被命名为init，这通常表示这是一个初始化迁移，可能是为了设置数据库的初始状态。
+
+即：这个命令会根据当前的模型生成 SQL 迁移文件，并自动应用到数据库中。现在数据库就和我们的 schema 文件同步完成了，还自动生成了 Prisma Client。也就是使用 `npx prisma generate `生成 Prisma Client这一步。
+
+$ npx prisma migrate dev --name init
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma\schema.prisma
+Datasource "db": MySQL database "prisma-study" at "localhost:3306"
+
+Applying migration `20251210072318_init`
+
+The following migration(s) have been created and applied from new schema changes:
+
+prisma\migrations/
+  └─ 20251210072318_init/
+    └─ migration.sql
+
+Your database is now in sync with your schema.
+
+此命令会生成 prisma/migrations 目录，文件目录结构如下：
+nest-project
+├── prisma
+│  ├── migrations
+│   └── 20251210023008_init
+│       └── migration.sql
+│   ├── schema.prisma // 指定数据库连接并包含数据库 schema
+└── .env  // 配置数据库连接信息
+
+之后每次修改模型文件 schema.prisma 后，都需要重新生成 Prisma 客户端。
+`npx prisma generate`或者再次使用迁移。
+
+
+
+
+```
+
+##### 2. NestJS 集成 Prisma
+为了验证 Nest 应用能否成功集成了 Prisma，我们将通过 Prisma Client 进行数据播种，看能否与数据库进行交互。
+
+可视化数据库： `npx prisma studio`、运行命令后可以看到数据库中的内容。
+
+然后在 prisma 目录下新建 seed.ts 文件如下、这个也可以是以后本地开发时初始化数据的脚本。
+```ts
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  // 删除现有的所有数据 (可选)
+  await prisma.user.deleteMany();
+
+  // 创建种子数据
+  const users = await prisma.user.createMany({
+    data: [
+      {
+        email: 'alice@example.com',
+        name: 'Alice',
+      },
+      {
+        email: 'bob@example.com',
+        name: 'Bob',
+      },
+      {
+        email: 'charlie@example.com',
+        name: 'Charlie',
+      },
+    ],
+  });
+
+  console.log(`Seeded ${users.count} users`);
+}
+
+main()
+  .then(async () => {
+    await prisma.$disconnect();
+  })
+  .catch(async (e) => {
+    console.error(e);
+    await prisma.$disconnect();
+    process.exit(1);
+  });
+
+
+```
+
+为了让项目中的各个模块都能方便地使用Prisma Client，最佳实践是创建一个全局的 PrismaService
+`nest g mo prisma --no-spec`
+`nest g service prisma --no-spec`
+```ts
+import { Global, Module } from '@nestjs/common';
+import { PrismaService } from './prisma.service';
+
+// 全局模块
+@Global()
+@Module({
+  providers: [PrismaService],
+  exports: [PrismaService],
+})
+export class PrismaModule { }
+
+// src/prisma/prisma.service.ts
+import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { PrismaClient } from '@prisma/client';
+
+@Injectable()
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy {
+  constructor() {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    super();
+  }
+  async onModuleInit() {
+    // 应用启动时连接数据库
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    await this.$connect();
+  }
+
+  async onModuleDestroy() {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    await this.$disconnect();
+  }
+}
+
+// 实际使用，调用 Prisma Client 实例完成 CRUD
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from './prisma.service';// 声明为全局模块所以可以直接引入服务
+
+@Injectable()
+export class UserService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async createUser(email: string, name: string) {
+    return this.prisma.user.create({
+      data: {
+        email,
+        name,
+      },
+    });
+  }
+  async findAll() {
+    return this.prisma.user.findMany();
+  }
+  async findOne(id: number) {
+    return this.prisma.user.findUnique({
+      where: {
+        id,
+      },
+    });
+  }
+  async updateUser(id: number, updateUserDto: UpdateUserDto) {
+    return this.prisma.user.update({
+      where: {
+        id,
+      },
+      data: updateUserDto,
+    });
+  }
+  async remove(id: number) {
+    return this.prisma.user.delete({
+      where: {
+        id,
+      },
+    });
+  }
+}
+
+this.prisma 就是 Prisma Client 实例的引用，Prisma Client 是Prisma ORM的客户端库，它提供了与数据库交互的方法。通过 .user 就能唤起 Prisma Client 中定义的模型引用，user 是模型的名称，它对应于数据库中的一个表。
+
+// 高级查询：Prisma 还支持复杂的查询操作，如关联查询、分页、过滤等。本质没什么不同就是api不一样。
+
+
+
+
+
+```
+
+
+
+### 5.2.3 MongoDB集成
 
 #### 1 概述
 Nest 提供了两种与 MongoDB 数据库集成的方法。
@@ -3923,7 +4656,7 @@ export class CatsService {
 
 ```
 
-### 5.2.3 Redis集成
+### 5.2.4 Redis集成
 
 #### 1 概述
 redis 的设计是 key、value 的键值对的形式,常用来做缓存。就是可以查出数据来之后放到 redis 中缓存，下次如果 redis 有数据就直接用，没有的话就查数据库然后更新 redis 缓存。
@@ -4758,7 +5491,7 @@ private logger;
 
 ```
 
-事实上社区有对这个封装了nest-winston 直接使用即可、所以在实际项目里我们可以直接如下使用。这时只要在需要的地方注入即可。
+事实上社区有对这个封装了nest-winston 直接使用即可、所以在实际项目里我们可以直接如下使用。这时只要在需要的地方注入即可。winston-daily-rotate-file: 用于将日志文件按天轮换保存
 安装：`npm install winston nest-winston winston-daily-rotate-file chalk@4`
 
 ```js
@@ -4858,7 +5591,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           winston.format.splat(),
           winston.format.json() // 结构化JSON格式
         ),
-        
+        exitOnError: false, // 防止意外退出
         // 传输器配置
         transports: [
           // 控制台输出（开发环境）
@@ -4982,6 +5715,16 @@ export class UserController {
     return result;
   }
 }
+
+// 也可以在入口文件整个更换日志记录器
+import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.useLogger(app.get(WINSTON_MODULE_NEST_PROVIDER));
+  await app.listen(3000);
+}
+bootstrap();
 
 ```
 
@@ -5136,13 +5879,25 @@ this.eventEmitter.emit(
 
 ```
 
-**监听事件:**要声明一个事件监听器，使用@OnEvent()装饰器在包含要执行的代码的方法定义之前进行修饰即可。作为一个提供者传入模块即可。
+**监听事件:**要声明一个事件监听器，使用装饰器简化监听 如果你不想在构造函数中手动绑定事件监听器,使用@OnEvent()装饰器在包含要执行的代码的方法定义之前进行修饰即可。作为一个提供者传入模块即可。
 ```js
-import { Injectable } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
+import { Injectable,Inject  } from '@nestjs/common';
+import { EventEmitter2 ,OnEvent } from '@nestjs/event-emitter';
 
 @Injectable()
 export class FindCatsAllListener {
+   constructor(
+    @Inject(EventEmitter2)
+    private readonly eventEmitter: EventEmitter2,
+  ) {
+    this.eventEmitter.on('my-event', this.handleEvent);
+  }
+
+  private handleEvent(data: any) {
+    console.log('Received data:', data);
+  }
+
+  // 使用装饰器订阅事件(监听事件)
   @OnEvent('find-mongo')
   handleOrderCreatedEvent(payload: any) {
     // emit 抛出的载荷
@@ -7114,7 +7869,7 @@ import { UserModule } from './modules/user/user.module';
     AuthModule,
     UserModule,
     JwtModule.register({
-      secret: '123456',
+      secret: '123456',//process.env.JWT_SECRET,
       signOptions: { expiresIn: '60s' },
     }),
   ],
@@ -7173,7 +7928,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       // 需要初始化配置所以传入一个配置对象
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),// 提供从 Request 中提取 JWT 的方法。即指定从 request 的 header 里提取 token，然后取出 payload 之后会传入 validate 方法做验证，返回的值同样会设置到 request.user。
       ignoreExpiration: false,
-      secretOrKey: "123456",
+      secretOrKey: "123456",//process.env.JWT_SECRET,
     });
   }
   // Passport 首先会验证 JWT 签名并解码 JSON 数据，随后调用我们的 validate() 方法。最后 jwt token 验证成功后，Passport 会根据这个方法的返回值构建一个用户对象，这个对象会挂载在 request.user 属性上。验证不通过报错。
@@ -8085,6 +8840,30 @@ async function bootstrap() {
 }
 bootstrap();
 
+DocumentBuilder 属性
+方法描述
+etTitle文档标题
+setDescription文档描述
+setVersion文档版本
+setTermsOfService文档服务条款
+setContact文档联系信息
+setLicense文档许可证信息
+addServer文档服务地址
+setExternalDoc文档外部链接
+setBasePath设置文档基础路径
+addTag添加文档标签
+addExtension添加扩展
+addSecurity添加安全方案
+addGlobalParameters添加全局参数
+addSecurityRequirements添加安全需求
+addBearerAuth添加 Bearer Token 认证
+addOAuth2添加 OAuth2 认证
+addApiKey添加 ApiKey
+addBasicAuth添加基础认证
+addCookieAuth添加 Cookie 认证
+build构建服务
+
+
 // 在控制器(路由api)文件中定义文档
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 
@@ -8195,7 +8974,13 @@ findByRole(@Query('role') role: string) {
 
 // @ApiProperty(...) 用于 DTO 类中的属性，以提供关于字段的具体信息，如类型、描述、是否必需等。
 export class CreateUserDto {
-  @ApiProperty({ description: "用户名", example: "Moment" })
+  @ApiProperty({
+     type: String,
+     description: '用户名',
+     required: false,
+     example: "Moment" , 
+     default: '',
+   })
   name: string;
 
   @ApiProperty({ description: "用户邮箱", example: "moment@qq.com" })
@@ -8426,8 +9211,8 @@ export class EmailService {
 
     transporter: Transporter
     
-    constructor(private configService: ConfigService) {
-      this.transporter = createTransport({
+    constructor(private configSer      this.transporter = createTransport({
+ransport({
           host: "smtp.qq.com",
           port: 587,
           secure: false,
@@ -8583,6 +9368,10 @@ await page.click('.search-btn', {
 ## 5.19 excel导入导出
 Excel 是常用的办公软件，我们会用它来做数据的整理。后台管理系统一般都会支持从 Excel 导入数据，或者导出数据到 Excel 文件：在node里一般我们会用 exceljs 这个包来做。安装依赖：` npm install exceljs @types/exceljs`
 
+工作簿：指的就是整个Excel表格，被称为Workbook，可以设置Excel的表名、创建者、创建时间和更新时间等属性。
+
+工作表：也称为Sheet，一个工作簿里有很多工作表，Sheet下管理多行(row)、多列(colunm)数据，我们经常会对数据进行行列维度的增删改查操作。
+
 workbook（工作簿） > worksheet（工作表） > row（行） > cell（列）这样的层级关系。每一个都有对应的方法进行遍历查询。也可以直接调用 worksheet 的 getSheetValues 来拿到表格数据，不用自己遍历：
 
 ```js
@@ -8638,6 +9427,8 @@ import { Workbook } from 'exceljs';
       // });
     });
     return arrObj;
+
+
   }
 
   @Get('setExcel')
@@ -8687,6 +9478,365 @@ import { Workbook } from 'exceljs';
   }
 
 ```
+
+封装成一个服务类
+```ts
+// src/common/services/excel.service.ts
+import { Injectable, Logger, StreamableFile } from '@nestjs/common';
+import { Response } from 'express';
+import * as ExcelJS from 'exceljs';
+import * as path from 'path';
+import { Readable } from 'stream';
+
+export interface ColumnDefinition {
+  header: string;
+  key: string;
+  width?: number;
+  style?: Partial<ExcelJS.Style>;
+  // 数据转换函数
+  valueFormatter?: (value: any, row?: any) => any;
+}
+
+export interface ImportOptions {
+  sheetNumber?: number;
+  sheetName?: string;
+  startRow?: number; // 数据开始行（从1开始）
+  headers?: string[]; // 自定义表头（如果Excel没有表头）
+  hasHeader?: boolean; // Excel是否有表头行
+}
+
+export interface ExportOptions<T = any> {
+  filename?: string;
+  sheetName?: string;
+  columns: ColumnDefinition[];
+  data: T[];
+  headerStyle?: Partial<ExcelJS.Style>;
+  rowStyle?: (row: T, rowNumber: number) => Partial<ExcelJS.Style>;
+  // 可自定义的Workbook
+  customizeWorkbook?: (workbook: ExcelJS.Workbook) => void;
+}
+
+@Injectable()
+export class ExcelService {
+  private readonly logger = new Logger(ExcelService.name);
+
+  /**
+   * 导入Excel文件
+   * @param fileBuffer 文件Buffer
+   * @param options 导入选项
+   * @returns 解析后的数据数组
+   */
+  async importFromBuffer<T = any>(
+    fileBuffer: Buffer,
+    options: ImportOptions = {},
+  ): Promise<T[]> {
+    try {
+      const {
+        sheetNumber = 1,
+        sheetName,
+        startRow = 1,
+        headers = [],
+        hasHeader = true,
+      } = options;
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(fileBuffer);
+
+      // 获取工作表
+      const worksheet = sheetName
+        ? workbook.getWorksheet(sheetName)
+        : workbook.getWorksheet(sheetNumber);
+
+      if (!worksheet) {
+        throw new Error(
+          `工作表 ${sheetName || sheetNumber} 不存在`,
+        );
+      }
+
+      const data: T[] = [];
+      const actualStartRow = hasHeader ? startRow + 1 : startRow;
+      let columnKeys: string[] = [];
+
+      // 如果有表头，提取列键名
+      if (hasHeader && headers.length === 0) {
+        const headerRow = worksheet.getRow(startRow);
+        columnKeys = headerRow.values
+          .slice(1) // ExcelJS行数据从索引1开始
+          .map((header) =>
+            String(header || '').trim().toLowerCase().replace(/\s+/g, '_'),
+          );
+      } else if (headers.length > 0) {
+        columnKeys = headers;
+      }
+
+      // 遍历数据行
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber < actualStartRow) return;
+
+        const rowData: any = {};
+
+        row.eachCell((cell, colNumber) => {
+          const key =
+            columnKeys[colNumber - 1] || `column_${colNumber}`;
+          
+          // 处理不同类型的单元格值
+          if (cell.value instanceof Date) {
+            rowData[key] = cell.value;
+          } else if (cell.value && typeof cell.value === 'object') {
+            // 处理公式结果、富文本等
+            rowData[key] = cell.value.result || cell.value.text || JSON.stringify(cell.value);
+          } else {
+            rowData[key] = cell.value;
+          }
+        });
+
+        if (Object.keys(rowData).length > 0) {
+          data.push(rowData);
+        }
+      });
+
+      this.logger.log(`成功导入 ${data.length} 条数据`);
+      return data as T[];
+    } catch (error) {
+      this.logger.error('导入Excel失败', error.stack);
+      throw new Error(`导入Excel失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 从文件路径导入Excel
+   */
+  async importFromFile<T = any>(
+    filePath: string,
+    options?: ImportOptions,
+  ): Promise<T[]> {
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(filePath);
+    const buffer = await workbook.xlsx.writeBuffer();
+    return this.importFromBuffer(buffer, options);
+  }
+
+  /**
+   * 导出Excel到Buffer
+   */
+  async exportToBuffer<T = any>(
+    options: ExportOptions<T>,
+  ): Promise<Buffer> {
+    try {
+      const {
+        sheetName = 'Sheet1',
+        columns,
+        data,
+        headerStyle = {
+          font: { bold: true, color: { argb: 'FFFFFFFF' } },
+          fill: {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF4F81BD' },
+          },
+          alignment: { horizontal: 'center', vertical: 'middle' },
+        },
+        rowStyle,
+        customizeWorkbook,
+      } = options;
+
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'NestJS Excel Service';
+      workbook.created = new Date();
+
+      const worksheet = workbook.addWorksheet(sheetName);
+
+      // 设置列定义
+      worksheet.columns = columns.map((col) => ({
+        header: col.header,
+        key: col.key,
+        width: col.width || 20,
+        style: col.style,
+      }));
+
+      // 添加表头行
+      const headerRow = worksheet.getRow(1);
+      headerRow.values = columns.map((col) => col.header);
+      headerRow.eachCell((cell) => {
+        Object.assign(cell.style, headerStyle);
+      });
+
+      // 添加数据行
+      data.forEach((item, index) => {
+        const rowNumber = index + 2;
+        const row = worksheet.addRow(item);
+
+        // 应用行样式
+        if (rowStyle) {
+          const style = rowStyle(item, rowNumber);
+          row.eachCell((cell) => {
+            Object.assign(cell.style, style);
+          });
+        }
+
+        // 应用列特定的值格式化
+        columns.forEach((col, colIndex) => {
+          if (col.valueFormatter) {
+            const cell = row.getCell(colIndex + 1);
+            cell.value = col.valueFormatter(item[col.key], item);
+          }
+        });
+      });
+
+      // 自定义Workbook（可选）
+      if (customizeWorkbook) {
+        customizeWorkbook(workbook);
+      }
+
+      // 自动调整列宽
+      worksheet.columns.forEach((column) => {
+        let maxLength = 0;
+        column.eachCell({ includeEmpty: true }, (cell) => {
+          const columnLength = cell.value ? cell.value.toString().length : 10;
+          if (columnLength > maxLength) {
+            maxLength = columnLength;
+          }
+        });
+        column.width = Math.min(maxLength + 2, 50); // 最大宽度限制
+      });
+
+      return await workbook.xlsx.writeBuffer() as Buffer;
+    } catch (error) {
+      this.logger.error('导出Excel失败', error.stack);
+      throw new Error(`导出Excel失败: ${error.message}`);
+    }
+  }
+
+  /**
+   * 导出Excel并直接发送HTTP响应
+   */
+  async exportToResponse<T = any>(
+    response: Response,
+    options: ExportOptions<T>,
+  ): Promise<void> {
+    const { filename = `export_${Date.now()}.xlsx` } = options;
+    const buffer = await this.exportToBuffer(options);
+
+    response.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`,
+      'Content-Length': buffer.length,
+    });
+
+    response.end(buffer);
+  }
+
+  /**
+   * 导出Excel为StreamableFile（NestJS推荐方式）
+   */
+  async exportToStreamableFile<T = any>(
+    options: ExportOptions<T>,
+  ): Promise<StreamableFile> {
+    const buffer = await this.exportToBuffer(options);
+    const stream = new Readable();
+    stream.push(buffer);
+    stream.push(null);
+
+    return new StreamableFile(stream, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${options.filename || `export_${Date.now()}.xlsx`}"`,
+    });
+  }
+
+  /**
+   * 生成模板文件（只有表头）
+   */
+  async generateTemplate(
+    columns: ColumnDefinition[],
+    filename?: string,
+  ): Promise<Buffer> {
+    return this.exportToBuffer({
+      filename: filename || 'template.xlsx',
+      sheetName: '模板',
+      columns,
+      data: [],
+      headerStyle: {
+        font: { bold: true, color: { argb: 'FF0000FF' } }, // 蓝色加粗
+        fill: {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFFFFF00' }, // 黄色背景
+        },
+      },
+    });
+  }
+
+  /**
+   * 验证Excel文件格式
+   */
+  async validateExcelFile(
+    fileBuffer: Buffer,
+    expectedSheets?: string[],
+  ): Promise<{ isValid: boolean; sheets: string[]; error?: string }> {
+    try {
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(fileBuffer);
+
+      const sheets = workbook.worksheets.map((ws) => ws.name);
+
+      if (expectedSheets && expectedSheets.length > 0) {
+        const missingSheets = expectedSheets.filter(
+          (expected) => !sheets.includes(expected),
+        );
+        if (missingSheets.length > 0) {
+          return {
+            isValid: false,
+            sheets,
+            error: `缺少必要的工作表: ${missingSheets.join(', ')}`,
+          };
+        }
+      }
+
+      return { isValid: true, sheets };
+    } catch (error) {
+      return {
+        isValid: false,
+        sheets: [],
+        error: `文件格式无效: ${error.message}`,
+      };
+    }
+  }
+
+  /**
+   * 合并多个数据集到同一个Excel的不同Sheet
+   */
+  async mergeToMultipleSheets(
+    sheetConfigs: Array<{
+      name: string;
+      columns: ColumnDefinition[];
+      data: any[];
+    }>,
+  ): Promise<Buffer> {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'NestJS Excel Service';
+    workbook.created = new Date();
+
+    for (const config of sheetConfigs) {
+      const worksheet = workbook.addWorksheet(config.name);
+      worksheet.columns = config.columns;
+
+      // 添加表头
+      const headerRow = worksheet.getRow(1);
+      headerRow.values = config.columns.map((col) => col.header);
+      headerRow.font = { bold: true };
+
+      // 添加数据
+      if (config.data.length > 0) {
+        worksheet.addRows(config.data);
+      }
+    }
+
+    return (await workbook.xlsx.writeBuffer()) as Buffer;
+  }
+}
+
+```
+
 
 ## 5.20 国际化
 如果你的网站要支持多种语言访问，那就要做国际化。Nest 里做国际化用 nestjs-i18n 这个包。安装依赖`npm install --save nestjs-i18n`
@@ -8761,14 +9911,117 @@ bootstrap();
 ```
 
 
-# 六、WebSockets
 
-# 七、微服务
-当一个应用越来越大以后会难以维护和扩展，这时可以通过微服务的方式把业务逻辑拆分到不同的微服务里。
 
-Nest是原生地支持微服务的开发架构、在Nest中，微服务本质上是一个使用与HTTP不同的传输层的应用程序。微服务之间默认通过 tcp 方式通信，在 nest 里需要用到 @nestjs/microservices 这个包。
+## 5.21 服务监控
+使用 nestjs-prometheus 来集成 Prometheus 监控系统，监控应用的各种指标，如 HTTP 请求时间、错误率、内存使用等。还可以使用 Grafana 来可视化 Prometheus 收集的指标数据，构建监控大盘，实现实时性能监控和报警机制。
 
-## 7.1 快速上手
+
+## 5.22 生成 SVG 图形验证码
+安装依赖`npm install --save svg-captcha pnpm add svg-captcha`
+```js
+import { Controller, Get, Res, Session } from '@nestjs/common';
+import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger'; // swagger 接口文档
+import { Response } from 'express';
+import svgCaptcha from 'svg-captcha';
+
+import { VerifyCodeResponseDto } from './dto/response-auth.dto';
+
+@ApiTags('身份鉴权')
+@Controller('auth')
+export class AuthController {
+  /**
+   * @description: 获取图形验证码
+   */
+  @Get('captcha') //当请求该接口时，返回一张随机图片验证码
+  @ApiOkResponse({ type: VerifyCodeResponseDto })
+  @ApiOperation({ summary: '获取图形验证码' })
+  async getCaptcha(@Session() session: Api.Common.SessionInfo, @Res() res: Response) {
+    const captcha = svgCaptcha.createMathExpr({
+      //可配置返回的图片信息
+      size: 4, // 验证码长度
+      ignoreChars: '0oO1ilI', // 验证码字符中排除 0oO1ilI
+      noise: 2, // 干扰线条的数量
+      width: 132,
+      height: 40,
+      fontSize: 50,
+      color: true, // 验证码的字符是否有颜色，默认没有，如果设定了背景，则默认有
+      background: '#fff',
+    });
+    session.captchaCode = captcha.text; //使用session保存验证，用于登陆时验证
+    res.type('image/svg+xml'); //指定返回的类型
+    return res.send(captcha.data); //给页面返回一张图片
+  }
+}
+
+```
+
+
+## 5.23 热重载HMR
+Nest.js 服务对应用程序的引导过程影响最大的是 TypeScript 编译。每次当我们修改文件时，应用程序都会重新编译整个项目，当应用程序比较庞大时，项目编译会越来越慢，会有很明显的效率低下问题。使用 webpack HMR（Hot-Module Replacement） 能很大程度上降低应用实例化所用的时间。
+安装依赖`pnpm add webpack-node-externals run-script-webpack-plugin webpack -D`
+`npm i --save-dev webpack webpack-node-externals run-script-webpack-plugin`
+
+根目录下新增 webpack 配置文件 webpack-hmr.config.js
+```js
+const nodeExternals = require('webpack-node-externals');
+const { RunScriptWebpackPlugin } = require('run-script-webpack-plugin');
+
+module.exports = function (options, webpack) {
+  return {
+    ...options,
+    entry: ['webpack/hot/poll?100', options.entry],
+    externals: [
+      nodeExternals({
+        allowlist: ['webpack/hot/poll?100'],
+      }),
+    ],
+    plugins: [
+      ...options.plugins,
+      new webpack.HotModuleReplacementPlugin(),
+      new webpack.WatchIgnorePlugin({
+        paths: [/\.js$/, /\.d\.ts$/],
+      }),
+      new RunScriptWebpackPlugin({ name: options.output.filename }),
+    ],
+  };
+};
+
+```
+
+修改应用入口文件添加 HMR 的支持代码:
+```js
+declare const module: any;
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  await app.listen(3000);
+
+  if (module.hot) {
+    module.hot.accept();
+    module.hot.dispose(() => app.close());
+  }
+}
+bootstrap();
+
+
+```
+更新启动脚本:在 package.json 文件的 scripts 部分，修改或添加 start:dev 命令：
+```json
+"scripts": {
+  "start:dev": "nest build --webpack --webpackPath webpack-hmr.config.js --watch"
+}
+
+```
+
+
+
+# 六、微服务
+
+## 6.1 概述
+当一个应用越来越大以后会难以维护和扩展，这时可以通过微服务的方式把业务逻辑拆分到不同的微服务里。Nest是原生地支持微服务的开发架构、在Nest中，微服务本质上是一个使用与HTTP不同的传输层的应用程序。微服务之间默认通过 tcp 方式通信，在 nest 里需要用到 @nestjs/microservices 这个包。
+
+## 6.2 快速上手
 本质上还是使用 `$ nest new microservice-app` 命令创建项目,
 但是需要安装 `$ pnpm i --save @nestjs/microservices ` 这个包。
 同时入口文件 main.ts 要使用NestFactory类的createMicroservice()方法，同时指定 tcp 的端口。而不再是create()方法。
@@ -8800,36 +10053,40 @@ bootstrap();
 
 ```
 
-## 7.2 客户端
-Nest应用程序的客户端可以使用ClientProxy类与Nest微服务交换消息或发布事件。
-就比如在一个http server里要引入连接微服务的客户端、它也需要安装微服务相关的包。
-`$ pnpm install @nestjs/microservices --save`
-
-```js
-// 然后再app模块中引入 ClientsModule 动态模块
-
-
-```
-
-
-
-## 7.3 模式
-微服务是通过模式来识别消息和事件、简单说就是识别消息和事件。
 
 
 
 
-# 八、Docker
+
+
+
+# 七、WebSockets
+
+# 八、GraphQL
+
+## 8.1 概述
+GraphQL 是一种强大的 API 查询语言，也是一个运行时环境，用于使用现有数据满足这些查询需求。它采用优雅的方式解决了 REST API 常见的诸多问题。用了 GraphQL 之后，返回什么数据不再是服务端说了算，而是客户端自己决定。
+
+
+
+
+
+
+# 九、Docker
 
 ## 8.1 docker desktop 快速上手 
 Docker 是一个开源的应用容器引擎，基于 Go 语言和 C 语言开发。它把系统的所有文件(需要的环境等)封装成一个镜像，镜像跑起来作为一个独立的容器，它可以在一台机器上跑多个容器，每个容器都有独立的操作系统环境，比如文件系统、网络端口等，在容器内跑各种服务(相当于一台独立的服务器)。通过这种方式可以快速部署多个相同的实例。
 
 这里我们是通过Windows的桌面版本使用、docker desktop 可以可视化的管理它们，很方便、快速上手。Docker 提供了 Docker Hub 镜像仓库，可以把本地镜像 push 到仓库或者从仓库 pull 镜像到本地。
 
-images 是本地的所有镜像，containers 是镜像跑起来的容器。 volume 挂载将本地挂载的目录映射到容器中,这时在本地添加文件会同步到容器对应挂载的目录下。
+
+images 是本地所有的镜像，
+containers 是镜像跑起来的容器。
+volume 挂载将本地挂载的目录映射到容器中,这时在本地添加文件会同步到容器对应挂载的目录下。
 ```js
 // 安装完成之后可以通过如下命令查看帮助
 docker --help
+docker -h
 // 搜索镜像
 docker search nginx
 // 拉取镜像
@@ -9210,7 +10467,7 @@ networks:// 指定创建的 common-network 桥接网络，网络驱动程序指�
 
 ```
 
-# 九、Nginx
+# 十、Nginx
 
 ## 9.1 概述
 Nginx 是流行的服务器，一般用它对静态资源做托管、对动态资源做反向代理。Docker 是流行的容器技术，里面可以跑任何服务。那 Docker + Nginx 如何结合使用呢？nginx 托管静态 html 页面主要知道配置文件和页面都存在哪里就行。一般是xxx/nginx/html/ 目录下面就是所有的静态文件。nginx 配置文件，也就是 /etc/nginx/nginx.conf。
@@ -9325,7 +10582,7 @@ location ^~ /api {
 
 ```
 
-# 十、实战
+# 十一、实战
 
 ## 9.1 图书管理系统实战1
 目的是为了把nest基础知识串联起来用一下，加深理解。不包含数据库。
@@ -9477,5 +10734,229 @@ User 相关
 -put /user:id 修改用户 信息
 -delete /user:id 删除用户
 
-# 十一、总结
+# 十二、总结
 Nest作为一个Web应用程序使用至此可以说是学习结束。至于 WebSockets、微服务、或者独立应用程序的开发，可以等待下一次学习。
+
+目 录  
+第1部分 基础篇  
+第1章 需要提前掌握的知识 2  
+1.1 Node中的请求与响应对象 2  
+1.1.1 原生Node处理HTTP请求 2  
+1.1.2 Express处理HTTP请求 4  
+1.1.3 Nest处理HTTP请求 7  
+1.2 TypeScript基础与应用 7  
+1.2.1 TypeScript编译 8  
+1.2.2 TypeScript类型系统 9  
+第2章 Nest初识 15  
+2.1 什么是Nest 15  
+2.1.1 Nest概述 15  
+2.1.2 Nest的主要特点 15  
+2.1.3 Nest的应用场景 16  
+2.2 快速上手Nest CLI 16  
+2.2.1 Nest CLI的安装 16  
+2.2.2 创建项目 17  
+2.2.3 生成指定的代码片段 19  
+2.2.4 构建应用 22  
+2.2.5 启动开发调试 24  
+2.2.6 查看项目信息 25  
+2.3 创建第一个Nest应用 25  
+2.3.1 生成后端项目 26  
+2.3.2 生成前端项目 26  
+2.3.3 准备工作 27  
+2.3.4 运行结果 29  
+2.3.5 模块化开发 30  
+2.4 Nest的AOP架构理念 32  
+2.4.1 MVC架构概述 32  
+2.4.2 AOP解决的问题 33  
+2.4.3 AOP在Nest中的应用 33  
+2.5 IoC思想解决了什么问题 40  
+2.5.1 IoC核心思想概述 40  
+2.5.2 IoC在Nest中的应用 41  
+2.6 学会调试Nest应用 44  
+2.6.1 Chrome DevTools调试 44  
+2.6.2 VS Code调试 46  
+2.6.3 扩展调试技巧 48  
+第3章 Nest核心概念介绍 51  
+3.1 贯穿全书的装饰器 51  
+3.1.1 基本概念 51  
+3.1.2 装饰器的种类 51  
+3.1.3 Nest中的装饰器 59  
+3.2 井然有序的模块化 60  
+3.2.1 基本概念 60  
+3.2.2 创建模块 61  
+3.2.3 共享模块 62  
+3.2.4 全局模块 64  
+3.2.5 动态模块 65  
+3.3 控制器与服务的默契配合 66  
+3.3.1 基本概念 66  
+3.3.2 Controller管理请求路由 67  
+3.3.3 Controller处理请求参数与请求体 68  
+3.3.4 Service处理数据层 70  
+3.3.5 服务与服务提供者 71  
+3.4 耳熟能详的中间件 71  
+3.4.1 类中间件 71  
+3.4.2 函数式中间件 74  
+3.4.3 局部中间件 74  
+3.4.4 全局中间件 74  
+3.5 拦截器与RxJS知多少 75  
+3.5.1 基本概念 75  
+3.5.2 创建项目 76  
+3.5.3 拦截器的基本使用方法 76  
+3.6 数据之源守护者：管道 79  
+3.6.1 基本概念 79  
+3.6.2 内置管道 80  
+3.6.3 自定义管道 88  
+3.7 Nest实现文件上传 89  
+3.7.1 初识Multer 89  
+3.7.2 单文件上传 91  
+3.7.3 多文件上传 94  
+3.7.4 上传任意文件 98  
+3.7.5 文件验证 99  
+第2部分 进阶篇  
+第4章 Nest与数据库 102  
+4.1 快速上手MySQL 102  
+4.1.1 安装和运行 102  
+4.1.2 MySQL的常用命令 105  
+4.1.3 可视化操作MySQL 107  
+4.2 MySQL表之间的关系 112  
+4.2.1 一对一关系 112  
+4.2.2 一对多/多对一关系 119  
+4.2.3 多对多关系 121  
+4.3 快速上手TypeORM 126  
+4.3.1 基本概念 126  
+4.3.2 项目准备 126  
+4.3.3 创建模型及实体 126  
+4.3.4 定义数据列及类型 127  
+4.3.5 连接数据库 128  
+4.3.6 使用Repository操作CRUD 129  
+4.3.7 使用QueryBuilder操作CRUD 131  
+4.4 使用TypeORM处理多表关系 134  
+4.4.1 一对一关系 134  
+4.4.2 一对多/多对一关系 140  
+4.4.3 多对多关系 142  
+4.5 在Nest中使用TypeORM操作MySQL 144  
+4.5.1 项目准备 144  
+4.5.2 使用EntityManager操作实体 147  
+4.5.3 使用Repository操作实体 148  
+4.5.4 使用QueryBuilder操作实体 151  
+第5章 性能优化之数据缓存 154  
+5.1 快速上手Redis 154  
+5.1.1 安装和运行 154  
+5.1.2 Redis的常用命令 155  
+5.2 在Nest中使用Redis缓存 162  
+5.2.1 项目准备 162  
+5.2.2 Redis初始化 164  
+5.2.3 建表并构建缓存 165  
+5.2.4 运行代码 167  
+5.2.5 设置缓存有效期 169  
+5.2.6 选择合理的有效期 170  
+第6章 身份验证与授权 171  
+6.1 Cookie、Session、Token、JWT、SSO详解 171  
+6.1.1 什么是身份验证 171  
+6.1.2 什么是授权 172  
+6.1.3 什么是凭证 172  
+6.1.4 什么是Cookie 172  
+6.1.5 什么是Session 173  
+6.1.6 Session与Cookie的区别 173  
+6.1.7 什么是Token 174  
+6.1.8 什么是JWT 176  
+6.1.9 JWT与Token的区别 177  
+6.1.10 什么是SSO 177  
+6.2 基于Passport和JWT实现身份验证 180  
+6.2.1 基本概念 181  
+6.2.2 项目准备 181  
+6.2.3 用本地策略实现用户登录 182  
+6.2.4 用JWT策略实现接口校验 184  
+6.2.5 代码优化 188  
+6.3 基于RBAC实现权限控制 191  
+6.3.1 基本概念 191  
+6.3.2 数据表设计 192  
+6.3.3 项目准备 193  
+6.3.4 创建实体 194  
+6.3.5 启动服务 196  
+6.3.6 实现角色守卫控制 196  
+6.3.7 生成测试数据 200  
+6.3.8 测试效果 202  
+第7章 系统部署与扩展 203  
+7.1 快速上手Docker 203  
+7.1.1 初识Docker 203  
+7.1.2 安装Docker 204  
+7.1.3 Docker的使用 205  
+7.2 快速上手Dockerfile 209  
+7.2.1 Docker的基本概念 209  
+7.2.2 Dockerfile的基本语法 210  
+7.2.3 Dockerfile实践 210  
+第3部分 扩展篇  
+第8章 单元测试与端到端测试 216  
+8.1 重新认识单元测试 216  
+8.1.1 什么是单元测试 216  
+8.1.2 为什么大部分公司没有进行单元测试 217  
+8.1.3 为什么要编写单元测试 217  
+8.1.4 先编写单元测试还是先编写代码 218  
+8.1.5 测试驱动开发 219  
+8.2 在Nest中使用Jest编写单元测试 220  
+8.2.1 初识Jest 220  
+8.2.2 项目准备 223  
+8.2.3 编写测试用例 224  
+8.2.4 实现业务代码 225  
+8.2.5 重构代码 229  
+8.3 集成测试 230  
+8.3.1 编写测试用例 230  
+8.3.2 测试效果 232  
+8.4 端到端测试 232  
+8.4.1 编写测试用例 233  
+8.4.2 实现业务代码 235  
+第9章 日志与错误处理 237  
+9.1 如何在Nest中记录日志 237  
+9.1.1 为什么要记录日志 238  
+9.1.2 内置日志器Logger 238  
+9.1.3 定制日志器 240  
+9.1.4 记录日志的正确姿势 241  
+9.1.5 第三方日志器Winston 241  
+9.2 Winston日志管理实践 241  
+9.2.1 Winston的基础使用 242  
+9.2.2 本地持久化日志 244  
+9.3 面向切面日志统计实践 248  
+9.3.1 中间件日志统计 248  
+9.3.2 拦截器日志统计 249  
+9.3.3 过滤器日志统计 251  
+第4部分 Nest项目实战篇  
+第10章 数字门店管理平台开发 254  
+10.1 产品需求分析与设计 254  
+10.1.1 产品需求说明 254  
+10.1.2 功能原型图 255  
+10.2 技术选型与项目准备 262  
+10.2.1 前端技术选型 262  
+10.2.2 初始化前端项目 262  
+10.2.3 前端架构设计 263  
+10.2.4 后端技术选型 264  
+10.2.5 初始化后端项目 265  
+10.2.6 后端架构设计 266  
+10.3 API接口及数据库表设计 268  
+10.3.1 API接口功能划分 268  
+10.3.2 数据库设计 269  
+10.4 实现注册登录 273  
+10.4.1 页面效果展示 273  
+10.4.2 接口实现 281  
+10.5 实现用户与角色模块 290  
+10.5.1 页面效果展示 290  
+10.5.2 表关系设计 295  
+10.5.3 接口实现 299  
+10.6 实现商品与订单模块 303  
+10.6.1 页面效果展示 304  
+10.6.2 表关系设计 306  
+10.6.3 接口实现 307  
+10.7 基于Redis实现商品热销榜 315  
+10.7.1 页面效果展示 316  
+10.7.2 接口实现 317  
+10.8 实现活动模块与定时任务 320  
+10.8.1 页面效果展示 320  
+10.8.2 表关系设计 322  
+10.8.3 接口实现 323  
+10.9 使用Docker Compose部署项目 325  
+10.9.1 编写后端Docker Compose文件 325  
+10.9.2 编写Dockerfile文件 330  
+完结语：是终点，更是新的起点 334  
+一个小小的决定 334  
+时间的杠杆 334  
+结语 334
