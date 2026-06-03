@@ -12,6 +12,10 @@ export class UserService {
     return `This action returns all user`;
   }
 
+  findVersion2All() {
+    return `This action returns all user (Version 2)`;
+  }
+
   findOne(id: number) {
     return `This action returns a #${id} user`;
   }
