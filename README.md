@@ -11039,7 +11039,7 @@ location ^~ /api {
 
 # 十一、实战
 
-## 9.1 图书管理系统实战1
+## 9.1 图书管理系统实战
 
 目的是为了把nest基础知识串联起来用一下, 加深理解。不包含数据库。
 
@@ -11049,18 +11049,28 @@ location ^~ /api {
 2. 图书模块包含图书列表、图书新增、图书修改、图书删除、图书详情。登录后可以查看书籍列表, 可以通过书名来模糊搜索。书籍内容包括：书名、作者、简介(描述)、价格、出版日期、分类、封面图片。
 
 **数据结构设计**：全部使用json文件代替数据库操作, 设置一个动态模块用来读取和写入不同的json文件。
-
 ```json
 // 用户模块结构
-{"username":"zhangsan","password":"123456"}
+{
+  "username":"zhangsan",
+  "password":"123456"
+}
 // 书籍模块结构
-{"id":1,"title":"《算法导论》","author":"R.L.Rivest","description":"算法是一种用于解决特定问题的计算机程序。","price":89.9,"category":"计算机","link":"https://book.douban.com/subject/1003014/"}
+{
+  "id":1,
+  "title":"《算法导论》",
+  "author":"R.L.Rivest",
+  "description":"算法是一种用于解决特定问题的计算机程序。",
+  "price":89.9,
+  "category":"计算机",
+  "link":"https://book.douban.com/subject/1003014/""
+}
 
 ```
 
 **接口设计**
 
-```js
+```ts
 // 用户模块接口
 用户登录：POST /user/login
 用户注册：POST /user/register
@@ -11078,76 +11088,25 @@ location ^~ /api {
 **项目初始化步骤**
 
 ```bash
-// 创建项目
-$ nest g new book-sys-demo1 -p npm
-// 创建用户模块
-$ nest g res modules/user --no-spec
-// 创建图书模块
-$ nest g res modules/book --no-spec
-// 创建一个用来读取json的动态模块、服务
+# 创建项目
+$ nest g new book-sys-demo1 -p pnpm
+# 创建用户模块
+$ nest g res system/modules/user --no-spec
+# 创建图书模块
+$ nest g res system/modules/book --no-spec
+# 创建一个用来读取json的动态模块、服务
 $ nest g mo  common/json-reader --no-spec
 $ nest g s common/json-reader --no-spec
-// 安装类验证相关依赖
-$ npm i --save class-validator class-transformer
-// 创建参数校验管道
-$ nest g pipe common/myValidation --no-spec
+# 使用内置验证管道配合 class-validator 实现参数校验
+$ pnpm i --save class-validator class-transformer
+# 安装上传需要的依赖
+$ pnpm i --save multer
+$ pnpm i -save-dev @types/multer
+
+# 
+ 
 ```
-
-**相关代码编写**
-
-```js
-// json-reader, 它是一个动态模块, 用于读取json文件。接收一个包含json文件路径作为参数的对象。
-import { DynamicModule, Module } from '@nestjs/common';
-import { JsonReaderService } from './json-reader.service';
-
-export interface JsonReaderOptions {
-  path: string;
-}
-
-@Module({})
-export class JsonReaderModule {
-  public static register(options: JsonReaderOptions): DynamicModule {
-    return {
-      module: JsonReaderModule,
-      providers: [
-        {
-          provide: 'JSON_READER_OPTIONS',
-          useValue: options,
-        },
-        JsonReaderService,
-      ],
-      exports: [JsonReaderService],
-    };
-  }
-}
-// 服务
-import { Inject, Injectable } from '@nestjs/common';
-import { JsonReaderOptions } from './json-reader.module';
-import * as fs from 'fs';
-
-@Injectable()
-export class JsonReaderService {
-  // 注入路径对象
-  @Inject('JSON_READER_OPTIONS')
-  private readonly options: JsonReaderOptions;
-
-  // 读取 JSON 文件
-  readJsonFile(): any {
-    const jsonData = fs.readFileSync(this.options.path, 'utf-8');
-    return JSON.parse(jsonData);
-  }
-
-  // 写入 JSON 文件
-  writeJsonFile(data: any): void {
-    const jsonData = JSON.stringify(data, null, 2);
-    fs.writeFileSync(this.options.path, jsonData, 'utf-8');
-  }
-}
-
-```
-
-到这里项目的后端部分也就算完成了, 整个项目是非常简单的。
-但其实还有很多优化的点：
+整个项目是非常简单的、但其实还有很多优化的点：
 
 1. 登录之后怎么保存登录状态？比如有的接口需要登录才能访问, 怎么控制？这需要用 session + cookie 或 jwt 的方式来实现登录状态的保存。
 2. 数据保存在文件里并不方便, 还有啥更好的方式？保存在 mysql 数据库, 用 TypeORM 作为 ORM 框架。

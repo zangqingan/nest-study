@@ -1,0 +1,47 @@
+[
+  {
+    "id": 3,
+    "title": "《天才游戏》11",
+    "author": "waren wong",
+    "description": "天才游戏是一本介绍天才游戏的书籍。",
+    "price": 99.9,
+    "category": "游戏",
+    "link": "/uploads/file-1780641459396-101531984.jpg"
+  },
+  {
+    "id": 4,
+    "title": "《厚黑学》",
+    "author": "里斯",
+    "description": "厚黑学是一本介绍厚黑学的书籍。",
+    "price": 79.9,
+    "category": "历史",
+    "link": "/uploads/file-1780543536100-468913106.png"
+  },
+  {
+    "id": 5,
+    "title": "《计算机网络》修改111",
+    "author": "Andrew S. Tanenbaum",
+    "description": "计算机网络是指由多个计算机系统通过通信链路连接起来的系统。幸福徐",
+    "price": 80.9,
+    "category": "计算机",
+    "link": "/uploads/file-1780629434689-366245585.jpg"
+  },
+  {
+    "id": 6,
+    "title": "《重生之我是特种兵》",
+    "author": "R.L.Rivest",
+    "description": "重生之我是特种兵是一本介绍重生之我是特种兵的书籍。",
+    "price": 89.9,
+    "category": "都市",
+    "link": "/uploads/file-1780641450797-539645963.jpg"
+  },
+  {
+    "id": 8,
+    "title": "《荷城往事》",
+    "author": "zangqingan",
+    "price": 22,
+    "category": "小说",
+    "description": "发的设计费历史交锋",
+    "link": "/uploads/file-1780798289235-901372849.png"
+  }
+]
