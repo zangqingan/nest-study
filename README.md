@@ -3903,13 +3903,19 @@ export class AppModule implements NestModule {
 
 ### 1. 概述
 
-应用程序通常在不同的环境中运行。根据环境的不同, 应使用不同的配置设置。在 Node.js 中都是通过 process.env 全局变量来获取外部定义的环境变量。而在 Node.js 应用程序中, 通常使用 .env 格式的配置文件来表示每个环境的键值对其中每个键代表特定的值。
+应用程序通常在不同的环境中运行。根据环境的不同, 应使用不同的配置设置。由于配置会根据环境变化，最佳实践是将配置变量存储在环境中。
 
-然后, 只需替换正确的 .env 文件即可在不同的环境中运行应用程序。它有一个专门的 npm 包 dotenv 来读取指定目录下的 .env 配置文件。可以通过 NODE_ENVIRMENT 环境变量来切换生产、开发的配置文件。
+在 Node.js 中都是通过 process.env 这个全局变量来获取外部定义的环境变量。而在 Node.js 应用程序中, 通常使用 .env 格式的配置文件来表示每个环境的键值对其中每个键代表特定的值。然后, 只需替换正确的 .env 文件即可在不同的环境中运行应用程序。
+
+它有一个专门的 npm 包 dotenv 来读取指定目录下的 .env 配置文件。可以通过 NODE_ENVIRMENT 环境变量来切换生产、开发的配置文件。
 
 此外也可以读取 yaml 格式的配置文件, 需要安装 js-yaml 包。
 
-node 里的读取配置一般就用上述的两种方式、两者区别 yaml 的格式更适合有层次关系的配置, 而 .env 更适合简单的配置。
+node 里的读取配置一般就用上述的两种方式、两者区别 yaml 的格式更适合有层次关系的配置, 而 .env 文件更适合简单的配置。
+
+对于这种常见的服务 Nest 提供了现成的封装：@nestjs/config  包。它是在NestJS中内置了一个模块 ConfigModule 来实现, 这个模块公开了一个 ConfigService, 该服务加载适当的 .env 文件。这个包在内部还是使用了 dotenv。
+
+这个包同样是动态模块的方式, 所以也有 forRoot 和 forFeature 两个方法。它从默认位置（项目根目录）加载和解析一个 .env 文件, 将 .env 文件中的键值对与分配给 process.env 的环境变量进行合并, 并将结果存储在一个私有结构中, 我们可以通过 ConfigService 访问该结构。
 
 ```js
 // 安装依赖
@@ -3953,17 +3959,14 @@ console.log(yaml.load(config));// 返回对象格式数据
 
 ```
 
-对于这种常见的服务 Nest 提供了现成的封装：@nestjs/config  包。它是在NestJS中内置了一个模块 ConfigModule 来实现, 这个模块公开了一个 ConfigService, 该服务加载适当的 .env 文件。这个包在内部还是使用了 dotenv。
-
-这个包同样是动态模块的方式, 所以也有 forRoot 和 forFeature 两个方法。它从默认位置（项目根目录）加载和解析一个 .env 文件, 将 .env 文件中的键值对与分配给 process.env 的环境变量进行合并, 并将结果存储在一个私有结构中, 我们可以通过 ConfigService 访问该结构。
-
 ### 2. 使用步骤
 
 1. 依赖安装: `$ npm i --save @nestjs/config`
 2. 根模块注册：安装完成后, 就可以导入 ConfigModule。通常情况下, 我们会将其导入到根 AppModule 中, 并使用ConfigModule.forRoot() 方法注册。或者通过 ConfigModule.forFeautrue 来注册局部配置。
-3. 读取配置文件内容：ConfigModule.forRoot() 方法会注册 ConfigService 提供者。该提供者提供了一个 get() 方法, 它接收两个参数：变量名、默认值。第一个参数是变量名, 通过传递变量名来读取这些已解析/合并的配置变量。第二个是可选的参数, 用于定义默认值, 当键不存在时将返回该值。
+3. 读取配置文件内容：ConfigModule.forRoot() 方法会注册 ConfigService 提供者。该提供者提供了一个 get() 方法, 它接收两个参数：第一个参数是变量名, 通过传递变量名来读取这些已解析/合并的配置变量。第二个是可选的参数, 用于定义默认值, 当键不存在时将返回该值。
 
-```js
+```ts
+// 引入注册
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 @Module({
@@ -4001,9 +4004,11 @@ export class AppController {
 
 ### 3. 自定义配置
 
-可以给ConfigModule.forRoot()方法传入一个配置对象。
+默认情况下是：在默认位置（即项目根目录）加载和解析 .env 文件，然后将 .env 文件中的键/值对与分配给 process.env 的环境变量合并，并将结果存储在一个私有结构中，通过 ConfigService 访问该结构。
 
-```js
+自定义配置时可以给 ConfigModule.forRoot()方法传入一个配置对象。
+
+```ts
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
@@ -4038,8 +4043,8 @@ export class AppModule {}
 1. js/ts文件, 它要导出一个工厂函数, 该函数返回一个配置对象。这个配置对象可以是任意嵌套的纯 JavaScript 对象。之后将其传递给 ConfigModule.forRoot() 方法的 options 对象中的 load 属性来加载该文件。
 2. YAML 文件,一样的需要安装 js-yaml 包。`$ npm i js-yaml `, `$ npm i -D @types/js-yaml`。安装该包后, 使用 yaml.load() 方法加载我们刚才创建的 YAML 文件。
 
-```js
-// config.ts 自定义配置文件
+```ts
+// config.ts 自定义配置文件:导出一个对象
 export default () => ({
   // 返回一个配置对象
   port: parseInt(process.env.PORT, 10) || 3000,
